@@ -82,6 +82,34 @@ class ConversationAgent:
         return {}
 
 
+    def suggest_budget_postes(self, event_data):
+        instruction = (
+            "Voici la fiche de l'événement :\n"
+            f"{json.dumps(event_data, ensure_ascii=False)}\n\n"
+            "Propose une répartition du budget total en postes adaptés à ce type d'événement "
+            "(par exemple lieu, traiteur, décoration, animation...). "
+            "Réponds UNIQUEMENT avec un JSON : une liste d'objets ayant les clés "
+            "nom (texte court) et montant_prevu (nombre entier). "
+            "La somme des montant_prevu doit être égale au budget de la fiche."
+        )
+
+        response = self.groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": instruction}],
+            model="openai/gpt-oss-120b",
+            include_reasoning=False,
+        ).choices[0].message.content
+
+        match = re.search(r"\[.*\]", response, re.DOTALL)
+
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                return []
+
+        return []
+
+
 
 
 
