@@ -2,6 +2,8 @@ from groq import Groq
 
 from dotenv import load_dotenv
 import os
+import json
+import re
 
 
 class ConversationAgent:
@@ -18,7 +20,7 @@ class ConversationAgent:
 
     @staticmethod
     def read_file(file_path):
-        with open(file_path, "r") as file:
+        with open(file_path, "r", encoding="utf-8") as file:
             return file.read()
 
 
@@ -47,6 +49,37 @@ class ConversationAgent:
 
 
         self.update_conversation_history(role="assistant", content=response)
+
+        return response
+
+
+    def extract_event_info(self, current_data):
+        instruction = (
+            "Voici la fiche actuelle de l'événement au format JSON :\n"
+            f"{json.dumps(current_data, ensure_ascii=False)}\n\n"
+            "En te basant sur toute la conversation, renvoie cette fiche mise à jour. "
+            "Réponds UNIQUEMENT avec le JSON, sans aucun texte autour. "
+            "Garde exactement les mêmes clés. "
+            "Garde les valeurs déjà connues sauf si la conversation les contredit. "
+            "budget et nombre_invites sont des nombres, date au format AAAA-MM-JJ, "
+            "allergies_interdits et prestataires sont des listes de textes courts."
+        )
+
+        response = self.groq_client.chat.completions.create(
+            messages=self.conversation_history + [{"role": "user", "content": instruction}],
+            model="openai/gpt-oss-120b",
+            include_reasoning=False,
+        ).choices[0].message.content
+
+        match = re.search(r"\{.*\}", response, re.DOTALL)
+
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                return {}
+
+        return {}
 
 
 
@@ -77,7 +110,8 @@ class ConversationAgent:
 
 
 if __name__ == "__main__":
+    agent = ConversationAgent()
     question = input("Pose ta question :\n")
-    response = ask_llm(question)
+    response = agent.ask_llm(question)
     print("\n")
     print(response)
