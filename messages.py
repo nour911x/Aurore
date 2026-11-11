@@ -31,6 +31,10 @@ def destinataire_prestataire(prestataire):
     }
 
 
+def fiche_publique(prestataire):
+    return {"nom": prestataire["nom"], "categorie": prestataire["categorie"], "statut": prestataire["statut"]}
+
+
 def destinataire_maries(event_data):
     return {
         "destinataire": event_data["noms"] or "Les mariés",
@@ -50,13 +54,14 @@ def suggestions_prestataires(carnet):
 
     for prestataire in carnet.prestataires:
         destinataire = destinataire_prestataire(prestataire)
+        contexte = fiche_publique(prestataire)
         depuis = prestataire.get("statut_depuis", aujourd_hui.isoformat())
 
         if prestataire["statut"] == "À contacter":
-            suggestions.append(suggestion(f"devis_{prestataire['id']}", "demande_devis", destinataire, prestataire))
+            suggestions.append(suggestion(f"devis_{prestataire['id']}", "demande_devis", destinataire, contexte))
 
         if prestataire["statut"] == "Devis demandé" and (aujourd_hui - date.fromisoformat(depuis)).days >= DELAI_RELANCE:
-            suggestions.append(suggestion(f"relance_{prestataire['id']}_{depuis}", "relance", destinataire, prestataire))
+            suggestions.append(suggestion(f"relance_{prestataire['id']}_{depuis}", "relance", destinataire, contexte))
 
     return suggestions
 
