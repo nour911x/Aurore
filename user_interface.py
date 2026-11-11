@@ -1,14 +1,15 @@
 import streamlit as st
-from llm_agent import ConversationAgent
+from llm_agent import ConversationAgent, PROFILS
+from outils import Outils
 from event_state import EventSheet
 from budget import Budget
 from agenda import Agenda
-from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email
+from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email, appliquer_statut
 from messages import (
 	Messagerie, TYPES_MESSAGE, detecter_messages,
 	destinataire_maries, destinataire_prestataire, suggestion
 )
-from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, generer_pdf
+from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, generer_pdf, lignes_valides
 from inspiration import (
 	Inspiration, ELEMENTS_MOODBOARD, CATEGORIES_BEAUTE,
 	lien_maps, generer_moodboard_pdf
@@ -57,6 +58,12 @@ ICONES_STATUT = {
 
 AUCUN = "—"
 
+PLACEHOLDERS = {
+	"Wedding planner": "Que puis-je faire pour vous ? (ex : ajoute une dégustation jeudi à 14h)",
+	"Mariés": "Parle-moi de ton mariage ! (ex : où en est notre budget ?)",
+	"Prestataire": "Que puis-je faire pour vous ? (ex : combien de couverts végétariens ?)"
+}
+
 PLANNER = "AURORE - Wedding planner"
 
 COLONNES_DEVIS = ["designation", "quantite", "prix_unitaire"]
@@ -102,27 +109,6 @@ def texte_vers_liste(texte):
 	return [element.strip() for element in texte.split(",") if element.strip()]
 
 
-def nombre(valeur):
-	try:
-		valeur = float(valeur)
-	except (TypeError, ValueError):
-		return 0.0
-
-	return valeur if valeur == valeur else 0.0
-
-
-def lignes_valides(lignes):
-	return [
-		{
-			"designation": str(ligne.get("designation") or "").strip(),
-			"quantite": nombre(ligne.get("quantite")),
-			"prix_unitaire": nombre(ligne.get("prix_unitaire"))
-		}
-		for ligne in lignes
-		if isinstance(ligne.get("designation"), str) and ligne["designation"].strip()
-	]
-
-
 def resume_contexte(contexte):
 	return contexte.get("titre") or contexte.get("libelle") or contexte.get("nom") or ""
 
@@ -140,6 +126,10 @@ class UserInterface:
 		self.carnet_devis = self.get_persistant("carnet_devis", CarnetDevis)
 		self.liste_invites = self.get_persistant("liste_invites", ListeInvites)
 		self.inspiration = self.get_persistant("inspiration", Inspiration)
+		self.outils = Outils(
+			self.event_sheet, self.agenda, self.budget, self.carnet,
+			self.liste_invites, self.messagerie, self.carnet_devis
+		)
 		st.session_state.setdefault("version_invites", 0)
 		st.session_state.setdefault("briefings", {})
 		st.session_state.setdefault("lignes_devis", [])
@@ -404,6 +394,12 @@ class UserInterface:
 				mime="text/calendar"
 			)
 
+		if self.outils.avec_outlook and st.button("📤 Envoyer mes rendez-vous vers Outlook"):
+			with st.spinner("Synchronisation avec Outlook…"):
+				nombre_envoyes = self.outils.synchroniser_outlook()
+
+			st.success(f"{nombre_envoyes} rendez-vous ajouté(s) à Outlook.")
+
 
 	def show_rdv_form(self):
 		with st.expander("➕ Ajouter un rendez-vous"):
@@ -487,10 +483,7 @@ class UserInterface:
 
 
 	def changer_statut_prestataire(self, prestataire, statut):
-		self.carnet.changer_statut(prestataire["id"], statut)
-
-		if statut == "Réservé":
-			self.event_sheet.ajouter_prestataire(f"{prestataire['nom']} ({prestataire['categorie']})")
+		appliquer_statut(self.carnet, self.event_sheet, prestataire, statut)
 
 
 	def show_prestataire(self, prestataire):
@@ -1077,7 +1070,31 @@ class UserInterface:
 			st.info(f"🔔 {total} message(s) à préparer ou à envoyer — voir l'onglet ✉️ Messages")
 
 
+	def choisir_profil(self):
+		with st.sidebar:
+			return st.radio("Je suis…", list(PROFILS), key="profil", horizontal=True)
+
+
+	def traiter_message(self, profil):
+		text_interaction = st.chat_input(
+			PLACEHOLDERS[profil],
+			accept_file=False,
+			accept_audio=False
+			)
+
+		if text_interaction :
+			with st.spinner("AURORE réfléchit…"):
+				self.conversation_agent_object.ask_llm(text_interaction, profil, self.outils)
+				new_info = self.conversation_agent_object.extract_event_info(self.event_sheet.infos_sans_historique())
+				self.event_sheet.update(new_info)
+
+			st.session_state.version_invites += 1
+
+
 	def run(self):
+		profil = self.choisir_profil()
+		self.traiter_message(profil)
+
 		suggestions = self.messagerie.a_preparer(
 			detecter_messages(self.event_sheet.data, self.carnet, self.agenda, self.budget)
 		)
@@ -1086,17 +1103,6 @@ class UserInterface:
 		chat_tab, fiche_tab, inspiration_tab, invites_tab, prestataires_tab, budget_tab, devis_tab, agenda_tab, messages_tab = st.tabs(
 			["💬 Discussion", "💑 Fiche couple", "✨ Inspiration", "👥 Invités", "🤝 Prestataires", "💰 Budget", "📄 Devis", "📅 Rendez-vous", "✉️ Messages"]
 		)
-
-		text_interaction = st.chat_input(
-			"Parle-moi de ton événement !",
-			accept_file=False,
-			accept_audio=False
-			)
-
-		if text_interaction :
-			self.conversation_agent_object.ask_llm(text_interaction)
-			new_info = self.conversation_agent_object.extract_event_info(self.event_sheet.infos_sans_historique())
-			self.event_sheet.update(new_info)
 
 		with chat_tab:
 			self.show_discussion_history()

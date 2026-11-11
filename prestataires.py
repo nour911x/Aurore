@@ -45,6 +45,21 @@ def lien_email(email, sujet="", message=""):
     return f"mailto:{email}?subject={quote(sujet)}&body={quote(message)}"
 
 
+def normaliser_nom(nom):
+    return nom.replace("’", "'").strip().lower()
+
+
+def meme_nom(premier, second):
+    return normaliser_nom(premier) == normaliser_nom(second)
+
+
+def appliquer_statut(carnet, event_sheet, prestataire, statut):
+    carnet.changer_statut(prestataire["id"], statut)
+
+    if statut == "Réservé":
+        event_sheet.ajouter_prestataire(f"{prestataire['nom']} ({prestataire['categorie']})")
+
+
 class Carnet:
     def __init__(self, file_path="./prestataires_data.json"):
         self.file_path = file_path
@@ -83,7 +98,7 @@ class Carnet:
 
     def trouver_par_nom(self, nom):
         for prestataire in self.prestataires:
-            if prestataire["nom"].lower() == nom.strip().lower():
+            if meme_nom(prestataire["nom"], nom):
                 return prestataire
 
         return None
