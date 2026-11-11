@@ -69,14 +69,14 @@ class Agenda:
             if datetime.fromisoformat(rdv["date_heure"]) <= limite
         ]
 
-    def export_ics(self):
+    def export_ics(self, rdvs=None):
         lignes = [
             "BEGIN:VCALENDAR",
             "VERSION:2.0",
             "PRODID:-//AURORE//Event Planner//FR"
         ]
 
-        for rdv in self.rdvs:
+        for rdv in self.rdvs if rdvs is None else rdvs:
             debut = datetime.fromisoformat(rdv["date_heure"])
             fin = debut + timedelta(minutes=rdv["duree_minutes"])
             lignes += [

@@ -11,9 +11,9 @@ from agenda import Agenda
 from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email, appliquer_statut, meme_nom
 from messages import (
 	Messagerie, TYPES_MESSAGE, detecter_messages,
-	destinataire_maries, destinataire_prestataire, suggestion
+	destinataire_maries, destinataire_prestataire, suggestion, fiche_publique
 )
-from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, generer_pdf, lignes_valides
+from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, date_lisible, generer_pdf, lignes_valides
 from inspiration import (
 	Inspiration, ELEMENTS_MOODBOARD, CATEGORIES_BEAUTE,
 	lien_maps, generer_moodboard_pdf
@@ -51,7 +51,39 @@ CHAMPS_POUR_PRESTATAIRE = [
 	"allergies_interdits", "preferences", "preferences_musicales"
 ]
 
-CHAMPS_DOSSIER ={"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités", "budget": "Budget"}
+ONGLETS = {
+	"discussion": "💬 Discussion",
+	"fiche": "💑 Fiche couple",
+	"mariage": "💍 Le mariage",
+	"inspiration": "✨ Inspiration",
+	"invites": "👥 Invités",
+	"prestataires": "🤝 Prestataires",
+	"budget": "💰 Budget",
+	"devis": "📄 Devis",
+	"agenda": "📅 Rendez-vous",
+	"messages": "✉️ Messages",
+	"achats": "🧾 Achats & factures"
+}
+
+ONGLETS_MARIES = {"fiche": "💑 Notre mariage"}
+
+ESPACES = {
+	"Wedding planner": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages"],
+	"Mariés": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages"],
+	"Prestataire": ["discussion", "mariage", "agenda", "devis", "achats"]
+}
+
+CHAMPS_DOSSIER = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités", "budget": "Budget"}
+
+CHAMPS_DOSSIER_PRESTATAIRE = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités"}
+
+DETAILS_DOSSIER_PRESTATAIRE = {
+	"noms": "Couple",
+	"type_evenement": "Événement",
+	"theme": "Thème",
+	"allergies_interdits": "Allergies",
+	"preferences_musicales": "Musique"
+}
 
 DETAILS_DOSSIER = {
 	"noms": "Couple",
@@ -74,6 +106,12 @@ RACCOURCIS = [
 	("budget", ":material/payments:", "Point budget", "Fais-moi le point sur le budget et les factures à payer."),
 	("invites", ":material/groups:", "Réponses des invités", "Où en sont les réponses des invités et les régimes alimentaires ?"),
 	("message", ":material/mail:", "Préparer un message", "Aide-moi à préparer un message pour un prestataire.")
+]
+
+RACCOURCIS_PRESTATAIRE = [
+	("agenda", ":material/calendar_month:", "Mes rendez-vous", "Quels sont mes prochains rendez-vous pour ce mariage ?"),
+	("couverts", ":material/restaurant:", "Couverts et allergies", "Combien de couverts, quels régimes et quelles allergies ?"),
+	("devis", ":material/request_quote:", "Préparer un devis", "Aide-moi à préparer mon devis pour ce mariage.")
 ]
 
 PLACEHOLDERS = {
@@ -135,7 +173,7 @@ class UserInterface:
 	def __init__(self):
 		st.set_page_config(page_title="AURORE", page_icon="🌅", layout="wide")
 		st.html(style_html())
-		self.conversation_agent_object = self.get_persistant("conversation_agent_object", ConversationAgent)
+		self.prestataire = None
 		self.event_sheet = self.get_persistant("event_sheet", EventSheet)
 		self.budget = self.get_persistant("budget", Budget)
 		self.agenda = self.get_persistant("agenda", Agenda)
@@ -163,18 +201,26 @@ class UserInterface:
 		return st.session_state[cle]
 
 
-	def show_event_sheet(self):
+	def show_event_sheet(self, profil):
 		with st.sidebar:
-			st.markdown(dossier_html(self.event_sheet.data, CHAMPS_DOSSIER, DETAILS_DOSSIER), unsafe_allow_html=True)
-			nombre_echanges = len(self.event_sheet.data["historique"])
+			if profil == "Prestataire":
+				st.markdown(dossier_html(self.event_sheet.data, CHAMPS_DOSSIER_PRESTATAIRE, DETAILS_DOSSIER_PRESTATAIRE), unsafe_allow_html=True)
+			else:
+				st.markdown(dossier_html(self.event_sheet.data, CHAMPS_DOSSIER, DETAILS_DOSSIER), unsafe_allow_html=True)
+				nombre_echanges = len(self.event_sheet.data["historique"])
 
-			if nombre_echanges:
-				st.caption(f"🗂️ {nombre_echanges} échange(s) dans l'historique")
+				if nombre_echanges:
+					st.caption(f"🗂️ {nombre_echanges} échange(s) dans l'historique")
 
 			if st.button("Nouvelle conversation", icon=":material/add:", width="stretch"):
-				st.session_state.pop("conversation_agent_object", None)
+				st.session_state.pop(self.cle_conversation(profil), None)
 				st.session_state.briefings = {}
 				st.rerun()
+
+
+	def cle_conversation(self, profil):
+		identifiant = self.prestataire["id"] if self.prestataire else ""
+		return f"conversation_{profil}_{identifiant}"
 
 
 	def show_fiche_form(self):
@@ -271,6 +317,10 @@ class UserInterface:
 
 	def show_accueil(self, profil):
 		st.markdown(accueil_html(profil), unsafe_allow_html=True)
+
+		if profil == "Prestataire":
+			return
+
 		tuiles = [
 			(identifiant, icone, f"**{titre}**  \n{exemples}", message)
 			for identifiant, icone, titre, exemples, message in TUILES
@@ -284,7 +334,7 @@ class UserInterface:
 		if not historique:
 			self.show_accueil(profil)
 
-		self.show_boutons_messages("raccourcis", RACCOURCIS)
+		self.show_boutons_messages("raccourcis", RACCOURCIS_PRESTATAIRE if self.prestataire else RACCOURCIS)
 
 		for message in historique:
 			with st.chat_message(message["role"]):
@@ -293,66 +343,77 @@ class UserInterface:
 		st.markdown(AVERTISSEMENT_HTML, unsafe_allow_html=True)
 
 
-	def show_alertes_factures(self):
-		for facture in self.budget.factures_a_payer():
+	@staticmethod
+	def show_alertes_factures(budget):
+		for facture in budget.factures_a_payer():
 			if facture["jours_restants"] < 0:
 				st.error(f"🚨 Facture en retard : {facture['libelle']} ({facture['montant']} €) — échéance dépassée ({facture['echeance']})")
 			elif facture["jours_restants"] <= 7:
 				st.warning(f"📬 À payer dans {facture['jours_restants']} jours : {facture['libelle']} ({facture['montant']} €, poste {facture['poste']})")
 
 
-	def show_budget_postes(self):
-		budget_total = self.event_sheet.data["budget"]
-		total_engage = self.budget.total_engage()
+	@staticmethod
+	def show_budget_postes(budget, budget_total, cle, libelle_poste="prévus"):
+		total_engage = budget.total_engage()
 
 		if budget_total:
 			st.progress(min(total_engage / budget_total, 1.0))
 			st.markdown(f"**{total_engage} € engagés** sur un budget de **{budget_total} €**")
 
-		for poste in self.budget.postes:
-			engage = self.budget.engage_du_poste(poste)
-			icone = "🔴" if engage > poste["montant_prevu"] else "🟢"
+		for poste in budget.postes:
+			engage = budget.engage_du_poste(poste)
+			icone = "🔴" if poste["montant_prevu"] and engage > poste["montant_prevu"] else "🟢"
 
-			with st.expander(f"{icone} {poste['nom']} — {engage} € / {poste['montant_prevu']} € prévus"):
+			with st.expander(f"{icone} {poste['nom']} — {engage} € / {poste['montant_prevu']} € {libelle_poste}"):
 				for facture in poste["factures"]:
 					statut = "✅ payée" if facture["payee"] else f"⏳ à payer avant le {facture['echeance']}"
 					st.markdown(f"- {facture['libelle']} : {facture['montant']} € ({statut})")
 
 					if not facture["payee"]:
-						if st.button("Marquer payée", key=f"payee_{poste['nom']}_{facture['libelle']}"):
-							self.budget.marquer_payee(poste["nom"], facture["libelle"])
+						if st.button("Marquer payée", key=f"{cle}_payee_{poste['nom']}_{facture['libelle']}"):
+							budget.marquer_payee(poste["nom"], facture["libelle"])
 							st.rerun()
 
 
-	def show_budget_forms(self):
+	@staticmethod
+	def show_budget_forms(budget, cle, exemple_poste="traiteur", exemple_facture="acompte traiteur"):
 		with st.expander("➕ Ajouter un poste"):
-			with st.form("form_poste", clear_on_submit=True):
-				nom = st.text_input("Nom du poste (ex : traiteur)")
+			with st.form(f"{cle}_form_poste", clear_on_submit=True):
+				nom = st.text_input(f"Nom du poste (ex : {exemple_poste})")
 				montant = st.number_input("Montant prévu (€)", min_value=0, step=100)
 
 				if st.form_submit_button("Ajouter le poste") and nom:
-					self.budget.add_poste(nom, montant)
+					budget.add_poste(nom, montant)
 					st.rerun()
 
-		with st.expander("🧾 Ajouter une facture / un devis"):
-			if self.budget.postes:
-				with st.form("form_facture", clear_on_submit=True):
-					noms_postes = [poste["nom"] for poste in self.budget.postes]
+		with st.expander("🧾 Ajouter une facture"):
+			if budget.postes:
+				with st.form(f"{cle}_form_facture", clear_on_submit=True):
+					noms_postes = [poste["nom"] for poste in budget.postes]
 					poste_choisi = st.selectbox("Poste", noms_postes)
-					libelle = st.text_input("Libellé (ex : acompte traiteur)")
+					libelle = st.text_input(f"Libellé (ex : {exemple_facture})")
 					montant = st.number_input("Montant (€)", min_value=0, step=50)
 					echeance = st.date_input("Date d'échéance")
 					payee = st.checkbox("Déjà payée")
 
 					if st.form_submit_button("Ajouter la facture") and libelle:
-						self.budget.add_facture(poste_choisi, libelle, montant, str(echeance), payee)
+						budget.add_facture(poste_choisi, libelle, montant, str(echeance), payee)
 						st.rerun()
 			else:
-				st.caption("Ajoute d'abord un poste de budget.")
+				st.caption("Ajoute d'abord un poste.")
+
+
+	def show_achats(self):
+		identifiant = self.prestataire["id"]
+		achats = self.get_persistant(f"achats_{identifiant}", lambda: Budget(f"./achats_{identifiant}.json"))
+		st.caption("Vos achats pour ce mariage (denrées, boissons, location…) et les factures de vos fournisseurs, avec leurs échéances.")
+		self.show_alertes_factures(achats)
+		self.show_budget_postes(achats, None, "achats", "budgétés")
+		self.show_budget_forms(achats, "achats", "viandes et poissons", "facture grossiste")
 
 
 	def show_budget(self):
-		self.show_alertes_factures()
+		self.show_alertes_factures(self.budget)
 
 		if not self.budget.postes:
 			st.info("Aucun poste de budget pour l'instant.")
@@ -366,13 +427,18 @@ class UserInterface:
 
 					st.rerun()
 		else:
-			self.show_budget_postes()
+			self.show_budget_postes(self.budget, self.event_sheet.data["budget"], "budget")
 
-		self.show_budget_forms()
+		self.show_budget_forms(self.budget, "budget")
+
+
+	def rdvs_visibles(self, rdvs):
+		visibles = self.outils.rdvs_visibles()
+		return [rdv for rdv in rdvs if rdv in visibles]
 
 
 	def show_rappels_rdv(self):
-		for rdv in self.agenda.rdvs_proches():
+		for rdv in self.rdvs_visibles(self.agenda.rdvs_proches()):
 			date_lisible = datetime.fromisoformat(rdv["date_heure"]).strftime("%d/%m à %H:%M")
 			st.info(f"📅 Bientôt : {rdv['titre']} le {date_lisible} avec {rdv['avec']}")
 
@@ -389,22 +455,21 @@ class UserInterface:
 
 
 	def generer_briefing(self, rdv):
-		event_data = self.event_sheet.infos_sans_historique()
+		if self.prestataire:
+			event_data = self.infos_pour_destinataire(self.prestataire["id"])
+			historique, budget, fiche = [], [], fiche_publique(self.prestataire)
+		else:
+			event_data = self.event_sheet.infos_sans_historique()
+			historique, budget, fiche = self.event_sheet.data["historique"], self.resume_budget(), self.carnet.trouver_par_nom(rdv["avec"])
 
 		if self.liste_invites.invites:
 			event_data["invites"] = self.liste_invites.recap_traiteur()
 
-		return self.conversation_agent_object.prepare_briefing(
-			rdv,
-			event_data,
-			self.event_sheet.data["historique"],
-			self.resume_budget(),
-			self.carnet.trouver_par_nom(rdv["avec"])
-		)
+		return self.conversation_agent_object.prepare_briefing(rdv, event_data, historique, budget, fiche)
 
 
 	def show_rdvs(self):
-		rdvs = self.agenda.rdvs_a_venir()
+		rdvs = self.rdvs_visibles(self.agenda.rdvs_a_venir())
 
 		if not rdvs:
 			st.info("Aucun rendez-vous à venir.")
@@ -432,15 +497,15 @@ class UserInterface:
 					with st.expander("📋 Briefing avant le rendez-vous", expanded=True):
 						st.markdown(st.session_state.briefings[cle])
 
-		if self.agenda.rdvs:
+		if rdvs:
 			st.download_button(
 				"📥 Exporter vers mon calendrier (.ics)",
-				data=self.agenda.export_ics(),
+				data=self.agenda.export_ics(rdvs),
 				file_name="aurore_rendez_vous.ics",
 				mime="text/calendar"
 			)
 
-		if self.outils.avec_outlook and st.button("📤 Envoyer mes rendez-vous vers Outlook"):
+		if self.outils.avec_outlook and not self.prestataire and st.button("📤 Envoyer mes rendez-vous vers Outlook"):
 			with st.spinner("Synchronisation avec Outlook…"):
 				nombre_envoyes = self.outils.synchroniser_outlook()
 
@@ -455,16 +520,22 @@ class UserInterface:
 				heure = st.time_input("Heure")
 				duree = st.number_input("Durée (minutes)", min_value=15, step=15, value=60)
 				lieu = st.text_input("Lieu")
-				noms_prestataires = [AUCUN] + [prestataire["nom"] for prestataire in self.carnet.prestataires]
-				prestataire_choisi = st.selectbox("Avec quel prestataire", noms_prestataires)
-				autre = st.text_input("Ou avec quelqu'un d'autre (ex : les mariés, la témoin)")
-				avec = autre or ("" if prestataire_choisi == AUCUN else prestataire_choisi)
+
+				if self.prestataire:
+					avec = self.prestataire["nom"]
+				else:
+					noms_prestataires = [AUCUN] + [prestataire["nom"] for prestataire in self.carnet.prestataires]
+					prestataire_choisi = st.selectbox("Avec quel prestataire", noms_prestataires)
+					autre = st.text_input("Ou avec quelqu'un d'autre (ex : les mariés, la témoin)")
+					avec = autre or ("" if prestataire_choisi == AUCUN else prestataire_choisi)
 
 				if st.form_submit_button("Ajouter le rendez-vous") and titre:
 					date_heure = datetime.combine(jour, heure).isoformat()
 					conflit = self.agenda.add_rdv(titre, date_heure, duree, lieu, avec)
 
-					if conflit:
+					if conflit and self.prestataire:
+						st.error("⚠️ Ce créneau est déjà pris dans l'agenda du mariage. Choisissez un autre horaire.")
+					elif conflit:
 						st.error(f"⚠️ Conflit avec « {conflit['titre']} » déjà prévu à ce moment-là. Choisis un autre créneau.")
 					else:
 						st.rerun()
@@ -792,20 +863,22 @@ class UserInterface:
 			self.changer_statut_prestataire(prestataire, "Réservé")
 
 
-	def show_devis_form(self):
-		emetteurs = {PLANNER: None} | {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires}
+	def show_devis_form(self, deja_des_devis):
+		if self.prestataire:
+			emetteurs = {self.prestataire["nom"]: self.prestataire}
+		else:
+			emetteurs = {PLANNER: None} | {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires}
 
-		with st.expander("➕ Nouveau devis", expanded=not self.carnet_devis.devis):
-			emetteur = st.selectbox("Émis par", list(emetteurs))
+		with st.expander("➕ Nouveau devis", expanded=not deja_des_devis):
+			emetteur = st.selectbox("Émis par", list(emetteurs), disabled=bool(self.prestataire))
 			prestataire = emetteurs[emetteur]
 
 			if st.button("✨ Proposer les lignes avec AURORE"):
 				categorie = prestataire["categorie"] if prestataire else "Wedding planner"
+				infos = self.infos_pour_destinataire(self.prestataire["id"]) if self.prestataire else self.event_sheet.infos_sans_historique()
 
 				with st.spinner("AURORE prépare les lignes du devis…"):
-					suggestions = self.conversation_agent_object.suggest_devis_lignes(
-						emetteur, categorie, self.event_sheet.infos_sans_historique()
-					)
+					suggestions = self.conversation_agent_object.suggest_devis_lignes(emetteur, categorie, infos)
 
 				self.nouvelles_lignes_devis(lignes_valides(suggestions))
 
@@ -839,7 +912,7 @@ class UserInterface:
 					st.rerun()
 
 
-	def show_devis_carte(self, devis):
+	def show_devis_carte(self, devis, profil):
 		montants = totaux(devis)
 		numero = devis["numero"]
 
@@ -856,7 +929,8 @@ class UserInterface:
 				STATUTS_DEVIS,
 				index=STATUTS_DEVIS.index(devis["statut"]),
 				key=f"statut_devis_{numero}_{devis['statut']}",
-				label_visibility="collapsed"
+				label_visibility="collapsed",
+				disabled=profil == "Prestataire"
 			)
 
 			if nouveau_statut != devis["statut"]:
@@ -880,6 +954,9 @@ class UserInterface:
 				width="stretch"
 			)
 
+			if profil != "Wedding planner":
+				return
+
 			if bouton_envoi.button("✉️ Préparer le message d'envoi", key=f"envoi_{numero}", width="stretch"):
 				contexte = {**devis, "totaux": montants}
 				self.rediger(suggestion(f"envoi_devis_{numero}", "envoi_devis", destinataire_maries(self.event_sheet.data), contexte))
@@ -889,14 +966,20 @@ class UserInterface:
 				st.rerun()
 
 
-	def show_devis(self):
-		if not self.carnet_devis.devis:
+	def show_devis(self, profil):
+		devis_visibles = [
+			devis for devis in self.carnet_devis.devis
+			if not self.prestataire or meme_nom(devis["emetteur"], self.prestataire["nom"])
+		]
+
+		if not devis_visibles:
 			st.info("Aucun devis pour l'instant.")
 
-		for devis in reversed(self.carnet_devis.devis):
-			self.show_devis_carte(devis)
+		for devis in reversed(devis_visibles):
+			self.show_devis_carte(devis, profil)
 
-		self.show_devis_form()
+		if profil != "Mariés":
+			self.show_devis_form(bool(devis_visibles))
 
 
 	def apres_modif_invites(self):
@@ -993,6 +1076,41 @@ class UserInterface:
 
 
 	def show_recap_traiteur(self):
+		recap = self.show_recap_invites()
+		traiteurs = {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires if prestataire["categorie"] == "Traiteur"}
+
+		if not traiteurs:
+			st.caption("Ajoute ton traiteur dans 🤝 Prestataires pour lui envoyer ce récapitulatif.")
+			return
+
+		traiteur = traiteurs[st.selectbox("Traiteur", list(traiteurs))]
+
+		if st.button("✉️ Préparer le message pour le traiteur"):
+			cle = f"recap_traiteur_{uuid.uuid4().hex[:8]}"
+			self.rediger(suggestion(cle, "recap_traiteur", destinataire_prestataire(traiteur), recap))
+
+
+	def show_le_mariage(self):
+		infos = self.infos_pour_destinataire(self.prestataire["id"])
+		self.show_compteurs({
+			"📅 Date": date_lisible(infos["date"]) or "À définir",
+			"📍 Lieu": infos["lieu"] or "À définir",
+			"👥 Invités prévus": infos["nombre_invites"] or "À définir"
+		})
+
+		for cle, titre in [
+			("allergies_interdits", "⚠️ Allergies et interdits"),
+			("preferences", "🎨 Préférences du couple"),
+			("preferences_musicales", "🎵 Goûts musicaux")
+		]:
+			if infos[cle]:
+				st.markdown(f"**{titre}** : {', '.join(infos[cle])}")
+
+		st.subheader("🍽️ Les invités")
+		self.show_recap_invites()
+
+
+	def show_recap_invites(self):
 		recap = self.liste_invites.recap_traiteur()
 		self.show_compteurs({
 			"🍽️ Couverts confirmés": recap["couverts_confirmes"],
@@ -1011,17 +1129,7 @@ class UserInterface:
 			for nom, allergies in recap["allergies"].items():
 				st.markdown(f"- ⚠️ {nom} : {allergies}")
 
-		traiteurs = {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires if prestataire["categorie"] == "Traiteur"}
-
-		if not traiteurs:
-			st.caption("Ajoute ton traiteur dans 🤝 Prestataires pour lui envoyer ce récapitulatif.")
-			return
-
-		traiteur = traiteurs[st.selectbox("Traiteur", list(traiteurs))]
-
-		if st.button("✉️ Préparer le message pour le traiteur"):
-			cle = f"recap_traiteur_{uuid.uuid4().hex[:8]}"
-			self.rediger(suggestion(cle, "recap_traiteur", destinataire_prestataire(traiteur), recap))
+		return recap
 
 
 	def show_invites(self):
@@ -1168,6 +1276,15 @@ class UserInterface:
 					bind="query-params", required=True, label_visibility="collapsed"
 				)
 
+				if profil == "Prestataire" and self.carnet.prestataires:
+					nom = st.selectbox(
+						"Prestataire", [prestataire["nom"] for prestataire in self.carnet.prestataires],
+						key="prestataire_actif", label_visibility="collapsed", width=220
+					)
+					self.prestataire = self.carnet.trouver_par_nom(nom)
+
+		self.outils.pour_espace(profil, self.prestataire)
+		self.conversation_agent_object = self.get_persistant(self.cle_conversation(profil), ConversationAgent)
 		st.html(theme_html(profil))
 		st.markdown(particules_html(self.event_sheet.data["type_evenement"]), unsafe_allow_html=True)
 
@@ -1184,53 +1301,50 @@ class UserInterface:
 		if text_interaction :
 			with st.spinner("AURORE réfléchit…"):
 				self.conversation_agent_object.ask_llm(text_interaction, profil, self.outils)
-				new_info = self.conversation_agent_object.extract_event_info(self.event_sheet.infos_sans_historique())
-				self.event_sheet.update(new_info)
+
+				if profil != "Prestataire":
+					new_info = self.conversation_agent_object.extract_event_info(self.event_sheet.infos_sans_historique())
+					self.event_sheet.update(new_info)
 
 			st.session_state.version_invites += 1
 
 
 	def run(self):
 		profil = self.show_barre_haut()
-		self.traiter_message(profil)
 
+		if profil == "Prestataire" and not self.prestataire:
+			st.info("Aucun prestataire dans le carnet : ajoutez-en depuis l'espace Wedding planner (onglet 🤝 Prestataires).")
+			return
+
+		self.traiter_message(profil)
 		suggestions = self.messagerie.a_preparer(
 			detecter_messages(self.event_sheet.data, self.carnet, self.agenda, self.budget)
 		)
-		self.show_notification(suggestions)
 
-		chat_tab, fiche_tab, inspiration_tab, invites_tab, prestataires_tab, budget_tab, devis_tab, agenda_tab, messages_tab = st.tabs(
-			["💬 Discussion", "💑 Fiche couple", "✨ Inspiration", "👥 Invités", "🤝 Prestataires", "💰 Budget", "📄 Devis", "📅 Rendez-vous", "✉️ Messages"]
-		)
+		if profil != "Prestataire":
+			self.show_notification(suggestions)
 
-		with chat_tab:
-			self.show_discussion_history(profil)
+		afficheurs = {
+			"discussion": lambda: self.show_discussion_history(profil),
+			"fiche": self.show_fiche_couple,
+			"mariage": self.show_le_mariage,
+			"inspiration": self.show_inspiration,
+			"invites": self.show_invites,
+			"prestataires": self.show_prestataires,
+			"budget": self.show_budget,
+			"devis": lambda: self.show_devis(profil),
+			"agenda": self.show_agenda,
+			"messages": lambda: self.show_messages(suggestions),
+			"achats": self.show_achats
+		}
+		libelles = ONGLETS | ONGLETS_MARIES if profil == "Mariés" else ONGLETS
+		onglets = ESPACES[profil]
 
-		with fiche_tab:
-			self.show_fiche_couple()
+		for onglet, tab in zip(onglets, st.tabs([libelles[onglet] for onglet in onglets])):
+			with tab:
+				afficheurs[onglet]()
 
-		with inspiration_tab:
-			self.show_inspiration()
-
-		with invites_tab:
-			self.show_invites()
-
-		with prestataires_tab:
-			self.show_prestataires()
-
-		with budget_tab:
-			self.show_budget()
-
-		with agenda_tab:
-			self.show_agenda()
-
-		with devis_tab:
-			self.show_devis()
-
-		with messages_tab:
-			self.show_messages(suggestions)
-
-		self.show_event_sheet()
+		self.show_event_sheet(profil)
 
 
 

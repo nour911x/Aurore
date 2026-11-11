@@ -68,6 +68,15 @@ class ConversationAgent:
                 "ou suppression, annonce précisément ce que tu vas faire et attends un « oui » explicite."
             )
 
+        prestataire = getattr(avec_outils, "prestataire", None)
+
+        if prestataire:
+            consignes += (
+                f" Ce prestataire est {prestataire['nom']} ({prestataire['categorie']}). "
+                "Ne lui révèle jamais le budget du mariage, les autres prestataires, les notes internes "
+                "ni les coordonnées des mariés. Tu ne vois et ne gères que ses propres rendez-vous et devis."
+            )
+
         return {"role": "system", "content": consignes}
 
 
