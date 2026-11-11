@@ -12,6 +12,7 @@ TYPES_MESSAGE = {
     "rappel_paiement": "Rappel de paiement",
     "envoi_devis": "Envoi du devis",
     "recap_traiteur": "Récapitulatif invités pour le traiteur",
+    "envoi_moodboard": "Envoi du moodboard",
     "libre": "Message libre"
 }
 

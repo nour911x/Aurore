@@ -9,6 +9,10 @@ from messages import (
 	destinataire_maries, destinataire_prestataire, suggestion
 )
 from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, generer_pdf
+from inspiration import (
+	Inspiration, ELEMENTS_MOODBOARD, CATEGORIES_BEAUTE,
+	lien_maps, generer_moodboard_pdf
+)
 from invites import (
 	ListeInvites, GROUPES, STATUTS_INVITE, REGIMES,
 	nettoyer, lire_contacts, message_personnel, generer_faire_part_pdf
@@ -135,6 +139,7 @@ class UserInterface:
 		self.messagerie = self.get_persistant("messagerie", Messagerie)
 		self.carnet_devis = self.get_persistant("carnet_devis", CarnetDevis)
 		self.liste_invites = self.get_persistant("liste_invites", ListeInvites)
+		self.inspiration = self.get_persistant("inspiration", Inspiration)
 		st.session_state.setdefault("version_invites", 0)
 		st.session_state.setdefault("briefings", {})
 		st.session_state.setdefault("lignes_devis", [])
@@ -336,8 +341,8 @@ class UserInterface:
 			st.info(f"📅 Bientôt : {rdv['titre']} le {date_lisible} avec {rdv['avec']}")
 
 
-	def generer_briefing(self, rdv):
-		postes_budget = [
+	def resume_budget(self):
+		return [
 			{
 				"nom": poste["nom"],
 				"montant_prevu": poste["montant_prevu"],
@@ -346,6 +351,8 @@ class UserInterface:
 			for poste in self.budget.postes
 		]
 
+
+	def generer_briefing(self, rdv):
 		event_data = self.event_sheet.infos_sans_historique()
 
 		if self.liste_invites.invites:
@@ -355,7 +362,7 @@ class UserInterface:
 			rdv,
 			event_data,
 			self.event_sheet.data["historique"],
-			postes_budget,
+			self.resume_budget(),
 			self.carnet.trouver_par_nom(rdv["avec"])
 		)
 
@@ -527,12 +534,12 @@ class UserInterface:
 				st.rerun()
 
 
-	def show_prestataire_form(self):
-		with st.expander("➕ Ajouter un prestataire"):
-			with st.form("form_prestataire", clear_on_submit=True):
+	def show_prestataire_form(self, titre="➕ Ajouter un prestataire", cle="form_prestataire", categorie_defaut=CATEGORIES[0]):
+		with st.expander(titre):
+			with st.form(cle, clear_on_submit=True):
 				gauche, droite = st.columns(2)
 				nom = gauche.text_input("Nom (ex : Traiteur Saveurs d'Orient)")
-				categorie = droite.selectbox("Catégorie", CATEGORIES)
+				categorie = droite.selectbox("Catégorie", CATEGORIES, index=CATEGORIES.index(categorie_defaut))
 				contact = gauche.text_input("Personne à contacter")
 				telephone = droite.text_input("Téléphone (ex : 06 12 34 56 78)")
 				email = gauche.text_input("Email")
@@ -954,6 +961,115 @@ class UserInterface:
 			self.show_recap_traiteur()
 
 
+	@staticmethod
+	def show_liens(liens, par_ligne=3):
+		elements = list(liens.items())
+
+		for debut in range(0, len(elements), par_ligne):
+			for colonne, (texte, url) in zip(st.columns(par_ligne), elements[debut:debut + par_ligne]):
+				colonne.link_button(texte, url, width="stretch")
+
+
+	@staticmethod
+	def show_palette(couleurs):
+		pastilles = "".join(
+			f'<div style="text-align:center;font-size:0.8em">'
+			f'<div style="width:72px;height:72px;border-radius:14px;background:{couleur["hex"]};'
+			f'border:1px solid rgba(128,128,128,0.3)"></div>{couleur["nom"]}<br>{couleur["hex"]}</div>'
+			for couleur in couleurs
+		)
+		st.markdown(f'<div style="display:flex;flex-wrap:wrap;gap:12px">{pastilles}</div>', unsafe_allow_html=True)
+
+
+	def show_moodboard(self):
+		if st.button("✨ Créer le moodboard à partir de la discussion"):
+			with st.spinner("AURORE compose votre moodboard…"):
+				self.inspiration.set_moodboard(
+					self.conversation_agent_object.suggest_moodboard(self.event_sheet.infos_sans_historique(), ELEMENTS_MOODBOARD)
+				)
+
+		moodboard = self.inspiration.moodboard
+
+		if not moodboard:
+			st.info("Discute d'abord avec AURORE de vos goûts (style, couleurs, saison…), puis crée le moodboard.")
+			return
+
+		st.subheader(moodboard["titre"])
+		st.markdown(moodboard["ambiance"])
+		self.show_palette(moodboard["couleurs"])
+		st.markdown(" ".join(f"`{mot}`" for mot in moodboard["mots_cles"]))
+
+		st.markdown("**📌 Inspirations Pinterest**")
+		self.show_liens({f"📌 {element}": lien for element, lien in moodboard["liens"].items()})
+
+		bouton_pdf, bouton_envoi = st.columns(2)
+		bouton_pdf.download_button(
+			"📥 Télécharger le moodboard (PDF)",
+			data=generer_moodboard_pdf(moodboard, self.event_sheet.data["noms"]),
+			file_name="moodboard.pdf",
+			mime="application/pdf",
+			width="stretch"
+		)
+
+		if bouton_envoi.button("✉️ Préparer l'envoi aux mariés", width="stretch"):
+			cle = f"moodboard_{uuid.uuid4().hex[:8]}"
+			self.rediger(
+				suggestion(cle, "envoi_moodboard", destinataire_maries(self.event_sheet.data), moodboard),
+				"Présente le style en une phrase et inclus les liens Pinterest du contexte, un par ligne."
+			)
+
+
+	def show_recommandation(self, categorie, recommandation, lieu):
+		st.markdown(f"**💶 Budget à prévoir :** {recommandation.get('fourchette', '')}")
+		st.markdown(recommandation.get("conseil", ""))
+
+		for type_adresse in recommandation.get("types", []):
+			with st.container(border=True):
+				st.markdown(f"**{type_adresse.get('type', '')}**")
+				st.caption(type_adresse.get("pourquoi", ""))
+				st.link_button("📍 Trouver près de chez vous", lien_maps(type_adresse.get("recherche", categorie), lieu))
+
+		if recommandation.get("questions"):
+			st.markdown("**❓ Questions à poser**")
+
+			for question in recommandation["questions"]:
+				st.markdown(f"- {question}")
+
+
+	def show_adresses(self):
+		categorie = st.selectbox("Que cherchez-vous ?", list(CATEGORIES_BEAUTE))
+		lieu = st.text_input("Ville ou secteur de recherche", value=self.event_sheet.data["lieu"] or "")
+
+		if st.button("✨ Demander conseil à AURORE"):
+			with st.spinner("AURORE réfléchit à ce qui vous correspond…"):
+				self.inspiration.set_recommandation(
+					categorie,
+					self.conversation_agent_object.recommend_adresses(
+						categorie, self.event_sheet.infos_sans_historique(), self.resume_budget()
+					)
+				)
+
+		recommandation = self.inspiration.recommandations.get(categorie)
+
+		if recommandation:
+			self.show_recommandation(categorie, recommandation, lieu)
+			self.show_prestataire_form(
+				"➕ Vous avez trouvé une adresse ? Ajoutez-la au carnet",
+				f"form_adresse_{categorie}",
+				CATEGORIES_BEAUTE[categorie]
+			)
+
+
+	def show_inspiration(self):
+		moodboard_tab, adresses_tab = st.tabs(["🎨 Moodboard", "💄 Boutiques & beauté"])
+
+		with moodboard_tab:
+			self.show_moodboard()
+
+		with adresses_tab:
+			self.show_adresses()
+
+
 	def show_notification(self, suggestions):
 		total = len(suggestions) + len(self.messagerie.par_statut("à envoyer"))
 
@@ -967,8 +1083,8 @@ class UserInterface:
 		)
 		self.show_notification(suggestions)
 
-		chat_tab, fiche_tab, invites_tab, prestataires_tab, budget_tab, devis_tab, agenda_tab, messages_tab = st.tabs(
-			["💬 Discussion", "💑 Fiche couple", "👥 Invités", "🤝 Prestataires", "💰 Budget", "📄 Devis", "📅 Rendez-vous", "✉️ Messages"]
+		chat_tab, fiche_tab, inspiration_tab, invites_tab, prestataires_tab, budget_tab, devis_tab, agenda_tab, messages_tab = st.tabs(
+			["💬 Discussion", "💑 Fiche couple", "✨ Inspiration", "👥 Invités", "🤝 Prestataires", "💰 Budget", "📄 Devis", "📅 Rendez-vous", "✉️ Messages"]
 		)
 
 		text_interaction = st.chat_input(
@@ -987,6 +1103,9 @@ class UserInterface:
 
 		with fiche_tab:
 			self.show_fiche_couple()
+
+		with inspiration_tab:
+			self.show_inspiration()
 
 		with invites_tab:
 			self.show_invites()

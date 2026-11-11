@@ -112,6 +112,44 @@ class ConversationAgent:
         return self.complete([{"role": "user", "content": instruction}])
 
 
+    def suggest_moodboard(self, event_data, elements):
+        instruction = (
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            "À partir de toute la conversation et de la fiche, crée le moodboard du projet "
+            "(style, saison, couleurs et goûts exprimés). "
+            "Réponds UNIQUEMENT avec un JSON ayant les clés : "
+            "titre (nom court du style, ex : \"Bohème champêtre\"), "
+            "ambiance (2 ou 3 phrases), "
+            "couleurs (liste de 5 objets avec nom et hex au format #RRGGBB), "
+            "mots_cles (liste de 6 à 8 mots), "
+            f"recherches (objet avec exactement les clés {json.dumps(elements, ensure_ascii=False)}, "
+            "chaque valeur est une recherche Pinterest précise en français, ex : \"centre de table mariage bohème terracotta\")."
+        )
+
+        response = self.complete(self.conversation_history + [{"role": "user", "content": instruction}])
+
+        return self.parse_json(response, r"\{.*\}", {})
+
+
+    def recommend_adresses(self, categorie, event_data, postes_budget):
+        instruction = (
+            f"Les mariés cherchent : {categorie}.\n\n"
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Budget par poste : {json.dumps(postes_budget, ensure_ascii=False)}\n\n"
+            "Conseille-les selon leur style et leur budget. Ne cite AUCUN nom de boutique ou de personne réelle. "
+            "Réponds UNIQUEMENT avec un JSON ayant les clés : "
+            "fourchette (texte, ex : \"800 - 1 500 €\"), "
+            "conseil (2 phrases), "
+            "types (liste de 3 ou 4 objets avec type, pourquoi et recherche : "
+            "une recherche Google Maps courte, ex : \"créatrice robe de mariée bohème\"), "
+            "questions (liste de 4 questions à poser)."
+        )
+
+        response = self.complete([{"role": "user", "content": instruction}])
+
+        return self.parse_json(response, r"\{.*\}", {})
+
+
     @staticmethod
     def parse_json(response, pattern, default):
         match = re.search(pattern, response, re.DOTALL)
