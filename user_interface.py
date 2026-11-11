@@ -4,11 +4,18 @@ from event_state import EventSheet
 from budget import Budget
 from agenda import Agenda
 from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email
+from messages import (
+	Messagerie, TYPES_MESSAGE, detecter_messages,
+	destinataire_maries, destinataire_prestataire, suggestion
+)
 from datetime import date, datetime
+import uuid
 
 
 LABELS_FICHE = {
 	"noms": "Couple / client(s)",
+	"telephone": "Téléphone",
+	"email": "Email",
 	"type_evenement": "Événement",
 	"date": "Date",
 	"lieu": "Lieu",
@@ -52,56 +59,30 @@ def texte_vers_liste(texte):
 	return [element.strip() for element in texte.split(",") if element.strip()]
 
 
+def resume_contexte(contexte):
+	return contexte.get("titre") or contexte.get("libelle") or contexte.get("nom") or ""
+
+
 class UserInterface:
 	def __init__(self):
 		st.set_page_config(page_title="AURORE")
 		st.title("AURORE 🎉")
-		self.conversation_agent_object = self.get_persistant_conversation_agent()
-		self.event_sheet = self.get_persistant_event_sheet()
-		self.budget = self.get_persistant_budget()
-		self.agenda = self.get_persistant_agenda()
-		self.carnet = self.get_persistant_carnet()
+		self.conversation_agent_object = self.get_persistant("conversation_agent_object", ConversationAgent)
+		self.event_sheet = self.get_persistant("event_sheet", EventSheet)
+		self.budget = self.get_persistant("budget", Budget)
+		self.agenda = self.get_persistant("agenda", Agenda)
+		self.carnet = self.get_persistant("carnet", Carnet)
+		self.messagerie = self.get_persistant("messagerie", Messagerie)
 		st.session_state.setdefault("briefings", {})
 
 
-	def get_persistant_conversation_agent(self):
+	@staticmethod
+	def get_persistant(cle, classe):
 
-		if "conversation_agent_object" not in st.session_state:
-			st.session_state.conversation_agent_object = ConversationAgent()
+		if cle not in st.session_state:
+			st.session_state[cle] = classe()
 
-		return st.session_state.conversation_agent_object
-
-
-	def get_persistant_event_sheet(self):
-
-		if "event_sheet" not in st.session_state:
-			st.session_state.event_sheet = EventSheet()
-
-		return st.session_state.event_sheet
-
-
-	def get_persistant_budget(self):
-
-		if "budget" not in st.session_state:
-			st.session_state.budget = Budget()
-
-		return st.session_state.budget
-
-
-	def get_persistant_agenda(self):
-
-		if "agenda" not in st.session_state:
-			st.session_state.agenda = Agenda()
-
-		return st.session_state.agenda
-
-
-	def get_persistant_carnet(self):
-
-		if "carnet" not in st.session_state:
-			st.session_state.carnet = Carnet()
-
-		return st.session_state.carnet
+		return st.session_state[cle]
 
 
 	def show_event_sheet(self):
@@ -129,6 +110,8 @@ class UserInterface:
 			gauche, droite = st.columns(2)
 			noms = gauche.text_input("Couple / client(s)", value=data["noms"] or "")
 			type_evenement = droite.text_input("Type d'événement", value=data["type_evenement"] or "")
+			telephone = gauche.text_input("Téléphone des mariés", value=data["telephone"] or "")
+			email = droite.text_input("Email des mariés", value=data["email"] or "")
 			date_evenement = gauche.date_input("Date de l'événement", value=lire_date(data["date"]))
 			lieu = droite.text_input("Lieu", value=data["lieu"] or "")
 			budget = gauche.number_input("Budget (€)", min_value=0, step=500, value=int(data["budget"]) if data["budget"] else None)
@@ -145,6 +128,8 @@ class UserInterface:
 				nouvelle_fiche = {
 					"noms": noms or None,
 					"type_evenement": type_evenement or None,
+					"telephone": telephone or None,
+					"email": email or None,
 					"date": str(date_evenement) if date_evenement else None,
 					"lieu": lieu or None,
 					"budget": budget,
@@ -380,18 +365,21 @@ class UserInterface:
 			colonne.metric(f"{ICONES_STATUT[statut]} {statut}", compteurs[statut])
 
 
-	def show_boutons_contact(self, prestataire):
+	@staticmethod
+	def show_boutons_contact(telephone, email, lien="", message="", sujet=""):
 		liens = []
 
-		if prestataire["telephone"]:
-			liens.append(("💬 WhatsApp", lien_whatsapp(prestataire["telephone"])))
-			liens.append(("📞 Appeler", f"tel:{prestataire['telephone']}"))
+		if telephone:
+			liens.append(("💬 WhatsApp", lien_whatsapp(telephone, message)))
 
-		if prestataire["email"]:
-			liens.append(("✉️ Email", lien_email(prestataire["email"])))
+			if not message:
+				liens.append(("📞 Appeler", f"tel:{telephone}"))
 
-		if prestataire["lien"]:
-			liens.append(("🔗 Site / Instagram", prestataire["lien"]))
+		if email:
+			liens.append(("✉️ Email", lien_email(email, sujet, message)))
+
+		if lien:
+			liens.append(("🔗 Site / Instagram", lien))
 
 		if liens:
 			for colonne, (texte, url) in zip(st.columns(len(liens)), liens):
@@ -453,7 +441,7 @@ class UserInterface:
 			if prestataire["notes"]:
 				st.markdown(f"📝 {prestataire['notes']}")
 
-			self.show_boutons_contact(prestataire)
+			self.show_boutons_contact(prestataire["telephone"], prestataire["email"], prestataire["lien"])
 
 			if prestataire["statut"] == "Réservé":
 				self.show_ajout_facture_prestataire(prestataire)
@@ -501,9 +489,132 @@ class UserInterface:
 		self.show_prestataire_form()
 
 
+	def rediger(self, suggestion_message, consigne=""):
+		with st.spinner("AURORE rédige le message…"):
+			contenu = self.conversation_agent_object.write_message(
+				TYPES_MESSAGE[suggestion_message["type"]],
+				suggestion_message["destinataire"],
+				suggestion_message["contexte"],
+				self.event_sheet.infos_sans_historique(),
+				consigne
+			)
+
+		self.messagerie.ajouter(suggestion_message, contenu)
+		st.rerun()
+
+
+	def marquer_envoye(self, message):
+		self.messagerie.modifier(message["id"], statut="envoyé", date=date.today().isoformat())
+		self.event_sheet.add_echange(
+			"Message",
+			f"**{TYPES_MESSAGE[message['type']]}** envoyé à {message['destinataire']} :\n\n{message['contenu']}"
+		)
+
+		if message["type"] == "demande_devis" and message["prestataire_id"]:
+			self.carnet.changer_statut(message["prestataire_id"], "Devis demandé")
+
+		st.rerun()
+
+
+	def show_suggestions(self, suggestions):
+		st.subheader("🔔 À préparer")
+
+		if not suggestions:
+			st.caption("Rien à préparer pour l'instant 👌")
+
+		for suggestion_message in suggestions:
+			with st.container(border=True):
+				st.markdown(f"**{TYPES_MESSAGE[suggestion_message['type']]}** → {suggestion_message['destinataire']}")
+				st.caption(resume_contexte(suggestion_message["contexte"]))
+				bouton_rediger, bouton_ignorer = st.columns([3, 1])
+
+				if bouton_rediger.button("✍️ Rédiger avec AURORE", key=f"rediger_{suggestion_message['cle']}"):
+					self.rediger(suggestion_message)
+
+				if bouton_ignorer.button("Ignorer", key=f"ignorer_{suggestion_message['cle']}"):
+					self.messagerie.ajouter(suggestion_message, "", "ignoré")
+					st.rerun()
+
+
+	def show_a_envoyer(self):
+		st.subheader("📤 À envoyer")
+		messages = self.messagerie.par_statut("à envoyer")
+
+		if not messages:
+			st.caption("Aucun message en attente.")
+
+		for message in messages:
+			type_message = TYPES_MESSAGE[message["type"]]
+
+			with st.container(border=True):
+				st.markdown(f"**{type_message}** → {message['destinataire']}")
+				contenu = st.text_area("Message", value=message["contenu"], key=f"contenu_{message['id']}", height=180, label_visibility="collapsed")
+
+				if contenu != message["contenu"]:
+					self.messagerie.modifier(message["id"], contenu=contenu)
+
+				if not (message["telephone"] or message["email"]):
+					st.caption("Pas de téléphone ni d'email pour ce destinataire : copie le message ou complète sa fiche.")
+
+				self.show_boutons_contact(message["telephone"], message["email"], message=contenu, sujet=type_message)
+				bouton_envoye, bouton_supprimer = st.columns([3, 1])
+
+				if bouton_envoye.button("✅ Marquer comme envoyé", key=f"envoye_{message['id']}"):
+					self.marquer_envoye(message)
+
+				if bouton_supprimer.button("Supprimer", key=f"suppr_msg_{message['id']}"):
+					self.messagerie.modifier(message["id"], statut="ignoré")
+					st.rerun()
+
+
+	def show_message_libre(self):
+		destinataires = [destinataire_maries(self.event_sheet.data)] + [
+			destinataire_prestataire(prestataire) for prestataire in self.carnet.prestataires
+		]
+		par_nom = {destinataire["destinataire"]: destinataire for destinataire in destinataires}
+
+		with st.expander("✍️ Écrire un message libre"):
+			with st.form("form_message_libre", clear_on_submit=True):
+				choix = st.selectbox("Destinataire", list(par_nom))
+				consigne = st.text_area("Que veux-tu lui dire ? (AURORE s'occupe de la formulation)")
+
+				if st.form_submit_button("Rédiger") and consigne:
+					nouveau = suggestion(f"libre_{uuid.uuid4().hex[:8]}", "libre", par_nom[choix], {})
+					self.rediger(nouveau, f"Ce que le message doit dire : {consigne}")
+
+
+	def show_envoyes(self):
+		envoyes = self.messagerie.par_statut("envoyé")
+
+		if envoyes:
+			with st.expander(f"📨 Messages envoyés ({len(envoyes)})"):
+				for message in reversed(envoyes):
+					st.markdown(f"**{TYPES_MESSAGE[message['type']]}** → {message['destinataire']} · {message['date']}")
+					st.caption(message["contenu"])
+
+
+	def show_messages(self, suggestions):
+		self.show_suggestions(suggestions)
+		self.show_a_envoyer()
+		self.show_message_libre()
+		self.show_envoyes()
+
+
+	def show_notification(self, suggestions):
+		total = len(suggestions) + len(self.messagerie.par_statut("à envoyer"))
+
+		if total:
+			st.info(f"🔔 {total} message(s) à préparer ou à envoyer — voir l'onglet ✉️ Messages")
+
+
 	def run(self):
-		chat_tab, fiche_tab, prestataires_tab, budget_tab, agenda_tab = st.tabs(
-			["💬 Discussion", "💑 Fiche couple", "🤝 Prestataires", "💰 Budget", "📅 Rendez-vous"]
+		suggestions = self.messagerie.a_preparer(
+			detecter_messages(self.event_sheet.data, self.carnet, self.agenda, self.budget)
+		)
+		self.show_notification(suggestions)
+
+		chat_tab, fiche_tab, prestataires_tab, budget_tab, agenda_tab, messages_tab = st.tabs(
+			["💬 Discussion", "💑 Fiche couple", "🤝 Prestataires", "💰 Budget", "📅 Rendez-vous", "✉️ Messages"]
 		)
 
 		text_interaction = st.chat_input(
@@ -531,6 +642,9 @@ class UserInterface:
 
 		with agenda_tab:
 			self.show_agenda()
+
+		with messages_tab:
+			self.show_messages(suggestions)
 
 		self.show_event_sheet()
 

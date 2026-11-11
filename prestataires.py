@@ -1,8 +1,9 @@
-import json
-import os
 import re
 import uuid
+from datetime import date
 from urllib.parse import quote
+
+from storage import load_json, save_json
 
 
 CATEGORIES = [
@@ -51,13 +52,10 @@ class Carnet:
         self.load()
 
     def load(self):
-        if os.path.exists(self.file_path):
-            with open(self.file_path, "r", encoding="utf-8") as file:
-                self.prestataires = json.load(file)
+        self.prestataires = load_json(self.file_path, [])
 
     def save(self):
-        with open(self.file_path, "w", encoding="utf-8") as file:
-            json.dump(self.prestataires, file, ensure_ascii=False, indent=4)
+        save_json(self.file_path, self.prestataires)
 
     def add_prestataire(self, nom, categorie, contact, telephone, email, lien, tarif_indicatif, poste_budget, notes):
         self.prestataires.append({
@@ -71,7 +69,8 @@ class Carnet:
             "tarif_indicatif": tarif_indicatif,
             "poste_budget": poste_budget,
             "notes": notes,
-            "statut": STATUTS[0]
+            "statut": STATUTS[0],
+            "statut_depuis": date.today().isoformat()
         })
         self.save()
 
@@ -94,6 +93,7 @@ class Carnet:
 
         if prestataire:
             prestataire["statut"] = statut
+            prestataire["statut_depuis"] = date.today().isoformat()
             self.save()
 
     def supprimer(self, prestataire_id):

@@ -1,6 +1,6 @@
-import json
-import os
 from datetime import datetime, timedelta
+
+from storage import load_json, save_json
 
 
 class Agenda:
@@ -10,13 +10,10 @@ class Agenda:
         self.load()
 
     def load(self):
-        if os.path.exists(self.file_path):
-            with open(self.file_path, "r", encoding="utf-8") as file:
-                self.rdvs = json.load(file)
+        self.rdvs = load_json(self.file_path, [])
 
     def save(self):
-        with open(self.file_path, "w", encoding="utf-8") as file:
-            json.dump(self.rdvs, file, ensure_ascii=False, indent=4)
+        save_json(self.file_path, self.rdvs)
 
     def detecter_conflit(self, date_heure, duree_minutes):
         debut = datetime.fromisoformat(date_heure)

@@ -1,6 +1,6 @@
-import json
-import os
 from datetime import date
+
+from storage import load_json, save_json
 
 
 class EventSheet:
@@ -9,6 +9,8 @@ class EventSheet:
         self.data = {
             "type_evenement": None,
             "noms": None,
+            "telephone": None,
+            "email": None,
             "date": None,
             "lieu": None,
             "budget": None,
@@ -23,13 +25,15 @@ class EventSheet:
         self.load()
 
     def load(self):
-        if os.path.exists(self.file_path):
-            with open(self.file_path, "r", encoding="utf-8") as file:
-                self.data.update(json.load(file))
+        self.data.update(load_json(self.file_path, {}))
+        self.normaliser_noms()
+
+    def normaliser_noms(self):
+        if isinstance(self.data["noms"], list):
+            self.data["noms"] = " et ".join(self.data["noms"]) or None
 
     def save(self):
-        with open(self.file_path, "w", encoding="utf-8") as file:
-            json.dump(self.data, file, ensure_ascii=False, indent=4)
+        save_json(self.file_path, self.data)
 
     def infos_sans_historique(self):
         return {key: value for key, value in self.data.items() if key != "historique"}
@@ -38,6 +42,7 @@ class EventSheet:
         for key, value in new_info.items():
             if key in self.data and key != "historique" and value:
                 self.data[key] = value
+        self.normaliser_noms()
         self.save()
 
     def remplacer(self, new_info):
