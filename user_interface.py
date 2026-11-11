@@ -9,6 +9,10 @@ from messages import (
 	destinataire_maries, destinataire_prestataire, suggestion
 )
 from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, generer_pdf
+from invites import (
+	ListeInvites, GROUPES, STATUTS_INVITE, REGIMES,
+	nettoyer, lire_contacts, message_personnel, generer_faire_part_pdf
+)
 from datetime import date, datetime, timedelta
 import pandas as pd
 import uuid
@@ -59,7 +63,28 @@ CONFIG_COLONNES_DEVIS = {
 	"prix_unitaire": st.column_config.NumberColumn("Prix unit. HT (€)", min_value=0)
 }
 
-NOTES_DEVIS = "Acompte à régler à la signature, solde au plus tard le jour de l'événement."
+ICONES_INVITE = {
+	"À inviter": "⚪",
+	"Invité": "📨",
+	"Confirmé": "✅",
+	"Décliné": "❌"
+}
+
+COLONNES_INVITES = ["id", "nom", "groupe", "telephone", "email", "accompagnants", "regime", "allergies", "statut"]
+
+CONFIG_COLONNES_INVITES = {
+	"id": None,
+	"nom": st.column_config.TextColumn("Nom", required=True),
+	"groupe": st.column_config.SelectboxColumn("Groupe", options=GROUPES, default="Autre"),
+	"telephone": st.column_config.TextColumn("Téléphone"),
+	"email": st.column_config.TextColumn("Email"),
+	"accompagnants": st.column_config.NumberColumn("+ Accomp.", min_value=0, step=1, default=0),
+	"regime": st.column_config.SelectboxColumn("Régime", options=REGIMES, default="Aucun"),
+	"allergies": st.column_config.TextColumn("Allergies"),
+	"statut": st.column_config.SelectboxColumn("Statut", options=STATUTS_INVITE, default="À inviter")
+}
+
+NOTES_DEVIS ="Acompte à régler à la signature, solde au plus tard le jour de l'événement."
 
 
 def lire_date(texte):
@@ -109,6 +134,8 @@ class UserInterface:
 		self.carnet = self.get_persistant("carnet", Carnet)
 		self.messagerie = self.get_persistant("messagerie", Messagerie)
 		self.carnet_devis = self.get_persistant("carnet_devis", CarnetDevis)
+		self.liste_invites = self.get_persistant("liste_invites", ListeInvites)
+		st.session_state.setdefault("version_invites", 0)
 		st.session_state.setdefault("briefings", {})
 		st.session_state.setdefault("lignes_devis", [])
 		st.session_state.setdefault("version_lignes", 0)
@@ -319,9 +346,14 @@ class UserInterface:
 			for poste in self.budget.postes
 		]
 
+		event_data = self.event_sheet.infos_sans_historique()
+
+		if self.liste_invites.invites:
+			event_data["invites"] = self.liste_invites.recap_traiteur()
+
 		return self.conversation_agent_object.prepare_briefing(
 			rdv,
-			self.event_sheet.infos_sans_historique(),
+			event_data,
 			self.event_sheet.data["historique"],
 			postes_budget,
 			self.carnet.trouver_par_nom(rdv["avec"])
@@ -395,12 +427,15 @@ class UserInterface:
 		self.show_rdv_form()
 
 
+	@staticmethod
+	def show_compteurs(compteurs):
+		for colonne, (label, valeur) in zip(st.columns(len(compteurs)), compteurs.items()):
+			colonne.metric(label, valeur)
+
+
 	def show_resume_carnet(self):
 		compteurs = self.carnet.compter_par_statut()
-		colonnes = st.columns(len(STATUTS))
-
-		for colonne, statut in zip(colonnes, STATUTS):
-			colonne.metric(f"{ICONES_STATUT[statut]} {statut}", compteurs[statut])
+		self.show_compteurs({f"{ICONES_STATUT[statut]} {statut}": compteurs[statut] for statut in STATUTS})
 
 
 	@staticmethod
@@ -776,6 +811,149 @@ class UserInterface:
 		self.show_devis_form()
 
 
+	def apres_modif_invites(self):
+		st.session_state.version_invites += 1
+		st.rerun()
+
+
+	def show_compteurs_invites(self):
+		compteurs = self.liste_invites.compter_par_statut()
+		self.show_compteurs(
+			{f"{ICONES_INVITE[statut]} {statut}": compteurs[statut] for statut in STATUTS_INVITE}
+			| {"👥 Personnes attendues": self.liste_invites.personnes(["Invité", "Confirmé"])}
+		)
+
+
+	def show_import_contacts(self):
+		with st.expander("📇 Importer des contacts (.vcf ou .csv)"):
+			st.caption("Depuis ton téléphone ou Google Contacts : Exporter → fichier .vcf ou .csv.")
+			fichier = st.file_uploader("Fichier de contacts", type=["vcf", "csv"])
+			groupe = st.selectbox("Groupe à attribuer", GROUPES)
+
+			if fichier and st.button("Importer"):
+				self.liste_invites.importer(lire_contacts(fichier.name, fichier.getvalue()), groupe)
+				self.apres_modif_invites()
+
+
+	def show_table_invites(self):
+		st.caption("Modifie directement le tableau. Ajoute une ligne tout en bas, supprime en cochant à gauche.")
+		tableau = st.data_editor(
+			pd.DataFrame(self.liste_invites.invites, columns=COLONNES_INVITES),
+			column_config=CONFIG_COLONNES_INVITES,
+			num_rows="dynamic",
+			hide_index=True,
+			width="stretch",
+			key=f"invites_{st.session_state.version_invites}"
+		)
+		invites = nettoyer(tableau.to_dict("records"))
+
+		if invites != self.liste_invites.invites:
+			self.liste_invites.remplacer(invites)
+			self.apres_modif_invites()
+
+
+	def show_redaction_faire_part(self):
+		if st.button("✨ Rédiger le faire-part avec AURORE"):
+			with st.spinner("AURORE écrit votre faire-part…"):
+				self.liste_invites.set_faire_part(
+					self.conversation_agent_object.write_faire_part(self.event_sheet.infos_sans_historique())
+				)
+
+		faire_part = st.text_area("Texte du faire-part", value=self.liste_invites.faire_part, height=200)
+
+		if faire_part != self.liste_invites.faire_part:
+			self.liste_invites.set_faire_part(faire_part)
+
+		if faire_part:
+			st.download_button(
+				"📥 Télécharger le faire-part (PDF)",
+				data=generer_faire_part_pdf(faire_part, self.event_sheet.data),
+				file_name="faire-part.pdf",
+				mime="application/pdf"
+			)
+
+
+	def show_envoi_faire_parts(self):
+		st.subheader("📨 Envoyer les faire-parts")
+
+		if not self.liste_invites.faire_part:
+			st.info("Rédige d'abord le texte du faire-part ci-dessus.")
+			return
+
+		groupes = st.multiselect("Envoyer à", GROUPES, default=GROUPES)
+		selection = [
+			invite for invite in self.liste_invites.invites
+			if invite["statut"] == "À inviter" and invite["groupe"] in groupes
+		]
+		st.caption(f"{len(selection)} invité(s) n'ont pas encore reçu leur faire-part.")
+
+		for invite in selection:
+			with st.container(border=True):
+				st.markdown(f"**{invite['nom']}** · {invite['groupe']}")
+
+				if invite["telephone"] or invite["email"]:
+					self.show_boutons_contact(
+						invite["telephone"], invite["email"],
+						message=message_personnel(invite, self.liste_invites.faire_part), sujet="Faire-part"
+					)
+				else:
+					st.caption("Pas de téléphone ni d'email : ajoute-les dans la liste.")
+
+				if st.button("✅ Marquer comme invité", key=f"invite_{invite['id']}"):
+					self.liste_invites.changer_statut(invite["id"], "Invité")
+					self.apres_modif_invites()
+
+
+	def show_recap_traiteur(self):
+		recap = self.liste_invites.recap_traiteur()
+		self.show_compteurs({
+			"🍽️ Couverts confirmés": recap["couverts_confirmes"],
+			"⏳ Couverts attendus": recap["couverts_attendus"]
+		})
+
+		if recap["regimes"]:
+			st.markdown("**Régimes particuliers (invités confirmés)**")
+
+			for regime, nombre_invites in recap["regimes"].items():
+				st.markdown(f"- {regime} : {nombre_invites}")
+
+		if recap["allergies"]:
+			st.markdown("**Allergies**")
+
+			for nom, allergies in recap["allergies"].items():
+				st.markdown(f"- ⚠️ {nom} : {allergies}")
+
+		traiteurs = {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires if prestataire["categorie"] == "Traiteur"}
+
+		if not traiteurs:
+			st.caption("Ajoute ton traiteur dans 🤝 Prestataires pour lui envoyer ce récapitulatif.")
+			return
+
+		traiteur = traiteurs[st.selectbox("Traiteur", list(traiteurs))]
+
+		if st.button("✉️ Préparer le message pour le traiteur"):
+			cle = f"recap_traiteur_{uuid.uuid4().hex[:8]}"
+			self.rediger(suggestion(cle, "recap_traiteur", destinataire_prestataire(traiteur), recap))
+
+
+	def show_invites(self):
+		liste_tab, faire_part_tab, traiteur_tab = st.tabs(["📋 Liste", "💌 Faire-parts", "🍽️ Pour le traiteur"])
+
+		with liste_tab:
+			if self.liste_invites.invites:
+				self.show_compteurs_invites()
+
+			self.show_import_contacts()
+			self.show_table_invites()
+
+		with faire_part_tab:
+			self.show_redaction_faire_part()
+			self.show_envoi_faire_parts()
+
+		with traiteur_tab:
+			self.show_recap_traiteur()
+
+
 	def show_notification(self, suggestions):
 		total = len(suggestions) + len(self.messagerie.par_statut("à envoyer"))
 
@@ -789,8 +967,8 @@ class UserInterface:
 		)
 		self.show_notification(suggestions)
 
-		chat_tab, fiche_tab, prestataires_tab, budget_tab, devis_tab, agenda_tab, messages_tab = st.tabs(
-			["💬 Discussion", "💑 Fiche couple", "🤝 Prestataires", "💰 Budget", "📄 Devis", "📅 Rendez-vous", "✉️ Messages"]
+		chat_tab, fiche_tab, invites_tab, prestataires_tab, budget_tab, devis_tab, agenda_tab, messages_tab = st.tabs(
+			["💬 Discussion", "💑 Fiche couple", "👥 Invités", "🤝 Prestataires", "💰 Budget", "📄 Devis", "📅 Rendez-vous", "✉️ Messages"]
 		)
 
 		text_interaction = st.chat_input(
@@ -809,6 +987,9 @@ class UserInterface:
 
 		with fiche_tab:
 			self.show_fiche_couple()
+
+		with invites_tab:
+			self.show_invites()
 
 		with prestataires_tab:
 			self.show_prestataires()
