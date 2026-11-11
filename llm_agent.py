@@ -281,6 +281,7 @@ class ConversationAgent:
             "Le message est court, chaleureux et professionnel, en français, prêt à être envoyé. "
             "Vouvoie le destinataire, n'invente aucune information absente du contexte "
             "et signe « AURORE - Organisation d'événements ». "
+            "Pour un prestataire, ne cite aucun budget ni montant, sauf budget_prestation s'il figure dans la fiche. "
             "Réponds uniquement avec le texte du message."
         )
 
