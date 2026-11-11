@@ -142,6 +142,12 @@ OUTILS_OUTLOOK = [
 ]
 
 
+OUTILS_PAR_ESPACE = {
+    "Mariés": {schema["function"]["name"] for schema in OUTILS} - {"creer_devis"},
+    "Prestataire": {"consulter_agenda", "creer_rdv", "supprimer_rdv", "consulter_invites", "creer_devis"}
+}
+
+
 def lire_date_heure(texte):
     return datetime.strptime(texte.strip()[:16].replace("T", " "), FORMAT_DATE)
 
@@ -164,17 +170,29 @@ class Outils:
         self.messagerie = messagerie
         self.carnet_devis = carnet_devis
         self.avec_outlook = outlook.outlook_disponible()
+        self.espace = "Wedding planner"
+        self.prestataire = None
+
+    def pour_espace(self, espace, prestataire=None):
+        self.espace = espace
+        self.prestataire = prestataire
 
     def schemas(self):
-        return OUTILS + (OUTILS_OUTLOOK if self.avec_outlook else [])
+        schemas = OUTILS + (OUTILS_OUTLOOK if self.avec_outlook and self.espace != "Prestataire" else [])
+        autorises = OUTILS_PAR_ESPACE.get(self.espace)
+
+        return [schema for schema in schemas if autorises is None or schema["function"]["name"] in autorises]
 
     def executer(self, nom, arguments):
         noms_autorises = {schema["function"]["name"] for schema in self.schemas()}
 
         if nom not in noms_autorises:
-            return json.dumps({"erreur": f"outil inconnu : {nom}"}, ensure_ascii=False)
+            return json.dumps({"erreur": f"outil non disponible dans cet espace : {nom}"}, ensure_ascii=False)
 
         arguments = {cle: valeur for cle, valeur in arguments.items() if valeur is not None}
+
+        if self.prestataire and nom in ("creer_rdv", "creer_devis"):
+            arguments["avec" if nom == "creer_rdv" else "emetteur"] = self.prestataire["nom"]
 
         try:
             resultat = getattr(self, nom)(**arguments)
@@ -183,12 +201,22 @@ class Outils:
 
         return json.dumps(resultat, ensure_ascii=False, default=str)
 
+    def rdvs_visibles(self):
+        if not self.prestataire:
+            return self.agenda.rdvs
+
+        return [rdv for rdv in self.agenda.rdvs if meme_nom(rdv["avec"], self.prestataire["nom"])]
+
     def consulter_agenda(self, jours=30):
-        return self.agenda.rdvs_proches(jours=jours)
+        visibles = self.rdvs_visibles()
+        return [rdv for rdv in self.agenda.rdvs_proches(jours=jours) if rdv in visibles]
 
     def creer_rdv(self, titre, date_heure, duree_minutes=60, lieu="", avec=""):
         debut = lire_date_heure(date_heure).isoformat()
         conflit = self.agenda.add_rdv(titre, debut, duree_minutes, lieu, avec)
+
+        if conflit and self.prestataire:
+            return {"erreur": "ce créneau est déjà pris dans l'agenda du mariage, propose un autre horaire"}
 
         if conflit:
             return {"erreur": "conflit d'horaire", "rdv_existant": conflit}
@@ -198,7 +226,7 @@ class Outils:
     def supprimer_rdv(self, titre, date_heure):
         debut = lire_date_heure(date_heure)
 
-        for rdv in self.agenda.rdvs:
+        for rdv in self.rdvs_visibles():
             if meme_nom(rdv["titre"], titre) and lire_date_heure(rdv["date_heure"]) == debut:
                 self.agenda.supprimer_rdv(rdv["titre"], rdv["date_heure"])
                 return {"statut": "rendez-vous supprimé", "titre": rdv["titre"]}
