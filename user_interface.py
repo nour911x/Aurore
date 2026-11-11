@@ -8,7 +8,7 @@ from habillage import (
 from event_state import EventSheet
 from budget import Budget
 from agenda import Agenda
-from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email, appliquer_statut
+from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email, appliquer_statut, meme_nom
 from messages import (
 	Messagerie, TYPES_MESSAGE, detecter_messages,
 	destinataire_maries, destinataire_prestataire, suggestion
@@ -46,7 +46,12 @@ ICONES_STATUT = {
 
 AUCUN = "—"
 
-CHAMPS_DOSSIER = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités", "budget": "Budget"}
+CHAMPS_POUR_PRESTATAIRE = [
+	"type_evenement", "noms", "date", "lieu", "nombre_invites", "theme",
+	"allergies_interdits", "preferences", "preferences_musicales"
+]
+
+CHAMPS_DOSSIER ={"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités", "budget": "Budget"}
 
 DETAILS_DOSSIER = {
 	"noms": "Couple",
@@ -606,13 +611,32 @@ class UserInterface:
 		self.show_prestataire_form()
 
 
+	def budget_du_poste(self, prestataire):
+		for nom_poste in filter(None, [prestataire["poste_budget"], prestataire["categorie"]]):
+			for poste in self.budget.postes:
+				if meme_nom(poste["nom"], nom_poste):
+					return poste["montant_prevu"]
+
+		return None
+
+
+	def infos_pour_destinataire(self, prestataire_id):
+		infos = self.event_sheet.infos_sans_historique()
+		prestataire = self.carnet.trouver(prestataire_id)
+
+		if not prestataire:
+			return infos
+
+		return {cle: infos[cle] for cle in CHAMPS_POUR_PRESTATAIRE} | {"budget_prestation": self.budget_du_poste(prestataire)}
+
+
 	def rediger(self, suggestion_message, consigne=""):
 		with st.spinner("AURORE rédige le message…"):
 			contenu = self.conversation_agent_object.write_message(
 				TYPES_MESSAGE[suggestion_message["type"]],
 				suggestion_message["destinataire"],
 				suggestion_message["contexte"],
-				self.event_sheet.infos_sans_historique(),
+				self.infos_pour_destinataire(suggestion_message["prestataire_id"]),
 				consigne
 			)
 
