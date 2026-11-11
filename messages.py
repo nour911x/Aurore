@@ -129,6 +129,7 @@ class Messagerie:
             "prestataire_id": suggestion["prestataire_id"],
             "telephone": suggestion["telephone"],
             "email": suggestion["email"],
+            "contexte": suggestion.get("contexte") or {},
             "contenu": contenu,
             "statut": statut,
             "date": date.today().isoformat()

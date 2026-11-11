@@ -627,20 +627,32 @@ class UserInterface:
 		if not prestataire:
 			return infos
 
-		return {cle: infos[cle] for cle in CHAMPS_POUR_PRESTATAIRE} | {"budget_prestation": self.budget_du_poste(prestataire)}
+		infos_prestataire = {cle: infos[cle] for cle in CHAMPS_POUR_PRESTATAIRE}
+
+		if st.session_state.get("donner_enveloppe"):
+			infos_prestataire["budget_prestation"] = self.budget_du_poste(prestataire)
+
+		return infos_prestataire
 
 
-	def rediger(self, suggestion_message, consigne=""):
+	def ecrire(self, message, consigne=""):
 		with st.spinner("AURORE rédige le message…"):
-			contenu = self.conversation_agent_object.write_message(
-				TYPES_MESSAGE[suggestion_message["type"]],
-				suggestion_message["destinataire"],
-				suggestion_message["contexte"],
-				self.infos_pour_destinataire(suggestion_message["prestataire_id"]),
+			return self.conversation_agent_object.write_message(
+				TYPES_MESSAGE[message["type"]],
+				message["destinataire"],
+				message.get("contexte") or {},
+				self.infos_pour_destinataire(message["prestataire_id"]),
 				consigne
 			)
 
-		self.messagerie.ajouter(suggestion_message, contenu)
+
+	def rediger(self, suggestion_message, consigne=""):
+		self.messagerie.ajouter(suggestion_message, self.ecrire(suggestion_message, consigne))
+		st.rerun()
+
+
+	def reecrire(self, message):
+		self.messagerie.modifier(message["id"], contenu=self.ecrire(message))
 		st.rerun()
 
 
@@ -691,7 +703,10 @@ class UserInterface:
 
 			with st.container(border=True):
 				st.markdown(f"**{type_message}** → {message['destinataire']}")
-				contenu = st.text_area("Message", value=message["contenu"], key=f"contenu_{message['id']}", height=180, label_visibility="collapsed")
+				contenu = st.text_area(
+					"Message", value=message["contenu"], height=180, label_visibility="collapsed",
+					key=f"contenu_{message['id']}_{hash(message['contenu'])}"
+				)
 
 				if contenu != message["contenu"]:
 					self.messagerie.modifier(message["id"], contenu=contenu)
@@ -700,10 +715,13 @@ class UserInterface:
 					st.caption("Pas de téléphone ni d'email pour ce destinataire : copie le message ou complète sa fiche.")
 
 				self.show_boutons_contact(message["telephone"], message["email"], message=contenu, sujet=type_message)
-				bouton_envoye, bouton_supprimer = st.columns([3, 1])
+				bouton_envoye, bouton_reecrire, bouton_supprimer = st.columns([2, 2, 1])
 
 				if bouton_envoye.button("✅ Marquer comme envoyé", key=f"envoye_{message['id']}"):
 					self.marquer_envoye(message)
+
+				if bouton_reecrire.button("🔄 Réécrire avec AURORE", key=f"reecrire_{message['id']}"):
+					self.reecrire(message)
 
 				if bouton_supprimer.button("Supprimer", key=f"suppr_msg_{message['id']}"):
 					self.messagerie.modifier(message["id"], statut="ignoré")
@@ -737,6 +755,11 @@ class UserInterface:
 
 
 	def show_messages(self, suggestions):
+		st.toggle(
+			"Indiquer aux prestataires l'enveloppe prévue pour leur poste",
+			key="donner_enveloppe",
+			help="Désactivé : aucun montant n'est donné, le prestataire propose son prix."
+		)
 		self.show_suggestions(suggestions)
 		self.show_a_envoyer()
 		self.show_message_libre()
