@@ -18,6 +18,7 @@ from inspiration import (
 	Inspiration, ELEMENTS_MOODBOARD, CATEGORIES_BEAUTE,
 	lien_maps, generer_moodboard_pdf
 )
+from galerie import Galerie, CATEGORIES_PHOTO, STATUTS_DROIT, publiable, generer_autorisation_pdf
 from invites import (
 	ListeInvites, GROUPES, STATUTS_INVITE, REGIMES,
 	nettoyer, lire_contacts, message_personnel, generer_faire_part_pdf
@@ -59,14 +60,15 @@ ONGLETS = {
 	"devis": "📄 Devis",
 	"agenda": "📅 Rendez-vous",
 	"messages": "✉️ Messages",
-	"achats": "🧾 Achats & factures"
+	"achats": "🧾 Achats & factures",
+	"galerie": "📸 Galerie"
 }
 
 ONGLETS_MARIES = {"fiche": "💑 Notre mariage"}
 
 ESPACES = {
-	"Wedding planner": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages"],
-	"Mariés": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages"],
+	"Wedding planner": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages", "galerie"],
+	"Mariés": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages", "galerie"],
 	"Prestataire": ["discussion", "mariage", "agenda", "devis", "achats"]
 }
 
@@ -179,6 +181,8 @@ class UserInterface:
 		self.carnet_devis = self.get_persistant("carnet_devis", CarnetDevis)
 		self.liste_invites = self.get_persistant("liste_invites", ListeInvites)
 		self.inspiration = self.get_persistant("inspiration", Inspiration)
+		self.galerie = self.get_persistant("galerie", Galerie)
+		st.session_state.setdefault("version_galerie", 0)
 		self.outils = Outils(
 			self.event_sheet, self.agenda, self.budget, self.carnet,
 			self.liste_invites, self.messagerie, self.carnet_devis
@@ -1258,6 +1262,239 @@ class UserInterface:
 			self.show_adresses()
 
 
+	def analyser_photos(self, photos):
+		for photo in photos:
+			try:
+				analyse = self.conversation_agent_object.analyser_photo(self.galerie.lire(photo), CATEGORIES_PHOTO)
+			except RateLimitError:
+				st.warning("Limite de Groq atteinte : relance l'analyse des photos restantes dans une minute.")
+				return
+
+			categorie = analyse.get("categorie")
+			self.galerie.modifier(
+				photo["id"],
+				categorie=categorie if categorie in CATEGORIES_PHOTO else "Autre",
+				personnes=bool(analyse["personnes"]) if "personnes" in analyse else None,
+				description=analyse.get("description", "")
+			)
+
+
+	def show_import_photos(self):
+		fichiers = st.file_uploader(
+			"Ajouter des photos", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True,
+			key=f"photos_{st.session_state.version_galerie}"
+		)
+
+		if fichiers and st.button("📥 Ajouter à la galerie et trier avec AURORE", type="primary"):
+			nouvelles = [self.galerie.ajouter_photo(fichier.getvalue(), fichier.type) for fichier in fichiers]
+
+			with st.spinner(f"AURORE trie {len(nouvelles)} photo(s)…"):
+				self.analyser_photos(nouvelles)
+
+			st.session_state.version_galerie += 1
+			st.rerun()
+
+		restantes = self.galerie.a_analyser()
+
+		if restantes and st.button(f"🔍 Analyser les {len(restantes)} photo(s) restante(s)"):
+			with st.spinner("AURORE analyse les photos…"):
+				self.analyser_photos(restantes)
+
+			st.rerun()
+
+
+	def show_photo(self, photo):
+		with st.container(border=True):
+			st.image(self.galerie.lire(photo), width="stretch")
+			ok, raison = publiable(photo, self.galerie.droit_image)
+			st.caption(f"{'✅ Publiable' if ok else '🔒 Non publiable'} : {raison}")
+
+			categorie = st.selectbox(
+				"Catégorie", CATEGORIES_PHOTO, index=CATEGORIES_PHOTO.index(photo["categorie"]),
+				key=f"categorie_{photo['id']}_{photo['categorie']}", label_visibility="collapsed"
+			)
+			personnes = st.checkbox(
+				"Personnes reconnaissables", value=bool(photo["personnes"]),
+				key=f"personnes_{photo['id']}_{photo['personnes']}"
+			)
+
+			changements = {}
+
+			if categorie != photo["categorie"]:
+				changements["categorie"] = categorie
+
+			if personnes != bool(photo["personnes"]):
+				changements["personnes"] = personnes
+
+			if changements:
+				self.galerie.modifier(photo["id"], **changements)
+				st.rerun()
+
+			if st.button("Supprimer", key=f"suppr_photo_{photo['id']}"):
+				self.galerie.supprimer(photo["id"])
+				st.rerun()
+
+
+	def show_photos(self):
+		self.show_import_photos()
+
+		if not self.galerie.photos:
+			st.info("Aucune photo pour l'instant. Ajoute les photos du jour J ci-dessus.")
+			return
+
+		filtre = st.pills("Afficher", ["Toutes"] + CATEGORIES_PHOTO, default="Toutes")
+		photos = [photo for photo in reversed(self.galerie.photos) if filtre in ("Toutes", None, photo["categorie"])]
+
+		for index, colonne in enumerate(st.columns(3)):
+			with colonne:
+				for photo in photos[index::3]:
+					self.show_photo(photo)
+
+
+	def show_droit_image(self, profil):
+		statut = self.galerie.droit_image
+		st.metric("Droit à l'image des mariés", statut)
+		st.caption(
+			"Sans accord, seules les photos sans personne reconnaissable (salle, déco, buffet, détails) peuvent être publiées. "
+			"Les photos où des invités sont reconnaissables ne sont jamais publiées."
+		)
+
+		if profil == "Mariés":
+			accorder, refuser = st.columns(2)
+
+			if accorder.button("✅ Nous accordons notre droit à l'image", width="stretch"):
+				self.galerie.set_droit_image("Accordé")
+				st.rerun()
+
+			if refuser.button("❌ Nous refusons", width="stretch"):
+				self.galerie.set_droit_image("Refusé")
+				st.rerun()
+		else:
+			nouveau = st.selectbox(
+				"Statut", STATUTS_DROIT, index=STATUTS_DROIT.index(statut), key=f"droit_image_{statut}"
+			)
+
+			if nouveau != statut:
+				self.galerie.set_droit_image(nouveau)
+				st.rerun()
+
+			if st.button("✉️ Préparer la demande d'autorisation aux mariés"):
+				if statut == "Non demandé":
+					self.galerie.set_droit_image("Demandé")
+
+				cle = f"droit_image_{uuid.uuid4().hex[:8]}"
+				self.rediger(suggestion(cle, "demande_droit_image", destinataire_maries(self.event_sheet.data), {"usage": "Instagram et site d'AURORE"}))
+
+		st.download_button(
+			"📥 Télécharger l'autorisation à signer (PDF)",
+			data=generer_autorisation_pdf(self.event_sheet.data),
+			file_name="autorisation-droit-image.pdf",
+			mime="application/pdf"
+		)
+
+
+	def show_publication(self, photo):
+		with st.container(border=True):
+			image, texte = st.columns([1, 2])
+			contenu = self.galerie.lire(photo)
+			image.image(contenu, width="stretch")
+
+			with texte:
+				if st.button("✨ Rédiger la légende avec AURORE", key=f"legende_{photo['id']}"):
+					with st.spinner("AURORE écrit la légende…"):
+						legende = self.conversation_agent_object.write_legende(
+							f"photo « {photo['categorie']} » : {photo['description']}", self.event_sheet.infos_pour_prestataire()
+						)
+
+					self.galerie.modifier(photo["id"], legende=legende)
+					st.rerun()
+
+				legende = st.text_area(
+					"Légende", value=photo["legende"], height=150,
+					key=f"texte_legende_{photo['id']}_{hash(photo['legende'])}"
+				)
+
+				if legende != photo["legende"]:
+					self.galerie.modifier(photo["id"], legende=legende)
+
+				telecharger, ouvrir, publiee = st.columns(3)
+				telecharger.download_button(
+					"📥 Photo", data=contenu, file_name=photo["fichier"], key=f"dl_photo_{photo['id']}", width="stretch"
+				)
+				ouvrir.link_button("📱 Instagram", "https://www.instagram.com/", width="stretch")
+
+				if publiee.button("✅ Publiée", key=f"publiee_{photo['id']}", width="stretch"):
+					self.galerie.modifier(photo["id"], publiee=True)
+					st.rerun()
+
+
+	def show_instagram(self):
+		a_publier = [photo for photo in self.galerie.publiables() if not photo["publiee"]]
+		deja_publiees = [photo for photo in self.galerie.photos if photo["publiee"]]
+		st.caption("Seules les photos autorisées apparaissent ici. Copie la légende, télécharge la photo et publie-la depuis Instagram.")
+
+		if not a_publier:
+			st.info("Aucune photo publiable en attente.")
+
+		for photo in a_publier:
+			self.show_publication(photo)
+
+		if deja_publiees:
+			st.caption(f"📌 {len(deja_publiees)} photo(s) déjà publiée(s).")
+
+
+	def show_avis(self, profil):
+		if profil == "Mariés":
+			with st.form("form_avis", clear_on_submit=True):
+				note = st.slider("Votre note", 1, 5, 5)
+				commentaire = st.text_area("Votre avis sur l'organisation de votre mariage")
+
+				if st.form_submit_button("Envoyer notre avis") and commentaire:
+					self.galerie.ajouter_avis(self.event_sheet.data["noms"] or "Les mariés", note, commentaire)
+					st.rerun()
+		elif st.button("✉️ Demander un avis aux mariés"):
+			cle = f"avis_manuel_{uuid.uuid4().hex[:8]}"
+			self.rediger(suggestion(cle, "demande_avis", destinataire_maries(self.event_sheet.data), {"date_mariage": self.event_sheet.data["date"]}))
+
+		if not self.galerie.avis:
+			st.caption("Aucun avis pour l'instant.")
+
+		for avis in reversed(self.galerie.avis):
+			with st.container(border=True):
+				st.markdown(f"{'⭐' * avis['note']} · **{avis['auteur']}** · {date_lisible(avis['date'])}")
+				st.markdown(f"« {avis['commentaire']} »")
+
+				if profil == "Mariés":
+					continue
+
+				if self.galerie.droit_image != "Accordé":
+					st.caption("🔒 Pour en faire un post Instagram, il faut l'accord des mariés (droit à l'image).")
+					continue
+
+				if st.button("✨ Transformer en post témoignage", key=f"post_avis_{avis['id']}"):
+					with st.spinner("AURORE prépare le post…"):
+						post = self.conversation_agent_object.write_legende(
+							f"témoignage des mariés, note {avis['note']}/5 : « {avis['commentaire']} »",
+							self.event_sheet.infos_pour_prestataire(),
+							"Cite un court extrait de leur avis entre guillemets."
+						)
+
+					self.galerie.modifier_avis(avis["id"], post=post)
+					st.rerun()
+
+				if avis["post"]:
+					st.text_area("Post Instagram", value=avis["post"], height=150, key=f"texte_post_{avis['id']}_{hash(avis['post'])}")
+
+
+	def show_galerie(self, profil):
+		onglets = ["🖼️ Photos", "✍️ Droit à l'image", "⭐ Avis"] + (["📱 Instagram"] if profil != "Mariés" else [])
+		afficheurs = [self.show_photos, lambda: self.show_droit_image(profil), lambda: self.show_avis(profil), self.show_instagram]
+
+		for tab, afficher in zip(st.tabs(onglets), afficheurs):
+			with tab:
+				afficher()
+
+
 	def show_notification(self, suggestions):
 		total = len(suggestions) + len(self.messagerie.par_statut("à envoyer"))
 
@@ -1353,7 +1590,8 @@ class UserInterface:
 			"devis": lambda: self.show_devis(profil),
 			"agenda": self.show_agenda,
 			"messages": lambda: self.show_messages(suggestions),
-			"achats": self.show_achats
+			"achats": self.show_achats,
+			"galerie": lambda: self.show_galerie(profil)
 		}
 		libelles = ONGLETS | ONGLETS_MARIES if profil == "Mariés" else ONGLETS
 		onglets = ESPACES[profil]

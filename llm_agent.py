@@ -16,6 +16,7 @@ MODELE_TRANSCRIPTION = "whisper-large-v3-turbo"
 MAX_TOURS_OUTILS = 6
 TAILLE_IMAGE_MAX = 1024
 MAX_JETONS_DESCRIPTION = 350
+MAX_JETONS_ANALYSE = 120
 TEXTE_PHOTO_SEULE = "Voici une photo pour notre projet, qu'en penses-tu ?"
 
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -238,6 +239,31 @@ class ConversationAgent:
         response = self.complete([{"role": "user", "content": instruction}])
 
         return self.parse_json(response, r"\[.*\]", [])
+
+
+    def analyser_photo(self, contenu, categories):
+        instruction = (
+            "Analyse cette photo prise lors d'un mariage. Réponds UNIQUEMENT avec un JSON ayant les clés : "
+            f"categorie (une valeur parmi {json.dumps(categories, ensure_ascii=False)}), "
+            "personnes (true si au moins un visage ou une personne est reconnaissable, sinon false), "
+            "description (une phrase courte)."
+        )
+        message = self.appel([message_avec_image(instruction, preparer_image(contenu))], modele=MODELE_VISION, max_tokens=MAX_JETONS_ANALYSE)
+
+        return self.parse_json(message.content or "", r"\{.*\}", {})
+
+
+    def write_legende(self, sujet, event_data, consigne=""):
+        instruction = (
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Sujet du post : {sujet}\n\n{consigne}\n\n"
+            "Rédige la légende d'un post Instagram pour le compte d'AURORE, organisatrice d'événements : "
+            "2 à 4 phrases élégantes et chaleureuses, quelques emojis, puis une ligne de 6 à 10 hashtags en français. "
+            "Ne donne aucun montant, aucune information privée, ni le nom des invités. "
+            "Réponds uniquement avec la légende."
+        )
+
+        return self.complete([{"role": "user", "content": instruction}])
 
 
     def write_faire_part(self, event_data):

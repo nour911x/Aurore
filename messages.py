@@ -13,6 +13,8 @@ TYPES_MESSAGE = {
     "envoi_devis": "Envoi du devis",
     "recap_traiteur": "Récapitulatif invités pour le traiteur",
     "envoi_moodboard": "Envoi du moodboard",
+    "demande_droit_image": "Demande d'autorisation de droit à l'image",
+    "demande_avis": "Demande d'avis après le mariage",
     "libre": "Message libre"
 }
 
@@ -20,6 +22,7 @@ DELAI_RELANCE = 5
 DELAI_CONFIRMATION = 3
 DELAI_RAPPEL = 1
 DELAI_PAIEMENT = 3
+DELAI_AVIS = 3
 
 
 def destinataire_prestataire(prestataire):
@@ -93,11 +96,24 @@ def suggestions_factures(budget, event_data):
     ]
 
 
+def suggestions_avis(event_data):
+    try:
+        jour_j = date.fromisoformat(event_data["date"])
+    except (TypeError, ValueError):
+        return []
+
+    if (date.today() - jour_j).days < DELAI_AVIS:
+        return []
+
+    return [suggestion(f"avis_{jour_j}", "demande_avis", destinataire_maries(event_data), {"date_mariage": event_data["date"]})]
+
+
 def detecter_messages(event_data, carnet, agenda, budget):
     return (
         suggestions_prestataires(carnet)
         + suggestions_rdvs(agenda, carnet, event_data)
         + suggestions_factures(budget, event_data)
+        + suggestions_avis(event_data)
     )
 
 
