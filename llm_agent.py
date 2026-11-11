@@ -266,6 +266,42 @@ class ConversationAgent:
         return self.complete([{"role": "user", "content": instruction}])
 
 
+    def suggest_deroule(self, event_data, prestataires, rdvs):
+        instruction = (
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Prestataires réservés : {json.dumps(prestataires, ensure_ascii=False)}\n\n"
+            f"Rendez-vous déjà prévus le jour J : {json.dumps(rdvs, ensure_ascii=False)}\n\n"
+            "Construis le déroulé heure par heure du jour J, des préparatifs à la fin de soirée "
+            "(12 à 18 moments), adapté à ce type d'événement, au lieu et aux prestataires réservés. "
+            "Pour un mariage en France, repères habituels : préparatifs le matin, cérémonie vers 15h-16h, "
+            "vin d'honneur ensuite pendant 2h environ, entrée des mariés et dîner vers 19h30-20h30, "
+            "discours entre les plats, dessert et pièce montée vers 23h, ouverture du bal après le dessert, "
+            "fin de soirée vers 3h-4h. Les prestataires arrivent avant les invités pour l'installation. "
+            "Réponds UNIQUEMENT avec un JSON : une liste d'objets ayant les clés heure (format HH:MM), "
+            "moment (titre court), lieu, intervenants (noms exacts des prestataires concernés, séparés par des virgules, "
+            "ou les rôles comme « mariés », « témoins ») et details (une phrase)."
+        )
+
+        response = self.complete([{"role": "user", "content": instruction}])
+
+        return self.parse_json(response, r"\[.*\]", [])
+
+
+    def suggest_placement(self, invites, tables, event_data):
+        instruction = (
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Tables (nom et nombre de places) : {json.dumps(tables, ensure_ascii=False)}\n\n"
+            f"Invités (id, nom, groupe, personnes = invité + accompagnants, régime) : {json.dumps(invites, ensure_ascii=False)}\n\n"
+            "Propose un plan de table : la table d'honneur pour la famille la plus proche, les membres d'un même groupe "
+            "ensemble, des tables équilibrées, et ne dépasse jamais le nombre de places (compte les personnes, pas les invités). "
+            "Réponds UNIQUEMENT avec un JSON : un objet dont les clés sont les id des invités et les valeurs le nom exact de leur table."
+        )
+
+        response = self.complete([{"role": "user", "content": instruction}])
+
+        return self.parse_json(response, r"\{.*\}", {})
+
+
     def write_faire_part(self, event_data):
         instruction = (
             f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"

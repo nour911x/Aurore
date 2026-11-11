@@ -85,7 +85,8 @@ OUTILS = [
         {"nom": TEXTE, "statut": choix_parmi(STATUTS)},
         ["nom", "statut"]
     ),
-    outil("consulter_invites", "Donne les réponses des invités, le nombre de couverts, les régimes et les allergies.", {}),
+    outil("consulter_deroule", "Donne le déroulé heure par heure du jour J (moments, lieux, intervenants).", {}),
+    outil("consulter_invites","Donne les réponses des invités, le nombre de couverts, les régimes et les allergies.", {}),
     outil(
         "ajouter_invite",
         "Ajoute un invité à la liste." + CONFIRMATION,
@@ -144,7 +145,7 @@ OUTILS_OUTLOOK = [
 
 OUTILS_PAR_ESPACE = {
     "Mariés": {schema["function"]["name"] for schema in OUTILS} - {"creer_devis"},
-    "Prestataire": {"consulter_agenda", "creer_rdv", "supprimer_rdv", "consulter_invites", "creer_devis"}
+    "Prestataire": {"consulter_agenda", "creer_rdv", "supprimer_rdv", "consulter_invites", "consulter_deroule", "creer_devis"}
 }
 
 
@@ -161,7 +162,8 @@ def chercher_par_nom(elements, nom):
 
 
 class Outils:
-    def __init__(self, event_sheet, agenda, budget, carnet, liste_invites, messagerie, carnet_devis):
+    def __init__(self, event_sheet, agenda, budget, carnet, liste_invites, messagerie, carnet_devis, jour_j):
+        self.jour_j = jour_j
         self.event_sheet = event_sheet
         self.agenda = agenda
         self.budget = budget
@@ -266,6 +268,9 @@ class Outils:
         appliquer_statut(self.carnet, self.event_sheet, prestataire, statut)
 
         return {"statut": f"{prestataire['nom']} est maintenant « {statut} »"}
+
+    def consulter_deroule(self):
+        return self.jour_j.deroule or {"info": "le déroulé du jour J n'a pas encore été construit"}
 
     def consulter_invites(self):
         return {"par_statut": dict(self.liste_invites.compter_par_statut()), **self.liste_invites.recap_traiteur()}

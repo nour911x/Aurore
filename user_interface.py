@@ -3,7 +3,7 @@ from llm_agent import ConversationAgent, PROFILS
 from outils import Outils
 from habillage import (
 	AVERTISSEMENT_HTML, style_html, theme_html, particules_html,
-	marque_html, accueil_html, dossier_html
+	marque_html, accueil_html, dossier_html, frise_html, plan_salle_html
 )
 from event_state import EventSheet
 from budget import Budget
@@ -17,6 +17,11 @@ from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, date
 from inspiration import (
 	Inspiration, ELEMENTS_MOODBOARD, CATEGORIES_BEAUTE,
 	lien_maps, generer_moodboard_pdf
+)
+from jour_j import (
+	JourJ, COLONNES_DEROULE, FORMES_TABLE, ELEMENTS_SALLE, AUCUNE_TABLE,
+	nettoyer_deroule, generer_deroule_pdf, generer_plan_table_pdf,
+	creer_tables, invites_a_placer, personnes
 )
 from galerie import Galerie, CATEGORIES_PHOTO, STATUTS_DROIT, publiable, generer_autorisation_pdf
 from invites import (
@@ -61,14 +66,23 @@ ONGLETS = {
 	"agenda": "📅 Rendez-vous",
 	"messages": "✉️ Messages",
 	"achats": "🧾 Achats & factures",
-	"galerie": "📸 Galerie"
+	"galerie": "📸 Galerie",
+	"jourj": "🏰 Jour J"
+}
+
+CONFIG_COLONNES_DEROULE = {
+	"heure": st.column_config.TextColumn("Heure", help="Format 14:30", width="small"),
+	"moment": st.column_config.TextColumn("Moment", required=True),
+	"lieu": st.column_config.TextColumn("Lieu"),
+	"intervenants": st.column_config.TextColumn("Qui"),
+	"details": st.column_config.TextColumn("Détails", width="large")
 }
 
 ONGLETS_MARIES = {"fiche": "💑 Notre mariage"}
 
 ESPACES = {
-	"Wedding planner": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages", "galerie"],
-	"Mariés": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages", "galerie"],
+	"Wedding planner": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "jourj", "messages", "galerie"],
+	"Mariés": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "jourj", "messages", "galerie"],
 	"Prestataire": ["discussion", "mariage", "agenda", "devis", "achats"]
 }
 
@@ -182,10 +196,11 @@ class UserInterface:
 		self.liste_invites = self.get_persistant("liste_invites", ListeInvites)
 		self.inspiration = self.get_persistant("inspiration", Inspiration)
 		self.galerie = self.get_persistant("galerie", Galerie)
+		self.jour_j = self.get_persistant("jour_j", JourJ)
 		st.session_state.setdefault("version_galerie", 0)
 		self.outils = Outils(
 			self.event_sheet, self.agenda, self.budget, self.carnet,
-			self.liste_invites, self.messagerie, self.carnet_devis
+			self.liste_invites, self.messagerie, self.carnet_devis, self.jour_j
 		)
 		st.session_state.setdefault("version_invites", 0)
 		st.session_state.setdefault("briefings", {})
@@ -1011,19 +1026,29 @@ class UserInterface:
 
 	def show_table_invites(self):
 		st.caption("Modifie directement le tableau. Ajoute une ligne tout en bas, supprime en cochant à gauche.")
+		self.editer_tableau(
+			"invites", self.liste_invites.invites, COLONNES_INVITES, CONFIG_COLONNES_INVITES,
+			nettoyer, self.liste_invites.remplacer
+		)
+
+
+	@staticmethod
+	def editer_tableau(cle, lignes, colonnes, config, nettoyer_lignes, enregistrer, num_rows="dynamic"):
+		version = st.session_state.setdefault(f"version_{cle}", 0)
 		tableau = st.data_editor(
-			pd.DataFrame(self.liste_invites.invites, columns=COLONNES_INVITES),
-			column_config=CONFIG_COLONNES_INVITES,
-			num_rows="dynamic",
+			pd.DataFrame(lignes, columns=colonnes),
+			column_config=config,
+			num_rows=num_rows,
 			hide_index=True,
 			width="stretch",
-			key=f"invites_{st.session_state.version_invites}"
+			key=f"{cle}_{version}"
 		)
-		invites = nettoyer(tableau.to_dict("records"))
+		nouvelles = nettoyer_lignes(tableau.to_dict("records"))
 
-		if invites != self.liste_invites.invites:
-			self.liste_invites.remplacer(invites)
-			self.apres_modif_invites()
+		if nouvelles != lignes:
+			enregistrer(nouvelles)
+			st.session_state[f"version_{cle}"] += 1
+			st.rerun()
 
 
 	def show_redaction_faire_part(self):
@@ -1111,6 +1136,27 @@ class UserInterface:
 
 		st.subheader("🍽️ Les invités")
 		self.show_recap_invites()
+
+		if self.jour_j.salle["tables"]:
+			st.subheader("🪑 Couverts par table")
+			repartition = self.jour_j.par_table(self.liste_invites.invites)
+			st.dataframe(
+				pd.DataFrame([
+					{
+						"Table": table,
+						"Couverts": sum(personnes(invite) for invite in invites),
+						"Régimes": ", ".join(invite["regime"] for invite in invites if invite["regime"] != "Aucun")
+					}
+					for table, invites in repartition.items()
+				]),
+				hide_index=True,
+				width="stretch"
+			)
+
+		if self.jour_j.deroule:
+			st.subheader("⏱️ Déroulé du jour J")
+			st.caption("Vos créneaux sont mis en avant.")
+			st.markdown(frise_html(self.jour_j.deroule, self.prestataire["nom"]), unsafe_allow_html=True)
 
 
 	def show_recap_invites(self):
@@ -1495,6 +1541,177 @@ class UserInterface:
 				afficher()
 
 
+	def generer_deroule(self):
+		reserves = [
+			{"nom": prestataire["nom"], "categorie": prestataire["categorie"]}
+			for prestataire in self.carnet.prestataires if prestataire["statut"] == "Réservé"
+		]
+		date_mariage = self.event_sheet.data["date"] or ""
+		rdvs_jour_j = [rdv for rdv in self.agenda.rdvs if date_mariage and rdv["date_heure"].startswith(date_mariage)]
+
+		with st.spinner("AURORE construit le déroulé de la journée…"):
+			deroule = self.conversation_agent_object.suggest_deroule(self.event_sheet.infos_pour_prestataire(), reserves, rdvs_jour_j)
+
+		self.jour_j.set_deroule(deroule)
+		st.session_state["version_deroule"] = st.session_state.get("version_deroule", 0) + 1
+		st.rerun()
+
+
+	def show_deroule(self):
+		libelle = "✨ Régénérer le déroulé avec AURORE" if self.jour_j.deroule else "✨ Construire le déroulé avec AURORE"
+
+		if st.button(libelle):
+			self.generer_deroule()
+
+		if not self.jour_j.deroule:
+			st.info("AURORE peut proposer le programme heure par heure à partir de la fiche et des prestataires réservés.")
+
+		st.markdown(frise_html(self.jour_j.deroule), unsafe_allow_html=True)
+
+		with st.expander("✏️ Modifier le déroulé"):
+			self.editer_tableau(
+				"deroule", self.jour_j.deroule, COLONNES_DEROULE, CONFIG_COLONNES_DEROULE,
+				nettoyer_deroule, self.jour_j.set_deroule
+			)
+
+		if self.jour_j.deroule:
+			st.download_button(
+				"📥 Télécharger le déroulé (PDF) pour les prestataires",
+				data=generer_deroule_pdf(self.jour_j.deroule, self.event_sheet.data),
+				file_name="deroule-jour-j.pdf",
+				mime="application/pdf"
+			)
+
+
+	def show_amenagement(self, total_personnes):
+		with st.expander("🏗️ Aménager la salle", expanded=not self.jour_j.salle["tables"]):
+			with st.form("form_salle"):
+				gauche, milieu, droite = st.columns(3)
+				forme = gauche.selectbox("Forme des tables", FORMES_TABLE)
+				places = milieu.number_input("Places par table", min_value=2, max_value=20, value=8)
+				places_honneur = droite.number_input("Table d'honneur (places, 0 = aucune)", min_value=0, max_value=30, value=10)
+				suggestion_tables = max(1, -(-max(total_personnes - places_honneur, 0) // places))
+				nombre = st.number_input("Nombre de tables", min_value=1, max_value=60, value=suggestion_tables)
+				elements = st.multiselect("Dans la salle", ELEMENTS_SALLE, default=self.jour_j.salle["elements"] or ELEMENTS_SALLE[:3])
+
+				if st.form_submit_button("Créer le plan de la salle"):
+					self.jour_j.amenager(creer_tables(nombre, places, forme, places_honneur), elements)
+					st.session_state["version_placement"] = st.session_state.get("version_placement", 0) + 1
+					st.rerun()
+
+
+	def proposer_placement(self, a_placer):
+		invites = [
+			{"id": invite["id"], "nom": invite["nom"], "groupe": invite["groupe"], "personnes": personnes(invite), "regime": invite["regime"]}
+			for invite in a_placer
+		]
+		tables = [{"nom": table["nom"], "places": table["places"]} for table in self.jour_j.salle["tables"]]
+
+		with st.spinner("AURORE réfléchit au plan de table…"):
+			souhaits = self.conversation_agent_object.suggest_placement(invites, tables, self.event_sheet.infos_pour_prestataire())
+
+		if not self.jour_j.placer(souhaits, self.liste_invites.invites):
+			st.warning("AURORE n'a pas réussi à proposer un placement cette fois-ci. Réessaie, ou place les invités à la main ci-dessous.")
+			return
+
+		st.session_state["version_placement"] = st.session_state.get("version_placement", 0) + 1
+		st.rerun()
+
+
+	def lignes_placement(self, a_placer):
+		return [
+			{
+				"id": invite["id"], "nom": invite["nom"], "groupe": invite["groupe"], "personnes": personnes(invite),
+				"table": self.jour_j.salle["placement"].get(invite["id"], AUCUNE_TABLE)
+			}
+			for invite in a_placer
+		]
+
+
+	def show_placement(self, a_placer):
+		noms_tables = [AUCUNE_TABLE] + [table["nom"] for table in self.jour_j.salle["tables"]]
+		config = {
+			"id": None,
+			"nom": st.column_config.TextColumn("Invité", disabled=True),
+			"groupe": st.column_config.TextColumn("Groupe", disabled=True),
+			"personnes": st.column_config.NumberColumn("Personnes", disabled=True),
+			"table": st.column_config.SelectboxColumn("Table", options=noms_tables, required=True)
+		}
+
+		with st.expander("✏️ Modifier le placement"):
+			self.editer_tableau(
+				"placement", self.lignes_placement(a_placer), ["id", "nom", "groupe", "personnes", "table"], config,
+				lambda lignes: [{**ligne, "table": ligne["table"] or AUCUNE_TABLE} for ligne in lignes],
+				lambda lignes: self.jour_j.placer({ligne["id"]: ligne["table"] for ligne in lignes}, self.liste_invites.invites),
+				num_rows="fixed"
+			)
+
+
+	def show_tables(self, repartition):
+		colonnes = st.columns(3)
+
+		for index, (table, invites) in enumerate(repartition.items()):
+			places = next(ligne["places"] for ligne in self.jour_j.salle["tables"] if ligne["nom"] == table)
+			regimes = [invite["regime"] for invite in invites if invite["regime"] != "Aucun"]
+
+			with colonnes[index % 3].container(border=True):
+				st.markdown(f"**{table}** · {sum(personnes(invite) for invite in invites)}/{places}")
+				st.caption(", ".join(invite["nom"] for invite in invites) or "Personne pour l'instant")
+
+				if regimes:
+					st.caption("🍽️ " + ", ".join(sorted(set(regimes))))
+
+
+	def show_plan_salle(self):
+		a_placer = invites_a_placer(self.liste_invites.invites)
+		total = sum(personnes(invite) for invite in a_placer)
+		self.show_amenagement(total)
+
+		if not self.jour_j.salle["tables"]:
+			st.info("Commence par aménager la salle : nombre de tables, forme, table d'honneur.")
+			return
+
+		repartition = self.jour_j.par_table(self.liste_invites.invites)
+		non_places = self.jour_j.non_places(self.liste_invites.invites)
+		self.show_compteurs({
+			"🪑 Tables": len(self.jour_j.salle["tables"]),
+			"💺 Places": sum(table["places"] for table in self.jour_j.salle["tables"]),
+			"👥 Personnes": total,
+			"⏳ Non placés": len(non_places)
+		})
+
+		if not a_placer:
+			st.caption("Ajoute des invités dans 👥 Invités pour faire le plan de table.")
+		elif st.button("✨ Proposer le plan de table avec AURORE"):
+			self.proposer_placement(a_placer)
+
+		if non_places and len(non_places) < len(a_placer):
+			st.warning("Pas encore placés : " + ", ".join(invite["nom"] for invite in non_places))
+
+		st.markdown(plan_salle_html(self.jour_j.salle["tables"], repartition, self.jour_j.salle["elements"]), unsafe_allow_html=True)
+		st.caption("Survole une table pour voir qui y est assis.")
+
+		if a_placer:
+			self.show_placement(a_placer)
+			self.show_tables(repartition)
+			st.download_button(
+				"📥 Télécharger le plan de table (PDF)",
+				data=generer_plan_table_pdf(repartition, self.event_sheet.data),
+				file_name="plan-de-table.pdf",
+				mime="application/pdf"
+			)
+
+
+	def show_jour_j(self):
+		deroule_tab, plan_tab = st.tabs(["⏱️ Déroulé", "🪑 Plan de salle"])
+
+		with deroule_tab:
+			self.show_deroule()
+
+		with plan_tab:
+			self.show_plan_salle()
+
+
 	def show_notification(self, suggestions):
 		total = len(suggestions) + len(self.messagerie.par_statut("à envoyer"))
 
@@ -1591,7 +1808,8 @@ class UserInterface:
 			"agenda": self.show_agenda,
 			"messages": lambda: self.show_messages(suggestions),
 			"achats": self.show_achats,
-			"galerie": lambda: self.show_galerie(profil)
+			"galerie": lambda: self.show_galerie(profil),
+			"jourj": self.show_jour_j
 		}
 		libelles = ONGLETS | ONGLETS_MARIES if profil == "Mariés" else ONGLETS
 		onglets = ESPACES[profil]
