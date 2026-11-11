@@ -62,7 +62,9 @@ class ConversationAgent:
             "Garde exactement les mêmes clés. "
             "Garde les valeurs déjà connues sauf si la conversation les contredit. "
             "budget et nombre_invites sont des nombres, date au format AAAA-MM-JJ, "
-            "allergies_interdits et prestataires sont des listes de textes courts."
+            "noms contient les prénoms du couple ou des personnes fêtées, "
+            "allergies_interdits, preferences, preferences_musicales et prestataires "
+            "sont des listes de textes courts."
         )
 
         response = self.groq_client.chat.completions.create(
@@ -108,6 +110,46 @@ class ConversationAgent:
                 return []
 
         return []
+
+
+    def complete(self, messages):
+        return self.groq_client.chat.completions.create(
+            messages=messages,
+            model="openai/gpt-oss-120b",
+            include_reasoning=False,
+        ).choices[0].message.content
+
+
+    def summarize_conversation(self):
+        instruction = (
+            "Résume cette conversation pour l'historique du dossier client, en 3 à 6 puces markdown : "
+            "les décisions prises, les nouvelles informations sur le couple et ce qu'il reste à faire. "
+            "Réponds uniquement avec les puces."
+        )
+
+        return self.complete(self.conversation_history + [{"role": "user", "content": instruction}])
+
+
+    def prepare_briefing(self, rdv, event_data, historique, postes_budget):
+        instruction = (
+            "Tu prépares le briefing d'AURORE juste avant un rendez-vous, pour arriver "
+            "en connaissant parfaitement le dossier.\n\n"
+            f"Rendez-vous : {json.dumps(rdv, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Historique des échanges : {json.dumps(historique, ensure_ascii=False)}\n\n"
+            f"Budget par poste (prévu et déjà engagé) : {json.dumps(postes_budget, ensure_ascii=False)}\n\n"
+            "Rédige en français et en markdown, court et concret, avec ces sections :\n"
+            "### 👥 Le dossier en bref\n"
+            "### 🎯 Ce qui compte pour ce rendez-vous\n"
+            "(seulement les infos utiles ici : allergies pour une dégustation, goûts musicaux pour le DJ, "
+            "style pour un essayage, nombre d'invités pour une visite de salle...)\n"
+            "### 💶 Budget du poste concerné\n"
+            "### ❓ Questions à poser\n"
+            "### ⚠️ Points de vigilance\n\n"
+            "N'invente rien : si une information manque, dis-le et propose de la demander pendant le rendez-vous."
+        )
+
+        return self.complete([{"role": "user", "content": instruction}])
 
 
 
