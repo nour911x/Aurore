@@ -2,6 +2,8 @@ import streamlit as st
 from llm_agent import ConversationAgent
 from event_state import EventSheet
 from budget import Budget
+from agenda import Agenda
+from datetime import datetime
 
 
 class UserInterface:
@@ -11,6 +13,7 @@ class UserInterface:
 		self.conversation_agent_object = self.get_persistant_conversation_agent()
 		self.event_sheet = self.get_persistant_event_sheet()
 		self.budget = self.get_persistant_budget()
+		self.agenda = self.get_persistant_agenda()
 
 
 	def get_persistant_conversation_agent(self):
@@ -35,6 +38,14 @@ class UserInterface:
 			st.session_state.budget = Budget()
 
 		return st.session_state.budget
+
+
+	def get_persistant_agenda(self):
+
+		if "agenda" not in st.session_state:
+			st.session_state.agenda = Agenda()
+
+		return st.session_state.agenda
 
 
 	def show_event_sheet(self):
@@ -145,8 +156,66 @@ class UserInterface:
 		self.show_budget_forms()
 
 
+	def show_rappels_rdv(self):
+		for rdv in self.agenda.rdvs_proches():
+			date_lisible = datetime.fromisoformat(rdv["date_heure"]).strftime("%d/%m à %H:%M")
+			st.info(f"📅 Bientôt : {rdv['titre']} le {date_lisible} avec {rdv['avec']}")
+
+
+	def show_rdvs(self):
+		rdvs = self.agenda.rdvs_a_venir()
+
+		if not rdvs:
+			st.info("Aucun rendez-vous à venir.")
+
+		for rdv in rdvs:
+			date_lisible = datetime.fromisoformat(rdv["date_heure"]).strftime("%A %d/%m/%Y à %H:%M")
+
+			with st.container(border=True):
+				st.markdown(f"**{rdv['titre']}** — {date_lisible} ({rdv['duree_minutes']} min)")
+				st.markdown(f"📍 {rdv['lieu']} · 👤 {rdv['avec']}")
+
+				if st.button("Supprimer", key=f"del_{rdv['titre']}_{rdv['date_heure']}"):
+					self.agenda.supprimer_rdv(rdv["titre"], rdv["date_heure"])
+					st.rerun()
+
+		if self.agenda.rdvs:
+			st.download_button(
+				"📥 Exporter vers mon calendrier (.ics)",
+				data=self.agenda.export_ics(),
+				file_name="aurore_rendez_vous.ics",
+				mime="text/calendar"
+			)
+
+
+	def show_rdv_form(self):
+		with st.expander("➕ Ajouter un rendez-vous"):
+			with st.form("form_rdv", clear_on_submit=True):
+				titre = st.text_input("Titre (ex : essayage robe, visite de salle, dégustation)")
+				jour = st.date_input("Date")
+				heure = st.time_input("Heure")
+				duree = st.number_input("Durée (minutes)", min_value=15, step=15, value=60)
+				lieu = st.text_input("Lieu")
+				avec = st.text_input("Avec qui (ex : traiteur, DJ, propriétaire de la salle)")
+
+				if st.form_submit_button("Ajouter le rendez-vous") and titre:
+					date_heure = datetime.combine(jour, heure).isoformat()
+					conflit = self.agenda.add_rdv(titre, date_heure, duree, lieu, avec)
+
+					if conflit:
+						st.error(f"⚠️ Conflit avec « {conflit['titre']} » déjà prévu à ce moment-là. Choisis un autre créneau.")
+					else:
+						st.rerun()
+
+
+	def show_agenda(self):
+		self.show_rappels_rdv()
+		self.show_rdvs()
+		self.show_rdv_form()
+
+
 	def run(self):
-		chat_tab, budget_tab = st.tabs(["💬 Discussion", "💰 Budget"])
+		chat_tab, budget_tab, agenda_tab = st.tabs(["💬 Discussion", "💰 Budget", "📅 Rendez-vous"])
 
 		text_interaction = st.chat_input(
 			"Parle-moi de ton événement !",
@@ -164,6 +233,9 @@ class UserInterface:
 
 		with budget_tab:
 			self.show_budget()
+
+		with agenda_tab:
+			self.show_agenda()
 
 		self.show_event_sheet()
 
