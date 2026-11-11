@@ -3,7 +3,42 @@ from llm_agent import ConversationAgent
 from event_state import EventSheet
 from budget import Budget
 from agenda import Agenda
-from datetime import datetime
+from datetime import date, datetime
+
+
+LABELS_FICHE = {
+	"noms": "Couple / client(s)",
+	"type_evenement": "Événement",
+	"date": "Date",
+	"lieu": "Lieu",
+	"budget": "Budget (€)",
+	"nombre_invites": "Invités",
+	"theme": "Thème",
+	"allergies_interdits": "Allergies / interdits",
+	"preferences": "Préférences",
+	"preferences_musicales": "Musique",
+	"prestataires": "Prestataires"
+}
+
+CHAMPS_LISTES = {
+	"allergies_interdits": "Allergies / interdits (alimentaires, religieux, à éviter absolument…)",
+	"preferences": "Préférences (style, couleurs, fleurs, ambiance…)",
+	"preferences_musicales": "Préférences musicales (styles, chansons, ouverture de bal…)",
+	"prestataires": "Prestataires déjà choisis"
+}
+
+SOURCES_ECHANGE = ["Rendez-vous", "Appel", "Message", "Email", "Autre"]
+
+
+def lire_date(texte):
+	try:
+		return date.fromisoformat(texte)
+	except (TypeError, ValueError):
+		return None
+
+
+def texte_vers_liste(texte):
+	return [element.strip() for element in texte.split(",") if element.strip()]
 
 
 class UserInterface:
@@ -14,6 +49,7 @@ class UserInterface:
 		self.event_sheet = self.get_persistant_event_sheet()
 		self.budget = self.get_persistant_budget()
 		self.agenda = self.get_persistant_agenda()
+		st.session_state.setdefault("briefings", {})
 
 
 	def get_persistant_conversation_agent(self):
@@ -49,27 +85,95 @@ class UserInterface:
 
 
 	def show_event_sheet(self):
-		labels = {
-			"type_evenement": "Événement",
-			"date": "Date",
-			"lieu": "Lieu",
-			"budget": "Budget (€)",
-			"nombre_invites": "Invités",
-			"theme": "Thème",
-			"allergies_interdits": "Allergies / interdits",
-			"prestataires": "Prestataires"
-		}
-
 		with st.sidebar:
 			st.header("📋 Fiche événement")
 
-			for key, label in labels.items():
+			for key, label in LABELS_FICHE.items():
 				value = self.event_sheet.data[key]
 
 				if value:
 					if isinstance(value, list):
 						value = ", ".join(value)
 					st.markdown(f"**{label}** : {value}")
+
+			nombre_echanges = len(self.event_sheet.data["historique"])
+
+			if nombre_echanges:
+				st.caption(f"🗂️ {nombre_echanges} échange(s) dans l'historique")
+
+
+	def show_fiche_form(self):
+		data = self.event_sheet.data
+
+		with st.form("form_fiche"):
+			gauche, droite = st.columns(2)
+			noms = gauche.text_input("Couple / client(s)", value=data["noms"] or "")
+			type_evenement = droite.text_input("Type d'événement", value=data["type_evenement"] or "")
+			date_evenement = gauche.date_input("Date de l'événement", value=lire_date(data["date"]))
+			lieu = droite.text_input("Lieu", value=data["lieu"] or "")
+			budget = gauche.number_input("Budget (€)", min_value=0, step=500, value=int(data["budget"]) if data["budget"] else None)
+			invites = droite.number_input("Nombre d'invités", min_value=0, step=5, value=int(data["nombre_invites"]) if data["nombre_invites"] else None)
+			theme = st.text_input("Thème", value=data["theme"] or "")
+
+			st.caption("Pour les listes, sépare les éléments par des virgules.")
+			listes = {
+				key: st.text_area(label, value=", ".join(data[key]), height=68)
+				for key, label in CHAMPS_LISTES.items()
+			}
+
+			if st.form_submit_button("💾 Enregistrer la fiche"):
+				nouvelle_fiche = {
+					"noms": noms or None,
+					"type_evenement": type_evenement or None,
+					"date": str(date_evenement) if date_evenement else None,
+					"lieu": lieu or None,
+					"budget": budget,
+					"nombre_invites": invites,
+					"theme": theme or None
+				}
+
+				for key, texte in listes.items():
+					nouvelle_fiche[key] = texte_vers_liste(texte)
+
+				self.event_sheet.remplacer(nouvelle_fiche)
+				st.rerun()
+
+
+	def show_historique(self):
+		st.subheader("🗂️ Historique des échanges")
+
+		if self.conversation_agent_object.get_conversation_history():
+			if st.button("📝 Ajouter un résumé de la discussion avec AURORE"):
+				with st.spinner("AURORE résume la discussion…"):
+					resume = self.conversation_agent_object.summarize_conversation()
+
+				self.event_sheet.add_echange("Discussion avec AURORE", resume)
+				st.rerun()
+
+		with st.expander("➕ Noter un échange (rendez-vous, appel, message…)"):
+			with st.form("form_echange", clear_on_submit=True):
+				source = st.selectbox("Type d'échange", SOURCES_ECHANGE)
+				resume = st.text_area("Ce qui a été dit ou décidé")
+
+				if st.form_submit_button("Ajouter à l'historique") and resume:
+					self.event_sheet.add_echange(source, resume)
+					st.rerun()
+
+		historique = self.event_sheet.data["historique"]
+
+		if not historique:
+			st.caption("Aucun échange enregistré pour l'instant.")
+
+		for echange in reversed(historique):
+			with st.container(border=True):
+				date_lisible = date.fromisoformat(echange["date"]).strftime("%d/%m/%Y")
+				st.markdown(f"**{echange['source']}** · {date_lisible}")
+				st.markdown(echange["resume"])
+
+
+	def show_fiche_couple(self):
+		self.show_fiche_form()
+		self.show_historique()
 
 
 	def show_discussion_history(self):
@@ -162,6 +266,24 @@ class UserInterface:
 			st.info(f"📅 Bientôt : {rdv['titre']} le {date_lisible} avec {rdv['avec']}")
 
 
+	def generer_briefing(self, rdv):
+		postes_budget = [
+			{
+				"nom": poste["nom"],
+				"montant_prevu": poste["montant_prevu"],
+				"engage": self.budget.engage_du_poste(poste)
+			}
+			for poste in self.budget.postes
+		]
+
+		return self.conversation_agent_object.prepare_briefing(
+			rdv,
+			self.event_sheet.infos_sans_historique(),
+			self.event_sheet.data["historique"],
+			postes_budget
+		)
+
+
 	def show_rdvs(self):
 		rdvs = self.agenda.rdvs_a_venir()
 
@@ -170,14 +292,26 @@ class UserInterface:
 
 		for rdv in rdvs:
 			date_lisible = datetime.fromisoformat(rdv["date_heure"]).strftime("%A %d/%m/%Y à %H:%M")
+			cle = f"{rdv['titre']}_{rdv['date_heure']}"
 
 			with st.container(border=True):
 				st.markdown(f"**{rdv['titre']}** — {date_lisible} ({rdv['duree_minutes']} min)")
 				st.markdown(f"📍 {rdv['lieu']} · 👤 {rdv['avec']}")
 
-				if st.button("Supprimer", key=f"del_{rdv['titre']}_{rdv['date_heure']}"):
+				bouton_briefing, bouton_supprimer = st.columns([3, 1])
+
+				if bouton_briefing.button("📋 Préparer le briefing", key=f"brief_{cle}"):
+					with st.spinner("AURORE rassemble tout ce qu'il faut savoir…"):
+						st.session_state.briefings[cle] = self.generer_briefing(rdv)
+
+				if bouton_supprimer.button("Supprimer", key=f"del_{cle}"):
 					self.agenda.supprimer_rdv(rdv["titre"], rdv["date_heure"])
+					st.session_state.briefings.pop(cle, None)
 					st.rerun()
+
+				if cle in st.session_state.briefings:
+					with st.expander("📋 Briefing avant le rendez-vous", expanded=True):
+						st.markdown(st.session_state.briefings[cle])
 
 		if self.agenda.rdvs:
 			st.download_button(
@@ -215,7 +349,7 @@ class UserInterface:
 
 
 	def run(self):
-		chat_tab, budget_tab, agenda_tab = st.tabs(["💬 Discussion", "💰 Budget", "📅 Rendez-vous"])
+		chat_tab, fiche_tab, budget_tab, agenda_tab = st.tabs(["💬 Discussion", "💑 Fiche couple", "💰 Budget", "📅 Rendez-vous"])
 
 		text_interaction = st.chat_input(
 			"Parle-moi de ton événement !",
@@ -225,11 +359,14 @@ class UserInterface:
 
 		if text_interaction :
 			self.conversation_agent_object.ask_llm(text_interaction)
-			new_info = self.conversation_agent_object.extract_event_info(self.event_sheet.data)
+			new_info = self.conversation_agent_object.extract_event_info(self.event_sheet.infos_sans_historique())
 			self.event_sheet.update(new_info)
 
 		with chat_tab:
 			self.show_discussion_history()
+
+		with fiche_tab:
+			self.show_fiche_couple()
 
 		with budget_tab:
 			self.show_budget()
