@@ -42,6 +42,9 @@ class Budget:
                         facture["payee"] = True
         self.save()
 
+    def facture_existe(self, libelle):
+        return any(facture["libelle"] == libelle for poste in self.postes for facture in poste["factures"])
+
     def engage_du_poste(self, poste):
         return sum(facture["montant"] for facture in poste["factures"])
 

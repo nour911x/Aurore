@@ -8,7 +8,9 @@ from messages import (
 	Messagerie, TYPES_MESSAGE, detecter_messages,
 	destinataire_maries, destinataire_prestataire, suggestion
 )
-from datetime import date, datetime
+from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, generer_pdf
+from datetime import date, datetime, timedelta
+import pandas as pd
 import uuid
 
 
@@ -47,6 +49,18 @@ ICONES_STATUT = {
 
 AUCUN = "—"
 
+PLANNER = "AURORE - Wedding planner"
+
+COLONNES_DEVIS = ["designation", "quantite", "prix_unitaire"]
+
+CONFIG_COLONNES_DEVIS = {
+	"designation": st.column_config.TextColumn("Désignation", width="large"),
+	"quantite": st.column_config.NumberColumn("Qté", min_value=0),
+	"prix_unitaire": st.column_config.NumberColumn("Prix unit. HT (€)", min_value=0)
+}
+
+NOTES_DEVIS = "Acompte à régler à la signature, solde au plus tard le jour de l'événement."
+
 
 def lire_date(texte):
 	try:
@@ -57,6 +71,27 @@ def lire_date(texte):
 
 def texte_vers_liste(texte):
 	return [element.strip() for element in texte.split(",") if element.strip()]
+
+
+def nombre(valeur):
+	try:
+		valeur = float(valeur)
+	except (TypeError, ValueError):
+		return 0.0
+
+	return valeur if valeur == valeur else 0.0
+
+
+def lignes_valides(lignes):
+	return [
+		{
+			"designation": str(ligne.get("designation") or "").strip(),
+			"quantite": nombre(ligne.get("quantite")),
+			"prix_unitaire": nombre(ligne.get("prix_unitaire"))
+		}
+		for ligne in lignes
+		if isinstance(ligne.get("designation"), str) and ligne["designation"].strip()
+	]
 
 
 def resume_contexte(contexte):
@@ -73,7 +108,10 @@ class UserInterface:
 		self.agenda = self.get_persistant("agenda", Agenda)
 		self.carnet = self.get_persistant("carnet", Carnet)
 		self.messagerie = self.get_persistant("messagerie", Messagerie)
+		self.carnet_devis = self.get_persistant("carnet_devis", CarnetDevis)
 		st.session_state.setdefault("briefings", {})
+		st.session_state.setdefault("lignes_devis", [])
+		st.session_state.setdefault("version_lignes", 0)
 
 
 	@staticmethod
@@ -406,6 +444,13 @@ class UserInterface:
 					st.success("Ajouté au budget ✅")
 
 
+	def changer_statut_prestataire(self, prestataire, statut):
+		self.carnet.changer_statut(prestataire["id"], statut)
+
+		if statut == "Réservé":
+			self.event_sheet.ajouter_prestataire(f"{prestataire['nom']} ({prestataire['categorie']})")
+
+
 	def show_prestataire(self, prestataire):
 		with st.container(border=True):
 			infos, statut = st.columns([3, 2])
@@ -426,16 +471,12 @@ class UserInterface:
 				"Statut",
 				STATUTS,
 				index=STATUTS.index(prestataire["statut"]),
-				key=f"statut_{prestataire['id']}",
+				key=f"statut_{prestataire['id']}_{prestataire['statut']}",
 				label_visibility="collapsed"
 			)
 
 			if nouveau_statut != prestataire["statut"]:
-				self.carnet.changer_statut(prestataire["id"], nouveau_statut)
-
-				if nouveau_statut == "Réservé":
-					self.event_sheet.ajouter_prestataire(f"{prestataire['nom']} ({prestataire['categorie']})")
-
+				self.changer_statut_prestataire(prestataire, nouveau_statut)
 				st.rerun()
 
 			if prestataire["notes"]:
@@ -510,8 +551,10 @@ class UserInterface:
 			f"**{TYPES_MESSAGE[message['type']]}** envoyé à {message['destinataire']} :\n\n{message['contenu']}"
 		)
 
-		if message["type"] == "demande_devis" and message["prestataire_id"]:
-			self.carnet.changer_statut(message["prestataire_id"], "Devis demandé")
+		prestataire = self.carnet.trouver(message["prestataire_id"])
+
+		if message["type"] == "demande_devis" and prestataire:
+			self.changer_statut_prestataire(prestataire, "Devis demandé")
 
 		st.rerun()
 
@@ -600,6 +643,139 @@ class UserInterface:
 		self.show_envoyes()
 
 
+	def nouvelles_lignes_devis(self, lignes):
+		st.session_state.lignes_devis = lignes
+		st.session_state.version_lignes += 1
+
+
+	def accepter_devis(self, devis, montants):
+		prestataire = self.carnet.trouver(devis["prestataire_id"])
+		poste = (prestataire["poste_budget"] or prestataire["categorie"]) if prestataire else "Wedding planner"
+
+		if poste not in [poste_existant["nom"] for poste_existant in self.budget.postes]:
+			self.budget.add_poste(poste, montants["ttc"])
+
+		echeance_solde = lire_date(self.event_sheet.data["date"]) or date.today() + timedelta(days=30)
+		factures = [
+			(f"Acompte {devis['numero']}", montants["acompte"], date.today() + timedelta(days=7)),
+			(f"Solde {devis['numero']}", round(montants["ttc"] - montants["acompte"], 2), echeance_solde)
+		]
+
+		for libelle, montant, echeance in factures:
+			if montant and not self.budget.facture_existe(libelle):
+				self.budget.add_facture(poste, libelle, montant, str(echeance), False)
+
+		if prestataire:
+			self.changer_statut_prestataire(prestataire, "Réservé")
+
+
+	def show_devis_form(self):
+		emetteurs = {PLANNER: None} | {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires}
+
+		with st.expander("➕ Nouveau devis", expanded=not self.carnet_devis.devis):
+			emetteur = st.selectbox("Émis par", list(emetteurs))
+			prestataire = emetteurs[emetteur]
+
+			if st.button("✨ Proposer les lignes avec AURORE"):
+				categorie = prestataire["categorie"] if prestataire else "Wedding planner"
+
+				with st.spinner("AURORE prépare les lignes du devis…"):
+					suggestions = self.conversation_agent_object.suggest_devis_lignes(
+						emetteur, categorie, self.event_sheet.infos_sans_historique()
+					)
+
+				self.nouvelles_lignes_devis(lignes_valides(suggestions))
+
+			tableau = st.data_editor(
+				pd.DataFrame(st.session_state.lignes_devis, columns=COLONNES_DEVIS),
+				column_config=CONFIG_COLONNES_DEVIS,
+				num_rows="dynamic",
+				width="stretch",
+				key=f"lignes_devis_{st.session_state.version_lignes}"
+			)
+
+			gauche, milieu, droite = st.columns(3)
+			tva = gauche.number_input("TVA (%)", min_value=0.0, value=20.0, step=0.5)
+			acompte = milieu.number_input("Acompte (%)", min_value=0, max_value=100, value=30, step=5)
+			validite = droite.number_input("Validité (jours)", min_value=1, value=30)
+			notes = st.text_area("Conditions / notes", value=NOTES_DEVIS)
+
+			if st.button("📄 Créer le devis"):
+				lignes = lignes_valides(tableau.to_dict("records"))
+
+				if not lignes:
+					st.warning("Ajoute au moins une ligne avec une désignation.")
+				else:
+					self.carnet_devis.add_devis(
+						emetteur,
+						prestataire["id"] if prestataire else None,
+						self.event_sheet.data["noms"] or "Les mariés",
+						lignes, tva, acompte, validite, notes
+					)
+					self.nouvelles_lignes_devis([])
+					st.rerun()
+
+
+	def show_devis_carte(self, devis):
+		montants = totaux(devis)
+		numero = devis["numero"]
+
+		with st.container(border=True):
+			infos, statut = st.columns([3, 2])
+			infos.markdown(f"**{numero}** · {devis['emetteur']} → {devis['destinataire']}")
+			infos.caption(
+				f"{euros(montants['ttc'])} TTC · acompte {euros(montants['acompte'])} · "
+				f"valable jusqu'au {date_validite(devis):%d/%m/%Y}"
+			)
+
+			nouveau_statut = statut.selectbox(
+				"Statut",
+				STATUTS_DEVIS,
+				index=STATUTS_DEVIS.index(devis["statut"]),
+				key=f"statut_devis_{numero}_{devis['statut']}",
+				label_visibility="collapsed"
+			)
+
+			if nouveau_statut != devis["statut"]:
+				self.carnet_devis.changer_statut(numero, nouveau_statut)
+
+				if nouveau_statut == "Accepté":
+					self.accepter_devis(devis, montants)
+
+				st.rerun()
+
+			with st.expander("Voir le détail"):
+				st.dataframe(pd.DataFrame(devis["lignes"]), column_config=CONFIG_COLONNES_DEVIS, hide_index=True, width="stretch")
+
+			bouton_pdf, bouton_envoi, bouton_supprimer = st.columns([2, 3, 1])
+			bouton_pdf.download_button(
+				"📥 Télécharger le PDF",
+				data=generer_pdf(devis, self.event_sheet.data),
+				file_name=f"{numero}.pdf",
+				mime="application/pdf",
+				key=f"pdf_{numero}",
+				width="stretch"
+			)
+
+			if bouton_envoi.button("✉️ Préparer le message d'envoi", key=f"envoi_{numero}", width="stretch"):
+				contexte = {**devis, "totaux": montants}
+				self.rediger(suggestion(f"envoi_devis_{numero}", "envoi_devis", destinataire_maries(self.event_sheet.data), contexte))
+
+			if bouton_supprimer.button("Supprimer", key=f"suppr_devis_{numero}"):
+				self.carnet_devis.supprimer(numero)
+				st.rerun()
+
+
+	def show_devis(self):
+		if not self.carnet_devis.devis:
+			st.info("Aucun devis pour l'instant.")
+
+		for devis in reversed(self.carnet_devis.devis):
+			self.show_devis_carte(devis)
+
+		self.show_devis_form()
+
+
 	def show_notification(self, suggestions):
 		total = len(suggestions) + len(self.messagerie.par_statut("à envoyer"))
 
@@ -613,8 +789,8 @@ class UserInterface:
 		)
 		self.show_notification(suggestions)
 
-		chat_tab, fiche_tab, prestataires_tab, budget_tab, agenda_tab, messages_tab = st.tabs(
-			["💬 Discussion", "💑 Fiche couple", "🤝 Prestataires", "💰 Budget", "📅 Rendez-vous", "✉️ Messages"]
+		chat_tab, fiche_tab, prestataires_tab, budget_tab, devis_tab, agenda_tab, messages_tab = st.tabs(
+			["💬 Discussion", "💑 Fiche couple", "🤝 Prestataires", "💰 Budget", "📄 Devis", "📅 Rendez-vous", "✉️ Messages"]
 		)
 
 		text_interaction = st.chat_input(
@@ -642,6 +818,9 @@ class UserInterface:
 
 		with agenda_tab:
 			self.show_agenda()
+
+		with devis_tab:
+			self.show_devis()
 
 		with messages_tab:
 			self.show_messages(suggestions)

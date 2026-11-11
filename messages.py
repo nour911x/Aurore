@@ -10,6 +10,7 @@ TYPES_MESSAGE = {
     "confirmation": "Demande de confirmation",
     "rappel_rdv": "Rappel de rendez-vous",
     "rappel_paiement": "Rappel de paiement",
+    "envoi_devis": "Envoi du devis",
     "libre": "Message libre"
 }
 

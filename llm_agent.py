@@ -82,6 +82,22 @@ class ConversationAgent:
         return self.parse_json(response, r"\[.*\]", [])
 
 
+    def suggest_devis_lignes(self, emetteur, categorie, event_data):
+        instruction = (
+            f"Tu prépares un brouillon de devis émis par : {emetteur} ({categorie}).\n\n"
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            "Propose les lignes de prestations adaptées à cet émetteur et à l'événement "
+            "(nombre d'invités, allergies, préférences...). Les prix sont indicatifs, hors taxes, "
+            "réalistes pour la France et cohérents avec le budget. "
+            "Réponds UNIQUEMENT avec un JSON : une liste d'objets ayant les clés "
+            "designation (texte court), quantite (nombre) et prix_unitaire (nombre)."
+        )
+
+        response = self.complete([{"role": "user", "content": instruction}])
+
+        return self.parse_json(response, r"\[.*\]", [])
+
+
     @staticmethod
     def parse_json(response, pattern, default):
         match = re.search(pattern, response, re.DOTALL)
