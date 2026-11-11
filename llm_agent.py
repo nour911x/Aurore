@@ -287,6 +287,21 @@ class ConversationAgent:
         return self.parse_json(response, r"\[.*\]", [])
 
 
+    def suggest_placement(self, invites, tables, event_data):
+        instruction = (
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Tables (nom et nombre de places) : {json.dumps(tables, ensure_ascii=False)}\n\n"
+            f"Invités (id, nom, groupe, personnes = invité + accompagnants, régime) : {json.dumps(invites, ensure_ascii=False)}\n\n"
+            "Propose un plan de table : la table d'honneur pour la famille la plus proche, les membres d'un même groupe "
+            "ensemble, des tables équilibrées, et ne dépasse jamais le nombre de places (compte les personnes, pas les invités). "
+            "Réponds UNIQUEMENT avec un JSON : un objet dont les clés sont les id des invités et les valeurs le nom exact de leur table."
+        )
+
+        response = self.complete([{"role": "user", "content": instruction}])
+
+        return self.parse_json(response, r"\{.*\}", {})
+
+
     def write_faire_part(self, event_data):
         instruction = (
             f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"

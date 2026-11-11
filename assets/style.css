@@ -349,3 +349,42 @@ button[role="tab"][aria-selected="true"] p { color: #FFFFFF; }
     padding: 6px 12px;
     box-shadow: var(--ombre);
 }
+
+.aurore-plan {
+    width: 100%;
+    height: auto;
+    animation: apparition 0.6s ease-out;
+}
+
+.aurore-plan .plan-fond {
+    fill: var(--surface);
+    stroke: var(--lueur-2);
+    stroke-width: 2;
+}
+
+.aurore-plan .plan-zone { fill: var(--rose-pale); }
+
+.aurore-plan .plan-table {
+    fill: #FFFFFF;
+    stroke: var(--accent);
+    stroke-width: 2;
+    transition: fill 0.2s ease;
+}
+
+.aurore-plan .plan-table.pleine { fill: var(--lueur-2); }
+
+.aurore-plan g:hover .plan-table { fill: var(--lueur-1); }
+
+.aurore-plan text {
+    text-anchor: middle;
+    font-family: 'Jost', sans-serif;
+    fill: var(--encre);
+    pointer-events: none;
+}
+
+.aurore-plan .plan-texte { font-size: 13px; }
+
+.aurore-plan .plan-compte {
+    font-size: 11px;
+    fill: var(--encre-douce);
+}

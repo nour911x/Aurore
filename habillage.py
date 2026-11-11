@@ -3,6 +3,7 @@ from html import escape
 from pathlib import Path
 
 from devis import date_lisible, euros
+from jour_j import TABLE_HONNEUR
 
 
 FICHIER_STYLE = Path(__file__).with_name("assets") / "style.css"
@@ -146,6 +147,81 @@ def frise_html(deroule, mis_en_avant=None):
         )
 
     return f'<ol class="aurore-frise">{"".join(etapes)}</ol>'
+
+
+LARGEUR_PLAN = 880
+COLONNES_PLAN = 5
+ECART_X = 160
+ECART_Y = 130
+
+
+def zone_svg(x, y, largeur, hauteur, libelle):
+    return (
+        f'<rect class="plan-zone" x="{x}" y="{y}" width="{largeur}" height="{hauteur}" rx="14"/>'
+        f'<text class="plan-texte" x="{x + largeur / 2}" y="{y + hauteur / 2 + 5}">{escape(libelle)}</text>'
+    )
+
+
+def table_svg(table, invites, x, y):
+    occupees = sum(1 + invite["accompagnants"] for invite in invites)
+    classe = "plan-table pleine" if occupees >= table["places"] else "plan-table"
+    noms = escape(", ".join(invite["nom"] for invite in invites) or "Personne pour l'instant")
+
+    if table["forme"] == "Ronde":
+        forme = f'<circle class="{classe}" cx="{x}" cy="{y}" r="42"/>'
+    else:
+        largeur = 240 if table["nom"] == TABLE_HONNEUR else 110
+        forme = f'<rect class="{classe}" x="{x - largeur / 2}" y="{y - 24}" width="{largeur}" height="48" rx="8"/>'
+
+    return (
+        f"<g><title>{noms}</title>{forme}"
+        f'<text class="plan-texte" x="{x}" y="{y - 2}">{escape(table["nom"])}</text>'
+        f'<text class="plan-compte" x="{x}" y="{y + 15}">{occupees}/{table["places"]}</text></g>'
+    )
+
+
+def plan_salle_html(tables, repartition, elements):
+    honneur = [table for table in tables if table["nom"] == TABLE_HONNEUR]
+    autres = [table for table in tables if table["nom"] != TABLE_HONNEUR]
+    morceaux = []
+    y = 50
+
+    for table in honneur:
+        morceaux.append(table_svg(table, repartition.get(table["nom"], []), LARGEUR_PLAN / 2, y))
+        y += 60
+
+    if "Piste de danse" in elements:
+        morceaux.append(zone_svg(LARGEUR_PLAN / 2 - 120, y, 240, 100, "Piste de danse"))
+
+        if "DJ" in elements:
+            morceaux.append(zone_svg(LARGEUR_PLAN / 2 + 135, y + 25, 70, 50, "DJ"))
+
+        y += 120
+    elif "DJ" in elements:
+        morceaux.append(zone_svg(LARGEUR_PLAN / 2 - 35, y, 70, 50, "DJ"))
+        y += 70
+
+    debut_tables = y + 50
+    marge = (LARGEUR_PLAN - (COLONNES_PLAN - 1) * ECART_X) / 2
+
+    for index, table in enumerate(autres):
+        x = marge + (index % COLONNES_PLAN) * ECART_X
+        morceaux.append(table_svg(table, repartition.get(table["nom"], []), x, debut_tables + (index // COLONNES_PLAN) * ECART_Y))
+
+    hauteur = debut_tables + max(1, -(-len(autres) // COLONNES_PLAN)) * ECART_Y
+
+    for position, element in [(16, "Buffet"), (LARGEUR_PLAN - 66, "Bar")]:
+        if element in elements:
+            morceaux.append(zone_svg(position, 120, 50, hauteur - 200, element))
+
+    if "Photobooth" in elements:
+        morceaux.append(zone_svg(LARGEUR_PLAN - 150, hauteur - 50, 130, 40, "Photobooth"))
+
+    return (
+        f'<svg class="aurore-plan" viewBox="0 0 {LARGEUR_PLAN} {hauteur}" role="img" aria-label="Plan de salle">'
+        f'<rect class="plan-fond" x="2" y="2" width="{LARGEUR_PLAN - 4}" height="{hauteur - 4}" rx="24"/>'
+        f'{"".join(morceaux)}</svg>'
+    )
 
 
 def dossier_html(event_data, champs_essentiels, champs_details):
