@@ -1,14 +1,22 @@
-from groq import Groq, BadRequestError
+from groq import Groq, APIError, BadRequestError
+from PIL import Image, ImageOps
 
 from dotenv import load_dotenv
 from datetime import datetime
+import base64
+import io
 import os
 import json
 import re
 
 
 MODELE = "openai/gpt-oss-120b"
+MODELE_VISION = "qwen/qwen3.8-27b"
+MODELE_TRANSCRIPTION = "whisper-large-v3-turbo"
 MAX_TOURS_OUTILS = 6
+TAILLE_IMAGE_MAX = 1024
+MAX_JETONS_DESCRIPTION = 350
+TEXTE_PHOTO_SEULE = "Voici une photo pour notre projet, qu'en penses-tu ?"
 
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
@@ -23,6 +31,25 @@ PROFILS = {
 def date_du_jour():
     maintenant = datetime.now()
     return f"{JOURS[maintenant.weekday()]} {maintenant.day} {MOIS[maintenant.month - 1]} {maintenant.year}, {maintenant:%H:%M}"
+
+
+def preparer_image(contenu):
+    image = ImageOps.exif_transpose(Image.open(io.BytesIO(contenu))).convert("RGB")
+    image.thumbnail((TAILLE_IMAGE_MAX, TAILLE_IMAGE_MAX))
+    tampon = io.BytesIO()
+    image.save(tampon, format="JPEG", quality=85)
+
+    return base64.b64encode(tampon.getvalue()).decode("utf-8")
+
+
+def message_avec_image(texte, image):
+    return {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": texte},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image}"}}
+        ]
+    }
 
 
 class ConversationAgent:
@@ -47,13 +74,42 @@ class ConversationAgent:
         return self.conversation_history[1: ]
 
 
-    def update_conversation_history(self, role, content):
-        self.conversation_history.append(
+    def update_conversation_history(self, role, content, image=None, description=None):
+        message = {"role": role, "content": content}
+
+        if image:
+            message["image"] = image
+            message["description"] = description
+
+        self.conversation_history.append(message)
+
+
+    def historique_api(self):
+        return [
             {
-            "role": role,
-            "content": content,
+                "role": message["role"],
+                "content": message["content"] + (f"\n\n[Photo jointe : {message['description']}]" if message.get("description") else "")
             }
+            for message in self.conversation_history
+        ]
+
+
+    def decrire_image(self, image, question):
+        instruction = (
+            "Décris précisément cette photo envoyée pour l'organisation d'un événement : objets, couleurs, "
+            "matières, style, ambiance, dimensions apparentes et texte visible. "
+            f"Question de l'utilisateur à garder en tête : {question}"
         )
+
+        return self.appel([message_avec_image(instruction, image)], modele=MODELE_VISION, max_tokens=MAX_JETONS_DESCRIPTION).content
+
+
+    def transcribe(self, audio):
+        return self.groq_client.audio.transcriptions.create(
+            file=("audio.wav", audio),
+            model=MODELE_TRANSCRIPTION,
+            language="fr"
+        ).text
 
 
     @staticmethod
@@ -69,21 +125,35 @@ class ConversationAgent:
             )
 
         prestataire = getattr(avec_outils, "prestataire", None)
+        fiche = None
 
         if prestataire:
+            fiche = avec_outils.event_sheet.infos_pour_prestataire()
             consignes += (
                 f" Ce prestataire est {prestataire['nom']} ({prestataire['categorie']}). "
                 "Ne lui révèle jamais le budget du mariage, les autres prestataires, les notes internes "
                 "ni les coordonnées des mariés. Tu ne vois et ne gères que ses propres rendez-vous et devis."
             )
+        elif avec_outils:
+            fiche = avec_outils.event_sheet.infos_sans_historique()
+
+        if fiche:
+            consignes += (
+                f" Fiche actuelle de l'événement (à jour, utilise-la sans redemander ce qui y figure) : "
+                f"{json.dumps(fiche, ensure_ascii=False)}"
+            )
 
         return {"role": "system", "content": consignes}
 
 
-    def ask_llm(self, text_interaction, profil="Mariés", outils=None):
+    def ask_llm(self, text_interaction, profil="Mariés", outils=None, image=None):
 
-        self.update_conversation_history(role="user", content=text_interaction)
-        messages = self.conversation_history[:1] + [self.consignes_session(profil, outils)] + self.conversation_history[1:]
+        texte = text_interaction or TEXTE_PHOTO_SEULE
+        image = preparer_image(image) if image else None
+        description = self.decrire_image(image, texte) if image else None
+        self.update_conversation_history(role="user", content=texte, image=image, description=description)
+        historique = self.historique_api()
+        messages = historique[:1] + [self.consignes_session(profil, outils)] + historique[1:]
         response = "Je n'ai pas réussi à terminer : trop d'actions à la suite. Peux-tu reformuler ?"
 
         for _ in range(MAX_TOURS_OUTILS):
@@ -91,6 +161,9 @@ class ConversationAgent:
                 message = self.appel(messages, tools=outils.schemas() if outils else None)
             except BadRequestError:
                 continue
+            except APIError:
+                self.conversation_history.pop()
+                raise
 
             if not message.tool_calls:
                 response = message.content
@@ -130,7 +203,7 @@ class ConversationAgent:
             "sont des listes de textes courts."
         )
 
-        response = self.complete(self.conversation_history + [{"role": "user", "content": instruction}])
+        response = self.complete(self.historique_api() + [{"role": "user", "content": instruction}])
 
         return self.parse_json(response, r"\{.*\}", {})
 
@@ -195,7 +268,7 @@ class ConversationAgent:
             "chaque valeur est une recherche Pinterest précise en français, ex : \"centre de table mariage bohème terracotta\")."
         )
 
-        response = self.complete(self.conversation_history + [{"role": "user", "content": instruction}])
+        response = self.complete(self.historique_api() + [{"role": "user", "content": instruction}])
 
         return self.parse_json(response, r"\{.*\}", {})
 
@@ -232,12 +305,13 @@ class ConversationAgent:
             return default
 
 
-    def appel(self, messages, tools=None):
-        options = {"tools": tools} if tools else {}
+    def appel(self, messages, tools=None, modele=MODELE, **options):
+        if tools:
+            options["tools"] = tools
 
         return self.groq_client.chat.completions.create(
             messages=messages,
-            model=MODELE,
+            model=modele,
             include_reasoning=False,
             **options
         ).choices[0].message
@@ -254,7 +328,7 @@ class ConversationAgent:
             "Réponds uniquement avec les puces."
         )
 
-        return self.complete(self.conversation_history + [{"role": "user", "content": instruction}])
+        return self.complete(self.historique_api() + [{"role": "user", "content": instruction}])
 
 
     def prepare_briefing(self, rdv, event_data, historique, postes_budget, prestataire=None):

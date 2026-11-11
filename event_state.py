@@ -3,6 +3,12 @@ from datetime import date
 from storage import load_json, save_json
 
 
+CHAMPS_POUR_PRESTATAIRE = [
+    "type_evenement", "noms", "date", "lieu", "nombre_invites", "theme",
+    "allergies_interdits", "preferences", "preferences_musicales"
+]
+
+
 class EventSheet:
     def __init__(self, file_path="./event_data.json"):
         self.file_path = file_path
@@ -34,6 +40,9 @@ class EventSheet:
 
     def save(self):
         save_json(self.file_path, self.data)
+
+    def infos_pour_prestataire(self):
+        return {key: self.data[key] for key in CHAMPS_POUR_PRESTATAIRE}
 
     def infos_sans_historique(self):
         return {key: value for key, value in self.data.items() if key != "historique"}

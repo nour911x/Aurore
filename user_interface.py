@@ -22,7 +22,9 @@ from invites import (
 	ListeInvites, GROUPES, STATUTS_INVITE, REGIMES,
 	nettoyer, lire_contacts, message_personnel, generer_faire_part_pdf
 )
+from groq import APIError, APIConnectionError, AuthenticationError, RateLimitError
 from datetime import date, datetime, timedelta
+import base64
 import pandas as pd
 import uuid
 
@@ -45,11 +47,6 @@ ICONES_STATUT = {
 }
 
 AUCUN = "—"
-
-CHAMPS_POUR_PRESTATAIRE = [
-	"type_evenement", "noms", "date", "lieu", "nombre_invites", "theme",
-	"allergies_interdits", "preferences", "preferences_musicales"
-]
 
 ONGLETS = {
 	"discussion": "💬 Discussion",
@@ -338,6 +335,9 @@ class UserInterface:
 
 		for message in historique:
 			with st.chat_message(message["role"]):
+				if message.get("image"):
+					st.image(base64.b64decode(message["image"]), width=280)
+
 				st.markdown(message["content"])
 
 		st.markdown(AVERTISSEMENT_HTML, unsafe_allow_html=True)
@@ -692,13 +692,12 @@ class UserInterface:
 
 
 	def infos_pour_destinataire(self, prestataire_id):
-		infos = self.event_sheet.infos_sans_historique()
 		prestataire = self.carnet.trouver(prestataire_id)
 
 		if not prestataire:
-			return infos
+			return self.event_sheet.infos_sans_historique()
 
-		infos_prestataire = {cle: infos[cle] for cle in CHAMPS_POUR_PRESTATAIRE}
+		infos_prestataire = self.event_sheet.infos_pour_prestataire()
 
 		if st.session_state.get("donner_enveloppe"):
 			infos_prestataire["budget_prestation"] = self.budget_du_poste(prestataire)
@@ -1291,16 +1290,35 @@ class UserInterface:
 		return profil
 
 
-	def traiter_message(self, profil):
-		text_interaction = st.chat_input(
+	def lire_saisie(self, profil):
+		saisie = st.chat_input(
 			PLACEHOLDERS[profil],
-			accept_file=False,
-			accept_audio=False
-			) or st.session_state.pop("message_en_attente", None)
+			accept_file=True,
+			accept_audio=True,
+			file_type=["jpg", "jpeg", "png", "webp"]
+			)
+		texte = st.session_state.pop("message_en_attente", None)
 
-		if text_interaction :
-			with st.spinner("AURORE réfléchit…"):
-				self.conversation_agent_object.ask_llm(text_interaction, profil, self.outils)
+		if not saisie:
+			return texte, None
+
+		texte = saisie.text
+
+		if saisie.audio:
+			with st.spinner("AURORE écoute ton message…"):
+				transcription = self.conversation_agent_object.transcribe(saisie.audio.getvalue())
+
+			texte = " ".join(filter(None, [texte, transcription]))
+
+		return texte, saisie.files[0].getvalue() if saisie.files else None
+
+
+	def traiter_message(self, profil):
+		text_interaction, image = self.lire_saisie(profil)
+
+		if text_interaction or image:
+			with st.spinner("AURORE regarde ta photo…" if image else "AURORE réfléchit…"):
+				self.conversation_agent_object.ask_llm(text_interaction, profil, self.outils, image)
 
 				if profil != "Prestataire":
 					new_info = self.conversation_agent_object.extract_event_info(self.event_sheet.infos_sans_historique())
@@ -1348,9 +1366,26 @@ class UserInterface:
 
 
 
+def message_erreur(erreur):
+	if isinstance(erreur, RateLimitError):
+		return "AURORE a reçu trop de demandes d'un coup. Réessaie dans une minute."
+
+	if isinstance(erreur, AuthenticationError):
+		return "La clé GROQ_KEY du fichier .env est refusée par Groq. Vérifie-la."
+
+	if isinstance(erreur, APIConnectionError):
+		return "AURORE n'arrive pas à joindre son serveur. Vérifie ta connexion internet."
+
+	return "AURORE n'a pas pu répondre. Réessaie dans un instant."
+
+
 if __name__ == "__main__":
 	user_interface_object = UserInterface()
-	user_interface_object.run()
+
+	try:
+		user_interface_object.run()
+	except APIError as erreur:
+		st.error(message_erreur(erreur), icon="🌧️")
 
 
 
