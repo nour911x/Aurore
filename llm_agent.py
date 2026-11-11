@@ -40,14 +40,7 @@ class ConversationAgent:
     def ask_llm(self, text_interaction):
 
         self.update_conversation_history(role="user", content=text_interaction)
-
-        response = self.groq_client.chat.completions.create(
-            messages=self.conversation_history,
-            model="openai/gpt-oss-120b",
-            include_reasoning=False,
-        ).choices[0].message.content
-
-
+        response = self.complete(self.conversation_history)
         self.update_conversation_history(role="assistant", content=response)
 
         return response
@@ -62,26 +55,15 @@ class ConversationAgent:
             "Garde exactement les mêmes clés. "
             "Garde les valeurs déjà connues sauf si la conversation les contredit. "
             "budget et nombre_invites sont des nombres, date au format AAAA-MM-JJ, "
-            "noms contient les prénoms du couple ou des personnes fêtées, "
+            "noms est un texte avec les prénoms du couple ou des personnes fêtées (ex : \"Léa et Karim\"), "
+            "telephone et email sont des textes, "
             "allergies_interdits, preferences, preferences_musicales et prestataires "
             "sont des listes de textes courts."
         )
 
-        response = self.groq_client.chat.completions.create(
-            messages=self.conversation_history + [{"role": "user", "content": instruction}],
-            model="openai/gpt-oss-120b",
-            include_reasoning=False,
-        ).choices[0].message.content
+        response = self.complete(self.conversation_history + [{"role": "user", "content": instruction}])
 
-        match = re.search(r"\{.*\}", response, re.DOTALL)
-
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError:
-                return {}
-
-        return {}
+        return self.parse_json(response, r"\{.*\}", {})
 
 
     def suggest_budget_postes(self, event_data):
@@ -95,21 +77,22 @@ class ConversationAgent:
             "La somme des montant_prevu doit être égale au budget de la fiche."
         )
 
-        response = self.groq_client.chat.completions.create(
-            messages=[{"role": "user", "content": instruction}],
-            model="openai/gpt-oss-120b",
-            include_reasoning=False,
-        ).choices[0].message.content
+        response = self.complete([{"role": "user", "content": instruction}])
 
-        match = re.search(r"\[.*\]", response, re.DOTALL)
+        return self.parse_json(response, r"\[.*\]", [])
 
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError:
-                return []
 
-        return []
+    @staticmethod
+    def parse_json(response, pattern, default):
+        match = re.search(pattern, response, re.DOTALL)
+
+        if not match:
+            return default
+
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            return default
 
 
     def complete(self, messages):
@@ -148,6 +131,22 @@ class ConversationAgent:
             "### ❓ Questions à poser\n"
             "### ⚠️ Points de vigilance\n\n"
             "N'invente rien : si une information manque, dis-le et propose de la demander pendant le rendez-vous."
+        )
+
+        return self.complete([{"role": "user", "content": instruction}])
+
+
+    def write_message(self, type_message, destinataire, contexte, event_data, consigne=""):
+        instruction = (
+            f"Tu es AURORE, wedding planner. Rédige un message de type « {type_message} » "
+            f"à envoyer par WhatsApp ou email à : {destinataire}.\n\n"
+            f"Contexte : {json.dumps(contexte, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"{consigne}\n\n"
+            "Le message est court, chaleureux et professionnel, en français, prêt à être envoyé. "
+            "Vouvoie le destinataire, n'invente aucune information absente du contexte "
+            "et signe « AURORE - Organisation d'événements ». "
+            "Réponds uniquement avec le texte du message."
         )
 
         return self.complete([{"role": "user", "content": instruction}])
