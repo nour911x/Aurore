@@ -46,6 +46,11 @@ class EventSheet:
                 self.data[key] = value
         self.save()
 
+    def ajouter_prestataire(self, description):
+        if description not in self.data["prestataires"]:
+            self.data["prestataires"].append(description)
+            self.save()
+
     def add_echange(self, source, resume):
         self.data["historique"].append({
             "date": date.today().isoformat(),

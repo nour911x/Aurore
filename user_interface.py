@@ -3,6 +3,7 @@ from llm_agent import ConversationAgent
 from event_state import EventSheet
 from budget import Budget
 from agenda import Agenda
+from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email
 from datetime import date, datetime
 
 
@@ -29,6 +30,16 @@ CHAMPS_LISTES = {
 
 SOURCES_ECHANGE = ["Rendez-vous", "Appel", "Message", "Email", "Autre"]
 
+ICONES_STATUT = {
+	"À contacter": "⚪",
+	"Devis demandé": "🟡",
+	"Devis reçu": "🟠",
+	"Réservé": "🟢",
+	"Refusé": "🔴"
+}
+
+AUCUN = "—"
+
 
 def lire_date(texte):
 	try:
@@ -49,6 +60,7 @@ class UserInterface:
 		self.event_sheet = self.get_persistant_event_sheet()
 		self.budget = self.get_persistant_budget()
 		self.agenda = self.get_persistant_agenda()
+		self.carnet = self.get_persistant_carnet()
 		st.session_state.setdefault("briefings", {})
 
 
@@ -82,6 +94,14 @@ class UserInterface:
 			st.session_state.agenda = Agenda()
 
 		return st.session_state.agenda
+
+
+	def get_persistant_carnet(self):
+
+		if "carnet" not in st.session_state:
+			st.session_state.carnet = Carnet()
+
+		return st.session_state.carnet
 
 
 	def show_event_sheet(self):
@@ -280,7 +300,8 @@ class UserInterface:
 			rdv,
 			self.event_sheet.infos_sans_historique(),
 			self.event_sheet.data["historique"],
-			postes_budget
+			postes_budget,
+			self.carnet.trouver_par_nom(rdv["avec"])
 		)
 
 
@@ -330,7 +351,10 @@ class UserInterface:
 				heure = st.time_input("Heure")
 				duree = st.number_input("Durée (minutes)", min_value=15, step=15, value=60)
 				lieu = st.text_input("Lieu")
-				avec = st.text_input("Avec qui (ex : traiteur, DJ, propriétaire de la salle)")
+				noms_prestataires = [AUCUN] + [prestataire["nom"] for prestataire in self.carnet.prestataires]
+				prestataire_choisi = st.selectbox("Avec quel prestataire", noms_prestataires)
+				autre = st.text_input("Ou avec quelqu'un d'autre (ex : les mariés, la témoin)")
+				avec = autre or ("" if prestataire_choisi == AUCUN else prestataire_choisi)
 
 				if st.form_submit_button("Ajouter le rendez-vous") and titre:
 					date_heure = datetime.combine(jour, heure).isoformat()
@@ -348,8 +372,139 @@ class UserInterface:
 		self.show_rdv_form()
 
 
+	def show_resume_carnet(self):
+		compteurs = self.carnet.compter_par_statut()
+		colonnes = st.columns(len(STATUTS))
+
+		for colonne, statut in zip(colonnes, STATUTS):
+			colonne.metric(f"{ICONES_STATUT[statut]} {statut}", compteurs[statut])
+
+
+	def show_boutons_contact(self, prestataire):
+		liens = []
+
+		if prestataire["telephone"]:
+			liens.append(("💬 WhatsApp", lien_whatsapp(prestataire["telephone"])))
+			liens.append(("📞 Appeler", f"tel:{prestataire['telephone']}"))
+
+		if prestataire["email"]:
+			liens.append(("✉️ Email", lien_email(prestataire["email"])))
+
+		if prestataire["lien"]:
+			liens.append(("🔗 Site / Instagram", prestataire["lien"]))
+
+		if liens:
+			for colonne, (texte, url) in zip(st.columns(len(liens)), liens):
+				colonne.link_button(texte, url, width="stretch")
+
+
+	def show_ajout_facture_prestataire(self, prestataire):
+		with st.expander("🧾 Ajouter son devis / acompte au budget"):
+			if not self.budget.postes:
+				st.caption("Crée d'abord tes postes dans l'onglet 💰 Budget.")
+				return
+
+			with st.form(f"facture_{prestataire['id']}", clear_on_submit=True):
+				noms_postes = [poste["nom"] for poste in self.budget.postes]
+				index_poste = noms_postes.index(prestataire["poste_budget"]) if prestataire["poste_budget"] in noms_postes else 0
+				poste_choisi = st.selectbox("Poste", noms_postes, index=index_poste)
+				libelle = st.text_input("Libellé", value=f"Acompte {prestataire['nom']}")
+				montant = st.number_input("Montant (€)", min_value=0, step=50, value=prestataire["tarif_indicatif"] or 0)
+				echeance = st.date_input("Date d'échéance")
+				payee = st.checkbox("Déjà payée")
+
+				if st.form_submit_button("Ajouter au budget") and libelle:
+					self.budget.add_facture(poste_choisi, libelle, montant, str(echeance), payee)
+					st.success("Ajouté au budget ✅")
+
+
+	def show_prestataire(self, prestataire):
+		with st.container(border=True):
+			infos, statut = st.columns([3, 2])
+			infos.markdown(f"**{prestataire['nom']}** {ICONES_STATUT[prestataire['statut']]}")
+
+			details = [
+				texte for texte in [
+					f"👤 {prestataire['contact']}" if prestataire["contact"] else "",
+					f"💶 ~{prestataire['tarif_indicatif']} €" if prestataire["tarif_indicatif"] else "",
+					f"📂 {prestataire['poste_budget']}" if prestataire["poste_budget"] else ""
+				] if texte
+			]
+
+			if details:
+				infos.caption(" · ".join(details))
+
+			nouveau_statut = statut.selectbox(
+				"Statut",
+				STATUTS,
+				index=STATUTS.index(prestataire["statut"]),
+				key=f"statut_{prestataire['id']}",
+				label_visibility="collapsed"
+			)
+
+			if nouveau_statut != prestataire["statut"]:
+				self.carnet.changer_statut(prestataire["id"], nouveau_statut)
+
+				if nouveau_statut == "Réservé":
+					self.event_sheet.ajouter_prestataire(f"{prestataire['nom']} ({prestataire['categorie']})")
+
+				st.rerun()
+
+			if prestataire["notes"]:
+				st.markdown(f"📝 {prestataire['notes']}")
+
+			self.show_boutons_contact(prestataire)
+
+			if prestataire["statut"] == "Réservé":
+				self.show_ajout_facture_prestataire(prestataire)
+
+			if st.button("Supprimer", key=f"suppr_presta_{prestataire['id']}"):
+				self.carnet.supprimer(prestataire["id"])
+				st.rerun()
+
+
+	def show_prestataire_form(self):
+		with st.expander("➕ Ajouter un prestataire"):
+			with st.form("form_prestataire", clear_on_submit=True):
+				gauche, droite = st.columns(2)
+				nom = gauche.text_input("Nom (ex : Traiteur Saveurs d'Orient)")
+				categorie = droite.selectbox("Catégorie", CATEGORIES)
+				contact = gauche.text_input("Personne à contacter")
+				telephone = droite.text_input("Téléphone (ex : 06 12 34 56 78)")
+				email = gauche.text_input("Email")
+				lien = droite.text_input("Site ou Instagram (lien complet)")
+				tarif = gauche.number_input("Tarif indicatif (€)", min_value=0, step=100)
+				postes = [AUCUN] + [poste["nom"] for poste in self.budget.postes]
+				poste_budget = droite.selectbox("Poste de budget", postes)
+				notes = st.text_area("Notes (spécialités, disponibilités, impressions…)", height=68)
+
+				if st.form_submit_button("Ajouter au carnet") and nom:
+					self.carnet.add_prestataire(
+						nom, categorie, contact, telephone, email, lien,
+						tarif, None if poste_budget == AUCUN else poste_budget, notes
+					)
+					st.rerun()
+
+
+	def show_prestataires(self):
+		if not self.carnet.prestataires:
+			st.info("Ton carnet est vide. Ajoute ton premier prestataire ci-dessous 👇")
+		else:
+			self.show_resume_carnet()
+
+		for categorie, membres in self.carnet.par_categorie().items():
+			st.subheader(categorie)
+
+			for prestataire in membres:
+				self.show_prestataire(prestataire)
+
+		self.show_prestataire_form()
+
+
 	def run(self):
-		chat_tab, fiche_tab, budget_tab, agenda_tab = st.tabs(["💬 Discussion", "💑 Fiche couple", "💰 Budget", "📅 Rendez-vous"])
+		chat_tab, fiche_tab, prestataires_tab, budget_tab, agenda_tab = st.tabs(
+			["💬 Discussion", "💑 Fiche couple", "🤝 Prestataires", "💰 Budget", "📅 Rendez-vous"]
+		)
 
 		text_interaction = st.chat_input(
 			"Parle-moi de ton événement !",
@@ -367,6 +522,9 @@ class UserInterface:
 
 		with fiche_tab:
 			self.show_fiche_couple()
+
+		with prestataires_tab:
+			self.show_prestataires()
 
 		with budget_tab:
 			self.show_budget()
