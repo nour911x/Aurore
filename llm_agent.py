@@ -98,6 +98,20 @@ class ConversationAgent:
         return self.parse_json(response, r"\[.*\]", [])
 
 
+    def write_faire_part(self, event_data):
+        instruction = (
+            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            "Rédige le texte d'un faire-part élégant et chaleureux, écrit par les personnes fêtées, "
+            "en 5 à 8 lignes : l'annonce, la date, le lieu, le thème s'il y en a un, "
+            "et une demande de confirmation de présence. "
+            "Ne commence pas par une formule d'adresse (le prénom de chaque invité sera ajouté avant). "
+            "N'invente aucune information absente de la fiche. "
+            "Réponds uniquement avec le texte, sans emoji ni markdown."
+        )
+
+        return self.complete([{"role": "user", "content": instruction}])
+
+
     @staticmethod
     def parse_json(response, pattern, default):
         match = re.search(pattern, response, re.DOTALL)
