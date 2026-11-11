@@ -7,7 +7,7 @@ from storage import load_json, save_json
 
 STATUTS_DEVIS = ["Brouillon", "Envoyé", "Accepté", "Refusé"]
 
-REMPLACEMENTS_PDF = {"’": "'", "‘": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "...", "œ": "oe", "Œ": "OE", "€": "EUR"}
+REMPLACEMENTS_PDF = {"’": "'", "‘": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "...", "œ": "oe", "Œ": "OE", "€": "EUR", "\u202f": " ", "\u2009": " ", "\u2011": "-", "\u2010": "-"}
 
 
 def nombre(valeur):

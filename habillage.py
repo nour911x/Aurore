@@ -131,6 +131,23 @@ def accueil_html(profil):
     return f'<div class="aurore-accueil"><h1>{salutation()}. {titre}</h1><p>{intro}</p></div>'
 
 
+def frise_html(deroule, mis_en_avant=None):
+    etapes = []
+
+    for ligne in deroule:
+        concerne = mis_en_avant and mis_en_avant.lower() in ligne["intervenants"].lower()
+        classe = "concerne" if concerne else ""
+        infos = " · ".join(escape(valeur) for valeur in [ligne["lieu"], ligne["intervenants"]] if valeur)
+        infos_html = f"<small>{infos}</small>" if infos else ""
+        details_html = f"<p>{escape(ligne['details'])}</p>" if ligne["details"] else ""
+        etapes.append(
+            f'<li class="{classe}"><span class="heure">{escape(ligne["heure"] or "—")}</span>'
+            f'<div><strong>{escape(ligne["moment"])}</strong>{infos_html}{details_html}</div></li>'
+        )
+
+    return f'<ol class="aurore-frise">{"".join(etapes)}</ol>'
+
+
 def dossier_html(event_data, champs_essentiels, champs_details):
     compte = compte_a_rebours(jours_restants(event_data["date"]))
     badge = f'<span class="aurore-compte">{compte}</span>' if compte else ""

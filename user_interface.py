@@ -3,7 +3,7 @@ from llm_agent import ConversationAgent, PROFILS
 from outils import Outils
 from habillage import (
 	AVERTISSEMENT_HTML, style_html, theme_html, particules_html,
-	marque_html, accueil_html, dossier_html
+	marque_html, accueil_html, dossier_html, frise_html
 )
 from event_state import EventSheet
 from budget import Budget
@@ -18,6 +18,7 @@ from inspiration import (
 	Inspiration, ELEMENTS_MOODBOARD, CATEGORIES_BEAUTE,
 	lien_maps, generer_moodboard_pdf
 )
+from jour_j import JourJ, COLONNES_DEROULE, nettoyer_deroule, generer_deroule_pdf
 from galerie import Galerie, CATEGORIES_PHOTO, STATUTS_DROIT, publiable, generer_autorisation_pdf
 from invites import (
 	ListeInvites, GROUPES, STATUTS_INVITE, REGIMES,
@@ -61,14 +62,23 @@ ONGLETS = {
 	"agenda": "📅 Rendez-vous",
 	"messages": "✉️ Messages",
 	"achats": "🧾 Achats & factures",
-	"galerie": "📸 Galerie"
+	"galerie": "📸 Galerie",
+	"jourj": "🏰 Jour J"
+}
+
+CONFIG_COLONNES_DEROULE = {
+	"heure": st.column_config.TextColumn("Heure", help="Format 14:30", width="small"),
+	"moment": st.column_config.TextColumn("Moment", required=True),
+	"lieu": st.column_config.TextColumn("Lieu"),
+	"intervenants": st.column_config.TextColumn("Qui"),
+	"details": st.column_config.TextColumn("Détails", width="large")
 }
 
 ONGLETS_MARIES = {"fiche": "💑 Notre mariage"}
 
 ESPACES = {
-	"Wedding planner": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages", "galerie"],
-	"Mariés": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "messages", "galerie"],
+	"Wedding planner": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "jourj", "messages", "galerie"],
+	"Mariés": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "jourj", "messages", "galerie"],
 	"Prestataire": ["discussion", "mariage", "agenda", "devis", "achats"]
 }
 
@@ -182,10 +192,11 @@ class UserInterface:
 		self.liste_invites = self.get_persistant("liste_invites", ListeInvites)
 		self.inspiration = self.get_persistant("inspiration", Inspiration)
 		self.galerie = self.get_persistant("galerie", Galerie)
+		self.jour_j = self.get_persistant("jour_j", JourJ)
 		st.session_state.setdefault("version_galerie", 0)
 		self.outils = Outils(
 			self.event_sheet, self.agenda, self.budget, self.carnet,
-			self.liste_invites, self.messagerie, self.carnet_devis
+			self.liste_invites, self.messagerie, self.carnet_devis, self.jour_j
 		)
 		st.session_state.setdefault("version_invites", 0)
 		st.session_state.setdefault("briefings", {})
@@ -1011,19 +1022,29 @@ class UserInterface:
 
 	def show_table_invites(self):
 		st.caption("Modifie directement le tableau. Ajoute une ligne tout en bas, supprime en cochant à gauche.")
+		self.editer_tableau(
+			"invites", self.liste_invites.invites, COLONNES_INVITES, CONFIG_COLONNES_INVITES,
+			nettoyer, self.liste_invites.remplacer
+		)
+
+
+	@staticmethod
+	def editer_tableau(cle, lignes, colonnes, config, nettoyer_lignes, enregistrer):
+		version = st.session_state.setdefault(f"version_{cle}", 0)
 		tableau = st.data_editor(
-			pd.DataFrame(self.liste_invites.invites, columns=COLONNES_INVITES),
-			column_config=CONFIG_COLONNES_INVITES,
+			pd.DataFrame(lignes, columns=colonnes),
+			column_config=config,
 			num_rows="dynamic",
 			hide_index=True,
 			width="stretch",
-			key=f"invites_{st.session_state.version_invites}"
+			key=f"{cle}_{version}"
 		)
-		invites = nettoyer(tableau.to_dict("records"))
+		nouvelles = nettoyer_lignes(tableau.to_dict("records"))
 
-		if invites != self.liste_invites.invites:
-			self.liste_invites.remplacer(invites)
-			self.apres_modif_invites()
+		if nouvelles != lignes:
+			enregistrer(nouvelles)
+			st.session_state[f"version_{cle}"] += 1
+			st.rerun()
 
 
 	def show_redaction_faire_part(self):
@@ -1111,6 +1132,11 @@ class UserInterface:
 
 		st.subheader("🍽️ Les invités")
 		self.show_recap_invites()
+
+		if self.jour_j.deroule:
+			st.subheader("⏱️ Déroulé du jour J")
+			st.caption("Vos créneaux sont mis en avant.")
+			st.markdown(frise_html(self.jour_j.deroule, self.prestataire["nom"]), unsafe_allow_html=True)
 
 
 	def show_recap_invites(self):
@@ -1495,6 +1521,55 @@ class UserInterface:
 				afficher()
 
 
+	def generer_deroule(self):
+		reserves = [
+			{"nom": prestataire["nom"], "categorie": prestataire["categorie"]}
+			for prestataire in self.carnet.prestataires if prestataire["statut"] == "Réservé"
+		]
+		date_mariage = self.event_sheet.data["date"] or ""
+		rdvs_jour_j = [rdv for rdv in self.agenda.rdvs if date_mariage and rdv["date_heure"].startswith(date_mariage)]
+
+		with st.spinner("AURORE construit le déroulé de la journée…"):
+			deroule = self.conversation_agent_object.suggest_deroule(self.event_sheet.infos_pour_prestataire(), reserves, rdvs_jour_j)
+
+		self.jour_j.set_deroule(deroule)
+		st.session_state["version_deroule"] = st.session_state.get("version_deroule", 0) + 1
+		st.rerun()
+
+
+	def show_deroule(self):
+		libelle = "✨ Régénérer le déroulé avec AURORE" if self.jour_j.deroule else "✨ Construire le déroulé avec AURORE"
+
+		if st.button(libelle):
+			self.generer_deroule()
+
+		if not self.jour_j.deroule:
+			st.info("AURORE peut proposer le programme heure par heure à partir de la fiche et des prestataires réservés.")
+
+		st.markdown(frise_html(self.jour_j.deroule), unsafe_allow_html=True)
+
+		with st.expander("✏️ Modifier le déroulé"):
+			self.editer_tableau(
+				"deroule", self.jour_j.deroule, COLONNES_DEROULE, CONFIG_COLONNES_DEROULE,
+				nettoyer_deroule, self.jour_j.set_deroule
+			)
+
+		if self.jour_j.deroule:
+			st.download_button(
+				"📥 Télécharger le déroulé (PDF) pour les prestataires",
+				data=generer_deroule_pdf(self.jour_j.deroule, self.event_sheet.data),
+				file_name="deroule-jour-j.pdf",
+				mime="application/pdf"
+			)
+
+
+	def show_jour_j(self):
+		(deroule_tab,) = st.tabs(["⏱️ Déroulé"])
+
+		with deroule_tab:
+			self.show_deroule()
+
+
 	def show_notification(self, suggestions):
 		total = len(suggestions) + len(self.messagerie.par_statut("à envoyer"))
 
@@ -1591,7 +1666,8 @@ class UserInterface:
 			"agenda": self.show_agenda,
 			"messages": lambda: self.show_messages(suggestions),
 			"achats": self.show_achats,
-			"galerie": lambda: self.show_galerie(profil)
+			"galerie": lambda: self.show_galerie(profil),
+			"jourj": self.show_jour_j
 		}
 		libelles = ONGLETS | ONGLETS_MARIES if profil == "Mariés" else ONGLETS
 		onglets = ESPACES[profil]
