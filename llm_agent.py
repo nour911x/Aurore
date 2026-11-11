@@ -130,11 +130,12 @@ class ConversationAgent:
         return self.complete(self.conversation_history + [{"role": "user", "content": instruction}])
 
 
-    def prepare_briefing(self, rdv, event_data, historique, postes_budget):
+    def prepare_briefing(self, rdv, event_data, historique, postes_budget, prestataire=None):
         instruction = (
             "Tu prépares le briefing d'AURORE juste avant un rendez-vous, pour arriver "
             "en connaissant parfaitement le dossier.\n\n"
             f"Rendez-vous : {json.dumps(rdv, ensure_ascii=False)}\n\n"
+            f"Fiche du prestataire rencontré : {json.dumps(prestataire, ensure_ascii=False)}\n\n"
             f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
             f"Historique des échanges : {json.dumps(historique, ensure_ascii=False)}\n\n"
             f"Budget par poste (prévu et déjà engagé) : {json.dumps(postes_budget, ensure_ascii=False)}\n\n"
