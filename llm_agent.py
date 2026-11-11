@@ -1,9 +1,28 @@
-from groq import Groq
+from groq import Groq, BadRequestError
 
 from dotenv import load_dotenv
+from datetime import datetime
 import os
 import json
 import re
+
+
+MODELE = "openai/gpt-oss-120b"
+MAX_TOURS_OUTILS = 6
+
+JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+
+PROFILS = {
+    "Wedding planner": "un ou une wedding planner professionnel(le) qui gère le mariage de ses clients. Vouvoie-le ou la, ton professionnel.",
+    "Mariés": "les futurs mariés qui organisent eux-mêmes leur mariage. Tutoie-les, ton chaleureux et complice.",
+    "Prestataire": "un prestataire (traiteur, DJ, domaine...) qui travaille sur ce mariage. Vouvoie-le ou la, ton professionnel."
+}
+
+
+def date_du_jour():
+    maintenant = datetime.now()
+    return f"{JOURS[maintenant.weekday()]} {maintenant.day} {MOIS[maintenant.month - 1]} {maintenant.year}, {maintenant:%H:%M}"
 
 
 class ConversationAgent:
@@ -37,10 +56,51 @@ class ConversationAgent:
         )
 
 
-    def ask_llm(self, text_interaction):
+    @staticmethod
+    def consignes_session(profil, avec_outils):
+        consignes = f"Nous sommes le {date_du_jour()}. Tu parles à {PROFILS[profil]}"
+
+        if avec_outils:
+            consignes += (
+                " Tu as des outils pour agir sur l'agenda, le budget, les prestataires, les invités, "
+                "les messages et les devis. Consulte avant d'agir (par exemple le carnet pour retrouver "
+                "le nom exact d'un prestataire). Avant toute création, modification "
+                "ou suppression, annonce précisément ce que tu vas faire et attends un « oui » explicite."
+            )
+
+        return {"role": "system", "content": consignes}
+
+
+    def ask_llm(self, text_interaction, profil="Mariés", outils=None):
 
         self.update_conversation_history(role="user", content=text_interaction)
-        response = self.complete(self.conversation_history)
+        messages = self.conversation_history[:1] + [self.consignes_session(profil, outils)] + self.conversation_history[1:]
+        response = "Je n'ai pas réussi à terminer : trop d'actions à la suite. Peux-tu reformuler ?"
+
+        for _ in range(MAX_TOURS_OUTILS):
+            try:
+                message = self.appel(messages, tools=outils.schemas() if outils else None)
+            except BadRequestError:
+                continue
+
+            if not message.tool_calls:
+                response = message.content
+                break
+
+            messages.append({
+                "role": "assistant",
+                "content": message.content or "",
+                "tool_calls": [appel_outil.model_dump() for appel_outil in message.tool_calls]
+            })
+
+            for appel_outil in message.tool_calls:
+                arguments = self.parse_json(appel_outil.function.arguments or "{}", r"\{.*\}", {})
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": appel_outil.id,
+                    "content": outils.executer(appel_outil.function.name, arguments)
+                })
+
         self.update_conversation_history(role="assistant", content=response)
 
         return response
@@ -163,12 +223,19 @@ class ConversationAgent:
             return default
 
 
-    def complete(self, messages):
+    def appel(self, messages, tools=None):
+        options = {"tools": tools} if tools else {}
+
         return self.groq_client.chat.completions.create(
             messages=messages,
-            model="openai/gpt-oss-120b",
+            model=MODELE,
             include_reasoning=False,
-        ).choices[0].message.content
+            **options
+        ).choices[0].message
+
+
+    def complete(self, messages):
+        return self.appel(messages).content
 
 
     def summarize_conversation(self):

@@ -10,6 +10,27 @@ STATUTS_DEVIS = ["Brouillon", "Envoyé", "Accepté", "Refusé"]
 REMPLACEMENTS_PDF = {"’": "'", "‘": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "...", "œ": "oe", "Œ": "OE", "€": "EUR"}
 
 
+def nombre(valeur):
+    try:
+        valeur = float(valeur)
+    except (TypeError, ValueError):
+        return 0.0
+
+    return valeur if valeur == valeur else 0.0
+
+
+def lignes_valides(lignes):
+    return [
+        {
+            "designation": ligne["designation"].strip(),
+            "quantite": nombre(ligne.get("quantite")),
+            "prix_unitaire": nombre(ligne.get("prix_unitaire"))
+        }
+        for ligne in lignes
+        if isinstance(ligne.get("designation"), str) and ligne["designation"].strip()
+    ]
+
+
 def totaux(devis):
     total_ht = sum(ligne["quantite"] * ligne["prix_unitaire"] for ligne in devis["lignes"])
     tva = total_ht * devis["tva"] / 100

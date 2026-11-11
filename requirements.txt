@@ -2,3 +2,4 @@ groq
 python-dotenv
 streamlit
 fpdf2
+pywin32; sys_platform == "win32"
