@@ -1,6 +1,10 @@
 import streamlit as st
 from llm_agent import ConversationAgent, PROFILS
 from outils import Outils
+from habillage import (
+	AVERTISSEMENT_HTML, style_html, theme_html, particules_html,
+	marque_html, accueil_html, dossier_html
+)
 from event_state import EventSheet
 from budget import Budget
 from agenda import Agenda
@@ -23,22 +27,6 @@ import pandas as pd
 import uuid
 
 
-LABELS_FICHE = {
-	"noms": "Couple / client(s)",
-	"telephone": "Téléphone",
-	"email": "Email",
-	"type_evenement": "Événement",
-	"date": "Date",
-	"lieu": "Lieu",
-	"budget": "Budget (€)",
-	"nombre_invites": "Invités",
-	"theme": "Thème",
-	"allergies_interdits": "Allergies / interdits",
-	"preferences": "Préférences",
-	"preferences_musicales": "Musique",
-	"prestataires": "Prestataires"
-}
-
 CHAMPS_LISTES = {
 	"allergies_interdits": "Allergies / interdits (alimentaires, religieux, à éviter absolument…)",
 	"preferences": "Préférences (style, couleurs, fleurs, ambiance…)",
@@ -57,6 +45,31 @@ ICONES_STATUT = {
 }
 
 AUCUN = "—"
+
+CHAMPS_DOSSIER = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités", "budget": "Budget"}
+
+DETAILS_DOSSIER = {
+	"noms": "Couple",
+	"type_evenement": "Événement",
+	"theme": "Thème",
+	"allergies_interdits": "Allergies",
+	"preferences_musicales": "Musique",
+	"prestataires": "Prestataires"
+}
+
+TUILES = [
+	("mariage", ":material/favorite:", "Mariage", "Cérémonie, vin d'honneur, réception", "Je souhaite organiser un mariage."),
+	("baby", ":material/child_care:", "Baby shower", "Gender reveal, naissance", "Je souhaite organiser une baby shower."),
+	("anniversaire", ":material/cake:", "Anniversaire", "Surprise, 30 ans, enfant", "Je souhaite organiser un anniversaire."),
+	("autre", ":material/celebration:", "Autre", "EVJF, fiançailles, crémaillère", "Je souhaite organiser un autre type d'événement.")
+]
+
+RACCOURCIS = [
+	("agenda", ":material/calendar_month:", "Mon agenda de la semaine", "Quels sont mes rendez-vous des 7 prochains jours ?"),
+	("budget", ":material/payments:", "Point budget", "Fais-moi le point sur le budget et les factures à payer."),
+	("invites", ":material/groups:", "Réponses des invités", "Où en sont les réponses des invités et les régimes alimentaires ?"),
+	("message", ":material/mail:", "Préparer un message", "Aide-moi à préparer un message pour un prestataire.")
+]
 
 PLACEHOLDERS = {
 	"Wedding planner": "Que puis-je faire pour vous ? (ex : ajoute une dégustation jeudi à 14h)",
@@ -115,8 +128,8 @@ def resume_contexte(contexte):
 
 class UserInterface:
 	def __init__(self):
-		st.set_page_config(page_title="AURORE")
-		st.title("AURORE 🎉")
+		st.set_page_config(page_title="AURORE", page_icon="🌅", layout="wide")
+		st.html(style_html())
 		self.conversation_agent_object = self.get_persistant("conversation_agent_object", ConversationAgent)
 		self.event_sheet = self.get_persistant("event_sheet", EventSheet)
 		self.budget = self.get_persistant("budget", Budget)
@@ -147,20 +160,16 @@ class UserInterface:
 
 	def show_event_sheet(self):
 		with st.sidebar:
-			st.header("📋 Fiche événement")
-
-			for key, label in LABELS_FICHE.items():
-				value = self.event_sheet.data[key]
-
-				if value:
-					if isinstance(value, list):
-						value = ", ".join(value)
-					st.markdown(f"**{label}** : {value}")
-
+			st.markdown(dossier_html(self.event_sheet.data, CHAMPS_DOSSIER, DETAILS_DOSSIER), unsafe_allow_html=True)
 			nombre_echanges = len(self.event_sheet.data["historique"])
 
 			if nombre_echanges:
 				st.caption(f"🗂️ {nombre_echanges} échange(s) dans l'historique")
+
+			if st.button("Nouvelle conversation", icon=":material/add:", width="stretch"):
+				st.session_state.pop("conversation_agent_object", None)
+				st.session_state.briefings = {}
+				st.rerun()
 
 
 	def show_fiche_form(self):
@@ -241,10 +250,42 @@ class UserInterface:
 		self.show_historique()
 
 
-	def show_discussion_history(self):
-		for message in self.conversation_agent_object.get_conversation_history():
+	@staticmethod
+	def mettre_en_attente(texte):
+		st.session_state.message_en_attente = texte
+
+
+	def show_boutons_messages(self, cle, elements, **options):
+		with st.container(horizontal=True, key=cle):
+			for identifiant, icone, libelle, message in elements:
+				st.button(
+					libelle, key=f"{cle}-{identifiant}", icon=icone,
+					on_click=self.mettre_en_attente, args=(message,), **options
+				)
+
+
+	def show_accueil(self, profil):
+		st.markdown(accueil_html(profil), unsafe_allow_html=True)
+		tuiles = [
+			(identifiant, icone, f"**{titre}**  \n{exemples}", message)
+			for identifiant, icone, titre, exemples, message in TUILES
+		]
+		self.show_boutons_messages("tuiles", tuiles, width="stretch")
+
+
+	def show_discussion_history(self, profil):
+		historique = self.conversation_agent_object.get_conversation_history()
+
+		if not historique:
+			self.show_accueil(profil)
+
+		self.show_boutons_messages("raccourcis", RACCOURCIS)
+
+		for message in historique:
 			with st.chat_message(message["role"]):
 				st.markdown(message["content"])
+
+		st.markdown(AVERTISSEMENT_HTML, unsafe_allow_html=True)
 
 
 	def show_alertes_factures(self):
@@ -1070,9 +1111,20 @@ class UserInterface:
 			st.info(f"🔔 {total} message(s) à préparer ou à envoyer — voir l'onglet ✉️ Messages")
 
 
-	def choisir_profil(self):
-		with st.sidebar:
-			return st.radio("Je suis…", list(PROFILS), key="profil", horizontal=True)
+	def show_barre_haut(self):
+		with st.container(horizontal=True, key="barre-haut"):
+			st.markdown(marque_html(self.event_sheet.data), unsafe_allow_html=True)
+
+			with st.container(horizontal=True, key="barre-actions"):
+				profil = st.segmented_control(
+					"Je suis…", list(PROFILS), default="Wedding planner", key="profil",
+					bind="query-params", required=True, label_visibility="collapsed"
+				)
+
+		st.html(theme_html(profil))
+		st.markdown(particules_html(self.event_sheet.data["type_evenement"]), unsafe_allow_html=True)
+
+		return profil
 
 
 	def traiter_message(self, profil):
@@ -1080,7 +1132,7 @@ class UserInterface:
 			PLACEHOLDERS[profil],
 			accept_file=False,
 			accept_audio=False
-			)
+			) or st.session_state.pop("message_en_attente", None)
 
 		if text_interaction :
 			with st.spinner("AURORE réfléchit…"):
@@ -1092,7 +1144,7 @@ class UserInterface:
 
 
 	def run(self):
-		profil = self.choisir_profil()
+		profil = self.show_barre_haut()
 		self.traiter_message(profil)
 
 		suggestions = self.messagerie.a_preparer(
@@ -1105,7 +1157,7 @@ class UserInterface:
 		)
 
 		with chat_tab:
-			self.show_discussion_history()
+			self.show_discussion_history(profil)
 
 		with fiche_tab:
 			self.show_fiche_couple()
