@@ -4,6 +4,7 @@ from PIL import Image, ImageOps
 from dotenv import load_dotenv
 
 from config.evenements import description_champs_llm, type_du_dossier
+from textes import date_longue
 from datetime import datetime
 import base64
 import io
@@ -21,9 +22,6 @@ MAX_JETONS_DESCRIPTION = 350
 MAX_JETONS_ANALYSE = 120
 TEXTE_PHOTO_SEULE = "Voici une photo pour notre projet, qu'en penses-tu ?"
 
-JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
-
 PROFILS = {
     "Wedding planner": "un organisateur ou une organisatrice d'événements professionnel(le) qui gère l'événement de ses clients. Vouvoie-le ou la, ton professionnel.",
     "Mariés": "les clients dont on organise l'événement (mariage, baby shower, anniversaire…). Tutoie-les, ton chaleureux et complice.",
@@ -33,7 +31,7 @@ PROFILS = {
 
 def date_du_jour():
     maintenant = datetime.now()
-    return f"{JOURS[maintenant.weekday()]} {maintenant.day} {MOIS[maintenant.month - 1]} {maintenant.year}, {maintenant:%H:%M}"
+    return f"{date_longue(maintenant)} {maintenant.year}, {maintenant:%H:%M}"
 
 
 def preparer_image(contenu):

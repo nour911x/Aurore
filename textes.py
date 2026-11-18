@@ -7,6 +7,10 @@ LIAISONS = {"et", "and", "&"}
 
 PREFIXES_APOSTROPHE = {"d", "l"}
 
+JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+
+MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+
 
 def majuscule(mot):
     if any(lettre.isupper() for lettre in mot[1:]) and not mot.isupper():
@@ -52,6 +56,10 @@ def format_person_name(nom):
 
 def noms_clients(data, defaut="Les clients"):
     return format_person_name(data.get("noms")) or defaut
+
+
+def date_longue(jour):
+    return f"{JOURS[jour.weekday()]} {jour.day} {MOIS[jour.month - 1]}"
 
 
 def pluriel(nombre, singulier, forme_plurielle=None):

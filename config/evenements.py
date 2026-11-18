@@ -44,6 +44,8 @@ TYPES_EVENEMENT = {
     }
 }
 
+CHAMPS_ESSENTIELS = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités", "budget": "Budget"}
+
 CHAMPS_SPECIFIQUES = {
     "ceremonie": ("Cérémonie", "texte", "Lieu, heure, laïque ou religieuse…"),
     "reception": ("Réception", "texte", "Lieu et format : dîner assis, cocktail…"),
