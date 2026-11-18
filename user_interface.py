@@ -17,7 +17,7 @@ from accueil import JOURS_SURVEILLANCE, synthese
 from demo import creer_demo, dossiers_demo, retirer_demo
 from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email, appliquer_statut, meme_nom, normaliser_nom
 from messages import (
-	Messagerie, TYPES_MESSAGE, EMETTEUR_AURORE, detecter_messages,
+	Messagerie, TYPES_MESSAGE, EMETTEUR_AURORE, MODIFIABLES, detecter_messages,
 	destinataire_maries, destinataire_prestataire, suggestion, fiche_publique
 )
 from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, date_lisible, generer_pdf, lignes_valides
@@ -633,7 +633,8 @@ class UserInterface:
 
 			for element in elements:
 				morceaux = [
-					pluriel(element["a_envoyer"], "message à valider", "messages à valider") if element["a_envoyer"] else "",
+					pluriel(element["a_valider"], "message à valider", "messages à valider") if element["a_valider"] else "",
+					pluriel(element["a_envoyer"], "message validé à envoyer", "messages validés à envoyer") if element["a_envoyer"] else "",
 					pluriel(element["relances"], "relance") if element["relances"] else "",
 					pluriel(element["a_preparer"], "message à préparer", "messages à préparer") if element["a_preparer"] else "",
 					pluriel(len(element["confirmations"]), "confirmation attendue", "confirmations attendues") if element["confirmations"] else ""
@@ -648,7 +649,7 @@ class UserInterface:
 						icon=":material/check:", type="tertiary", on_click=self.confirmer_rdv, args=(rdv,)
 					)
 
-				if element["a_envoyer"] or element["relances"] or element["a_preparer"]:
+				if element["a_valider"] or element["a_envoyer"] or element["relances"] or element["a_preparer"]:
 					self.bouton_ouvrir(f"faire_{element['dossier_id']}", element["dossier_id"], "messages", "a_envoyer", "Ouvrir les messages")
 
 
@@ -1270,12 +1271,17 @@ class UserInterface:
 
 
 	def reecrire(self, message):
-		self.messagerie.modifier(message["id"], contenu=self.ecrire(message))
+		self.messagerie.reecrire(message["id"], self.ecrire(message))
+		st.rerun()
+
+
+	def changer_statut_message(self, message, statut):
+		self.messagerie.changer_statut(message["id"], statut)
 		st.rerun()
 
 
 	def marquer_envoye(self, message):
-		self.messagerie.modifier(message["id"], statut="envoyé", date=date.today().isoformat())
+		self.messagerie.changer_statut(message["id"], "envoyé")
 		self.event_sheet.add_echange(
 			"Message",
 			f"**{TYPES_MESSAGE[message['type']]}** envoyé à {nom_affiche(message)} :\n\n{message['contenu']}"
@@ -1305,45 +1311,74 @@ class UserInterface:
 					self.rediger(suggestion_message)
 
 				if bouton_ignorer.button("Ignorer", key=f"ignorer_{suggestion_message['cle']}"):
-					self.messagerie.ajouter(suggestion_message, "", "ignoré")
+					self.messagerie.ajouter(suggestion_message, "", "annulé")
 					st.rerun()
 
 
-	def show_a_envoyer(self):
-		st.subheader(":material/outbox: À envoyer")
-		messages = self.messagerie.par_statut("à envoyer")
+	def show_a_valider(self):
+		st.subheader(":material/rate_review: À relire et valider")
+		st.caption("Rien ne part sans votre validation : relisez, corrigez si besoin, puis validez.")
+		messages = self.messagerie.par_statut(*MODIFIABLES)
 
 		if not messages:
-			st.caption("Aucun message en attente.")
+			st.caption("Aucun message à relire.")
 
 		for message in messages:
-			type_message = TYPES_MESSAGE[message["type"]]
-
 			with st.container(border=True):
-				st.markdown(f"**{type_message}** → {nom_affiche(message)}")
+				badge = ":gray[brouillon]" if message["statut"] == "brouillon" else ":orange[à valider]"
+				st.markdown(f"**{TYPES_MESSAGE[message['type']]}** → {nom_affiche(message)} · {badge}")
 				contenu = st.text_area(
 					"Message", value=message["contenu"], height=180, label_visibility="collapsed",
 					key=f"contenu_{message['id']}_{hash(message['contenu'])}"
 				)
 
 				if contenu != message["contenu"]:
-					self.messagerie.modifier(message["id"], contenu=contenu)
+					self.messagerie.modifier_contenu(message["id"], contenu)
 
-				if not (message["telephone"] or message["email"]):
-					st.caption("Pas de téléphone ni d'email pour ce destinataire : copie le message ou complète sa fiche.")
+				principal, reecrire, annuler = st.columns([2, 2, 1])
 
-				self.show_boutons_contact(message["telephone"], message["email"], message=contenu, sujet=type_message)
-				bouton_envoye, bouton_reecrire, bouton_supprimer = st.columns([2, 2, 1])
+				if message["statut"] == "brouillon":
+					if principal.button("Prêt à relire", icon=":material/rate_review:", key=f"relire_{message['id']}"):
+						self.changer_statut_message(message, "à valider")
+				elif principal.button("Valider", icon=":material/task_alt:", type="primary", key=f"valider_{message['id']}"):
+					self.changer_statut_message(message, "validé")
 
-				if bouton_envoye.button("Marquer comme envoyé", icon=":material/check_circle:", key=f"envoye_{message['id']}"):
-					self.marquer_envoye(message)
-
-				if bouton_reecrire.button("Réécrire avec AURORE", icon=":material/refresh:", key=f"reecrire_{message['id']}"):
+				if reecrire.button("Réécrire avec AURORE", icon=":material/refresh:", key=f"reecrire_{message['id']}"):
 					self.reecrire(message)
 
-				if bouton_supprimer.button("Supprimer", key=f"suppr_msg_{message['id']}"):
-					self.messagerie.modifier(message["id"], statut="ignoré")
-					st.rerun()
+				if annuler.button("Annuler", key=f"annuler_{message['id']}"):
+					self.changer_statut_message(message, "annulé")
+
+
+	def show_valides(self):
+		st.subheader(":material/outbox: Validés, à envoyer")
+		messages = self.messagerie.par_statut("validé")
+
+		if not messages:
+			st.caption("Aucun message validé en attente d'envoi.")
+
+		for message in messages:
+			type_message = TYPES_MESSAGE[message["type"]]
+
+			with st.container(border=True):
+				st.markdown(f"**{type_message}** → {nom_affiche(message)} · :green[validé]")
+				st.markdown(message["contenu"])
+
+				if not (message["telephone"] or message["email"]):
+					st.caption("Pas de téléphone ni d'email pour ce destinataire : copiez le message ou complétez sa fiche.")
+
+				self.show_boutons_contact(message["telephone"], message["email"], message=message["contenu"], sujet=type_message)
+				st.caption("Ces boutons ouvrent WhatsApp ou votre messagerie avec le texte prêt : c'est vous qui envoyez.")
+				envoye, modifier, annuler = st.columns([2, 2, 1])
+
+				if envoye.button("Marquer comme envoyé", icon=":material/check_circle:", key=f"envoye_{message['id']}"):
+					self.marquer_envoye(message)
+
+				if modifier.button("Modifier", icon=":material/edit:", key=f"modifier_{message['id']}"):
+					self.changer_statut_message(message, "brouillon")
+
+				if annuler.button("Annuler", key=f"annuler_{message['id']}"):
+					self.changer_statut_message(message, "annulé")
 
 
 	def show_message_libre(self):
@@ -1355,21 +1390,30 @@ class UserInterface:
 		with st.expander("Écrire un message libre", icon=":material/edit:"):
 			with st.form("form_message_libre", clear_on_submit=True):
 				choix = st.selectbox("Destinataire", list(par_nom))
-				consigne = st.text_area("Que veux-tu lui dire ? (AURORE s'occupe de la formulation)")
+				consigne = st.text_area("Que voulez-vous lui dire ?")
+				avec_aurore, moi_meme = st.columns(2)
+				rediger = avec_aurore.form_submit_button("Rédiger avec AURORE", icon=":material/auto_awesome:")
+				ecrire = moi_meme.form_submit_button("Garder mon texte en brouillon", icon=":material/edit_note:")
 
-				if st.form_submit_button("Rédiger") and consigne:
+				if consigne and (rediger or ecrire):
 					nouveau = suggestion(f"libre_{uuid.uuid4().hex[:8]}", "libre", par_nom[choix], {})
-					self.rediger(nouveau, f"Ce que le message doit dire : {consigne}")
+
+					if rediger:
+						self.rediger(nouveau, f"Ce que le message doit dire : {consigne}")
+
+					self.messagerie.ajouter(nouveau, consigne, "brouillon")
+					st.rerun()
 
 
-	def show_envoyes(self):
-		envoyes = self.messagerie.par_statut("envoyé")
+	def show_historique_messages(self):
+		for statut, titre, icone in [("envoyé", "Envoyés", "send"), ("annulé", "Annulés", "cancel")]:
+			messages = [message for message in self.messagerie.par_statut(statut) if message["contenu"]]
 
-		if envoyes:
-			with st.expander(f"Messages envoyés ({len(envoyes)})", icon=":material/send:"):
-				for message in reversed(envoyes):
-					st.markdown(f"**{TYPES_MESSAGE[message['type']]}** → {nom_affiche(message)} · {message['date']}")
-					st.caption(message["contenu"])
+			if messages:
+				with st.expander(f"{titre} ({len(messages)})", icon=f":material/{icone}:"):
+					for message in reversed(messages):
+						st.markdown(f"**{TYPES_MESSAGE[message['type']]}** → {nom_affiche(message)} · {date_lisible(message['date'])}")
+						st.caption(message["contenu"])
 
 
 	def show_messages(self, suggestions):
@@ -1379,9 +1423,10 @@ class UserInterface:
 			help="Désactivé : aucun montant n'est donné, le prestataire propose son prix."
 		)
 		self.show_suggestions(suggestions)
-		self.show_a_envoyer()
+		self.show_a_valider()
+		self.show_valides()
 		self.show_message_libre()
-		self.show_envoyes()
+		self.show_historique_messages()
 
 
 	def nouvelles_lignes_devis(self, lignes):
@@ -1587,10 +1632,17 @@ class UserInterface:
 					self.conversation_agent_object.write_faire_part(self.event_sheet.infos_sans_historique())
 				)
 
-		faire_part = st.text_area("Texte du faire-part", value=self.liste_invites.faire_part, height=200)
+		valide = self.liste_invites.faire_part_valide
+		faire_part = st.text_area("Texte du faire-part", value=self.liste_invites.faire_part, height=200, disabled=valide)
 
 		if faire_part != self.liste_invites.faire_part:
 			self.liste_invites.set_faire_part(faire_part)
+
+		if faire_part and valide:
+			st.markdown(":green[:material/task_alt: Texte validé, prêt à être envoyé]")
+			st.button("Modifier le texte", icon=":material/edit:", on_click=self.liste_invites.valider_faire_part, args=(False,))
+		elif faire_part:
+			st.button("Valider le texte", icon=":material/task_alt:", type="primary", on_click=self.liste_invites.valider_faire_part)
 
 		if faire_part:
 			st.download_button(
@@ -1604,8 +1656,8 @@ class UserInterface:
 	def show_envoi_faire_parts(self):
 		st.subheader(":material/send: Envoyer les faire-parts")
 
-		if not self.liste_invites.faire_part:
-			st.info("Rédige d'abord le texte du faire-part ci-dessus.")
+		if not self.liste_invites.faire_part_valide:
+			st.info("Rédigez puis validez le texte du faire-part ci-dessus avant de l'envoyer.")
 			return
 
 		groupes = st.multiselect("Envoyer à", GROUPES, default=GROUPES)
@@ -2244,17 +2296,19 @@ class UserInterface:
 
 	def show_notification(self, profil, suggestions):
 		a_preparer = len(suggestions)
-		a_envoyer = len(self.messagerie.par_statut("à envoyer"))
+		a_valider = len(self.messagerie.par_statut(*MODIFIABLES))
+		a_envoyer = len(self.messagerie.par_statut("validé"))
 		morceaux = [
 			pluriel(a_preparer, "message à préparer", "messages à préparer") if a_preparer else "",
-			pluriel(a_envoyer, "message à envoyer", "messages à envoyer") if a_envoyer else ""
+			pluriel(a_valider, "message à valider", "messages à valider") if a_valider else "",
+			pluriel(a_envoyer, "message validé à envoyer", "messages validés à envoyer") if a_envoyer else ""
 		]
 
-		if not (a_preparer or a_envoyer):
+		if not (a_preparer or a_valider or a_envoyer):
 			return
 
 		with st.container(horizontal=True, vertical_alignment="center", key="notification"):
-			st.markdown(f":material/notifications: **{' et '.join(filter(None, morceaux))}**")
+			st.markdown(f":material/notifications: **{', '.join(filter(None, morceaux))}**")
 			st.button(
 				"Voir dans Messages", icon=":material/arrow_forward:", key="voir-messages",
 				on_click=ouvrir_messages, args=(profil,)

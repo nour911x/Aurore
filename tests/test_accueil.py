@@ -57,7 +57,8 @@ def test_synthese_sur_les_donnees_de_demo(tmp_path):
     assert sorted(facture["sens"] for facture in resultat["paiements"]) == ["client", "prestataire"]
 
     mariage = next(element for element in resultat["a_faire"] if "Camille" in element["dossier"])
-    assert mariage["a_envoyer"] == 1
+    assert mariage["a_valider"] == 1
+    assert mariage["a_envoyer"] == 0
     assert mariage["relances"] == 1
     assert [element["titre"] for element in mariage["confirmations"]] == ["Essayage robe", "Visite technique du château"]
 

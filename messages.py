@@ -25,6 +25,22 @@ DELAI_RAPPEL = 1
 DELAI_PAIEMENT = 3
 DELAI_AVIS = 3
 
+STATUTS_MESSAGE = ["brouillon", "à valider", "validé", "envoyé", "annulé"]
+
+TRANSITIONS = {
+    "brouillon": {"à valider", "annulé"},
+    "à valider": {"validé", "brouillon", "annulé"},
+    "validé": {"envoyé", "brouillon", "annulé"},
+    "envoyé": set(),
+    "annulé": set()
+}
+
+MODIFIABLES = {"brouillon", "à valider"}
+
+EN_COURS = ["brouillon", "à valider", "validé"]
+
+ANCIENS_STATUTS = {"à envoyer": "à valider", "ignoré": "annulé"}
+
 EMETTEUR_AURORE = "AURORE - Organisation d'événements"
 
 NOMS_CLIENTS = {"clients", "client", "les clients", "mariés", "maries", "les mariés"}
@@ -131,6 +147,9 @@ class Messagerie:
     def load(self):
         self.messages = load_json(self.file_path, [])
 
+        for message in self.messages:
+            message["statut"] = ANCIENS_STATUTS.get(message["statut"], message["statut"])
+
     def save(self):
         save_json(self.file_path, self.messages)
 
@@ -141,7 +160,7 @@ class Messagerie:
         deja_traitees = self.cles_traitees()
         return [suggestion for suggestion in suggestions if suggestion["cle"] not in deja_traitees]
 
-    def ajouter(self, suggestion, contenu, statut="à envoyer"):
+    def ajouter(self, suggestion, contenu, statut="à valider"):
         self.messages.append({
             "id": uuid.uuid4().hex[:8],
             "cle": suggestion["cle"],
@@ -164,12 +183,37 @@ class Messagerie:
 
         return None
 
-    def modifier(self, message_id, **champs):
+    def changer_statut(self, message_id, statut):
         message = self.trouver(message_id)
 
-        if message:
-            message.update(champs)
-            self.save()
+        if statut not in TRANSITIONS[message["statut"]]:
+            raise ValueError(f"Un message « {message['statut']} » ne peut pas passer à « {statut} ».")
 
-    def par_statut(self, statut):
-        return [message for message in self.messages if message["statut"] == statut]
+        message["statut"] = statut
+        message["date"] = date.today().isoformat()
+        message.setdefault("historique", []).append({"statut": statut, "date": message["date"]})
+        self.save()
+
+        return message
+
+    def modifier_contenu(self, message_id, contenu):
+        message = self.trouver(message_id)
+
+        if message["statut"] not in MODIFIABLES:
+            raise ValueError("Un message validé doit être repassé en brouillon avant d'être modifié.")
+
+        message["contenu"] = contenu
+        self.save()
+
+    def reecrire(self, message_id, contenu):
+        message = self.trouver(message_id)
+
+        if message["statut"] not in EN_COURS:
+            raise ValueError("Ce message n'est plus modifiable.")
+
+        message["contenu"] = contenu
+        message["statut"] = "à valider"
+        self.save()
+
+    def par_statut(self, *statuts):
+        return [message for message in self.messages if message["statut"] in statuts]

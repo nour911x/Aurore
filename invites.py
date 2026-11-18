@@ -129,15 +129,17 @@ class ListeInvites:
         self.file_path = file_path
         self.invites = []
         self.faire_part = ""
+        self.faire_part_valide = False
         self.load()
 
     def load(self):
         data = load_json(self.file_path, {"invites": [], "faire_part": ""})
         self.invites = data["invites"]
         self.faire_part = data["faire_part"]
+        self.faire_part_valide = data.get("faire_part_valide", False)
 
     def save(self):
-        save_json(self.file_path, {"invites": self.invites, "faire_part": self.faire_part})
+        save_json(self.file_path, {"invites": self.invites, "faire_part": self.faire_part, "faire_part_valide": self.faire_part_valide})
 
     def remplacer(self, invites):
         self.invites = invites
@@ -162,6 +164,11 @@ class ListeInvites:
 
     def set_faire_part(self, contenu):
         self.faire_part = contenu
+        self.faire_part_valide = False
+        self.save()
+
+    def valider_faire_part(self, valide=True):
+        self.faire_part_valide = valide and bool(self.faire_part)
         self.save()
 
     def personnes(self, statuts):
