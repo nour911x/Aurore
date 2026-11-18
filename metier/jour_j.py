@@ -2,9 +2,9 @@ import re
 
 from fpdf import FPDF
 
-from devis import texte_pdf, date_lisible
-from prestataires import normaliser_nom
-from storage import load_json, save_json
+from metier.devis import texte_pdf, date_lisible
+from metier.prestataires import normaliser_nom
+from donnees.storage import load_json, save_json
 from textes import format_person_name
 
 
@@ -74,7 +74,7 @@ def creer_tables(nombre, places, forme, places_honneur):
 
 
 class JourJ:
-    def __init__(self, file_path="./jour_j_data.json"):
+    def __init__(self, file_path):
         self.file_path = file_path
         self.deroule = []
         self.salle = {"tables": [], "elements": [], "placement": {}}

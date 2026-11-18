@@ -207,3 +207,12 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Import de contacts** : aperçu obligatoire (nombre de contacts, doublons ignorés, tableau nom / téléphone / email), puis bouton explicite « Importer N contacts ». Seuls ces trois champs sont repris.
 - **Export / suppression** (Fiche client › Données personnelles) : export JSON de tous les fichiers du dossier, de ses rendez-vous et de la liste de ses photos (les images elles-mêmes ne sont pas dans le JSON). La suppression est définitive : dossier, photos et rendez-vous. Elle demande de cocher une case de confirmation qui reprend le nom du dossier.
 - **Clés API** : aucune clé dans le code, les prompts ou la documentation. `GROQ_KEY` est lue depuis l'environnement (`.env`, ignoré par git) et `OUTLOOK_ACCOUNT` est optionnelle. `GEMINI_KEY` est présente dans `.env` mais n'est utilisée nulle part : à retirer si elle ne sert plus.
+
+### Phase 7
+- **Arborescence** : `app.py` (point d'entrée), `config/`, `ui/`, `metier/`, `donnees/`, `llm/`, `textes.py`, `tests/`. La commande de lancement devient `streamlit run app.py`.
+- **Découpage de l'interface** : chaque onglet est une classe « vue » dans `ui/`, et `UserInterface` (dans `app.py`) en hérite. Les corps des méthodes n'ont pas changé, ce qui limite le risque de régression. Les imports de chaque module ont été recalculés automatiquement à partir des noms réellement utilisés, puis vérifiés : aucun import inutile.
+- **Logique métier sortie de l'interface** : résumé du budget, enveloppe d'un poste, factures d'un prestataire et enregistrement d'un devis accepté sont maintenant des méthodes de `Budget` (`metier/budget.py`), testées.
+- **Chemins** : les classes n'ont plus de chemin de fichier par défaut (`"./budget_data.json"`…), qui risquait de recréer des fichiers à la racine. `context.txt` est dans `llm/` et se lit par un chemin absolu.
+- **Textes** : les libellés structurants sont dans `textes.py` : onglets, sections, vues, raccourcis, titres d'accueil, baseline, avertissement, messages d'erreur de l'IA, libellés de champs. Les libellés ponctuels (boutons, aides) restent dans les modules `ui/`. Pour une version anglaise, il restera à les y déplacer un par un.
+- **Avertissement conservé** : « AURORE peut se tromper : vérifiez les montants et les dates importantes. »
+- **README** réécrit : produit, vues, flags, lancement, variables d'environnement, tests, structure.

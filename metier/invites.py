@@ -5,8 +5,8 @@ from collections import Counter
 
 from fpdf import FPDF
 
-from devis import texte_pdf, date_lisible
-from storage import load_json, save_json
+from metier.devis import texte_pdf, date_lisible
+from donnees.storage import load_json, save_json
 from textes import format_person_name
 
 
@@ -125,7 +125,7 @@ def lire_contacts(nom_fichier, contenu_brut):
 
 
 class ListeInvites:
-    def __init__(self, file_path="./invites_data.json"):
+    def __init__(self, file_path):
         self.file_path = file_path
         self.invites = []
         self.faire_part = ""

@@ -3,7 +3,7 @@ import uuid
 from datetime import date
 from urllib.parse import quote
 
-from storage import load_json, save_json
+from donnees.storage import load_json, save_json
 
 
 CATEGORIES = [
@@ -61,7 +61,7 @@ def appliquer_statut(carnet, event_sheet, prestataire, statut):
 
 
 class Carnet:
-    def __init__(self, file_path="./prestataires_data.json"):
+    def __init__(self, file_path):
         self.file_path = file_path
         self.prestataires = []
         self.load()

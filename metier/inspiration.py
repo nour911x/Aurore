@@ -3,8 +3,8 @@ from urllib.parse import quote
 
 from fpdf import FPDF
 
-from devis import texte_pdf
-from storage import load_json, save_json
+from metier.devis import texte_pdf
+from donnees.storage import load_json, save_json
 
 
 ELEMENTS_MOODBOARD = ["Décoration", "Fleurs", "Tenues", "Gâteau", "Table", "Papeterie"]
@@ -54,7 +54,7 @@ def nettoyer_moodboard(moodboard):
 
 
 class Inspiration:
-    def __init__(self, file_path="./inspiration_data.json"):
+    def __init__(self, file_path):
         self.file_path = file_path
         self.moodboard = {}
         self.recommandations = {}

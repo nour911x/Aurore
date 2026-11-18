@@ -1,6 +1,7 @@
+from app import UserInterface
 from config import features
-from outils import OUTILS_PAR_ESPACE
-from user_interface import ESPACES, UserInterface
+from llm.outils import OUTILS_PAR_ESPACE
+from ui.commun import ESPACES
 
 
 def test_sections_masquees_selon_les_flags():

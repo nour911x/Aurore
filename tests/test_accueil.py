@@ -1,9 +1,9 @@
 from datetime import date, datetime, time, timedelta
 
-from accueil import champs_a_definir, confirmations_attendues, synthese
-from agenda import conflits, deviner_type
-from demo import creer_demo, dossiers_demo, retirer_demo
-from dossiers import lister
+from metier.accueil import champs_a_definir, confirmations_attendues, synthese
+from metier.agenda import conflits, deviner_type
+from donnees.demo import creer_demo, dossiers_demo, retirer_demo
+from donnees.dossiers import lister
 
 
 def rdv(titre, debut, duree=60, avec="", confirme=False):

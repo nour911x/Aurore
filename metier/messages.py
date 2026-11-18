@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from storage import load_json, save_json
+from donnees.storage import load_json, save_json
 from textes import noms_clients
 
 
@@ -139,7 +139,7 @@ def detecter_messages(event_data, carnet, agenda, budget):
 
 
 class Messagerie:
-    def __init__(self, file_path="./messages_data.json"):
+    def __init__(self, file_path):
         self.file_path = file_path
         self.messages = []
         self.load()

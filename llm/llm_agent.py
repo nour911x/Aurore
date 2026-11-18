@@ -4,15 +4,18 @@ from PIL import Image, ImageOps
 from dotenv import load_dotenv
 
 from config.evenements import description_champs_llm, type_du_dossier
-from rgpd import peut_recevoir_sante
+from metier.rgpd import peut_recevoir_sante
 from textes import date_longue
 from datetime import datetime
+from pathlib import Path
 import base64
 import io
 import os
 import json
 import re
 
+
+FICHIER_CONTEXTE = Path(__file__).with_name("context.txt")
 
 MODELE = "openai/gpt-oss-120b"
 MODELE_VISION = "qwen/qwen3.8-27b"
@@ -61,7 +64,7 @@ class ConversationAgent:
         self.conversation_history = [
                 {
                     "role": "system",
-                    "content": self.read_file(file_path="./context.txt")
+                    "content": self.read_file(file_path=FICHIER_CONTEXTE)
                 }
             ]
 
