@@ -19,6 +19,8 @@ ICONES_STATUT = {
 
 AUCUN = "—"
 
+FORMAT_DATE = "DD/MM/YYYY"
+
 
 OUI_NON = {AUCUN: None, "Oui": True, "Non": False}
 
@@ -205,7 +207,7 @@ def nouveau_dossier():
 	with st.form("form_nouveau_dossier"):
 		st.markdown(f"**{type_evenement['libelle']}**")
 		noms = st.text_input(type_evenement["personnes"])
-		jour = st.date_input("Date de l'événement", value=None)
+		jour = st.date_input("Date de l'événement", value=None, format=FORMAT_DATE)
 		sous_type = st.text_input("Type précis (EVJF, fiançailles, crémaillère…)") if cle_type == "autre" else ""
 
 		if st.form_submit_button("Créer le dossier", type="primary"):

@@ -60,7 +60,42 @@ def appliquer_statut(carnet, event_sheet, prestataire, statut):
         event_sheet.ajouter_prestataire(f"{prestataire['nom']} ({prestataire['categorie']})")
 
 
-class Carnet:
+CHAMPS_FICHE = ["nom", "categorie", "contact", "telephone", "email", "lien", "tarif_indicatif", "notes"]
+
+CHAMPS_DU_DOSSIER = ["statut", "statut_depuis", "tarif_indicatif", "poste_budget"]
+
+
+def normaliser_contact(valeur, cle):
+    valeur = valeur or ""
+    return re.sub(r"\D", "", valeur) if cle == "telephone" else valeur.strip().lower()
+
+
+def contact_identique(premier, second, cle):
+    a, b = normaliser_contact(premier.get(cle), cle), normaliser_contact(second.get(cle), cle)
+    return not a or not b or a == b
+
+
+def meme_fiche(premier, second):
+    return meme_nom(premier["nom"], second["nom"]) and all(
+        contact_identique(premier, second, cle) for cle in ("telephone", "email")
+    )
+
+
+def reservations_en_double(reservations):
+    par_jour = {}
+
+    for reservation in reservations:
+        if reservation["date"]:
+            par_jour.setdefault((reservation["prestataire_id"], reservation["date"]), []).append(reservation)
+
+    return [
+        {"prestataire": groupe[0]["nom"], "date": date_evenement, "dossiers": [element["dossier"] for element in groupe]}
+        for (_, date_evenement), groupe in sorted(par_jour.items(), key=lambda element: element[0][1])
+        if len({element["dossier_id"] for element in groupe}) > 1
+    ]
+
+
+class Annuaire:
     def __init__(self, file_path):
         self.file_path = file_path
         self.prestataires = []
@@ -72,22 +107,90 @@ class Carnet:
     def save(self):
         save_json(self.file_path, self.prestataires)
 
-    def add_prestataire(self, nom, categorie, contact, telephone, email, lien, tarif_indicatif, poste_budget, notes):
-        self.prestataires.append({
-            "id": uuid.uuid4().hex[:8],
-            "nom": nom,
-            "categorie": categorie,
-            "contact": contact,
-            "telephone": telephone,
-            "email": email,
-            "lien": lien,
-            "tarif_indicatif": tarif_indicatif,
-            "poste_budget": poste_budget,
-            "notes": notes,
+    def trouver(self, prestataire_id):
+        for prestataire in self.prestataires:
+            if prestataire["id"] == prestataire_id:
+                return prestataire
+
+        return None
+
+    def ajouter(self, fiche, prestataire_id=None):
+        for existant in self.prestataires:
+            if meme_fiche(existant, fiche):
+                for cle in CHAMPS_FICHE:
+                    if not existant.get(cle) and fiche.get(cle):
+                        existant[cle] = fiche[cle]
+
+                self.save()
+                return existant["id"]
+
+        nouveau = {cle: fiche.get(cle) or ("" if cle != "tarif_indicatif" else 0) for cle in CHAMPS_FICHE}
+        nouveau["id"] = prestataire_id or uuid.uuid4().hex[:8]
+        self.prestataires.append(nouveau)
+        self.save()
+
+        return nouveau["id"]
+
+
+class Carnet:
+    def __init__(self, annuaire, file_path):
+        self.annuaire = annuaire
+        self.file_path = file_path
+        self.selection = []
+        self.load()
+
+    def load(self):
+        self.selection = load_json(self.file_path, [])
+
+    def save(self):
+        save_json(self.file_path, self.selection)
+
+    @property
+    def prestataires(self):
+        fusion = []
+
+        for choix in self.selection:
+            fiche = self.annuaire.trouver(choix["prestataire_id"])
+
+            if fiche:
+                fusion.append({**fiche, **{cle: choix.get(cle) for cle in CHAMPS_DU_DOSSIER}, "id": fiche["id"]})
+
+        return fusion
+
+    def choix(self, prestataire_id):
+        for element in self.selection:
+            if element["prestataire_id"] == prestataire_id:
+                return element
+
+        return None
+
+    def selectionner(self, prestataire_id, tarif_indicatif=None, poste_budget=None):
+        if self.choix(prestataire_id):
+            return
+
+        fiche = self.annuaire.trouver(prestataire_id)
+        self.selection.append({
+            "prestataire_id": prestataire_id,
             "statut": STATUTS[0],
-            "statut_depuis": date.today().isoformat()
+            "statut_depuis": date.today().isoformat(),
+            "tarif_indicatif": tarif_indicatif or fiche.get("tarif_indicatif") or 0,
+            "poste_budget": poste_budget
         })
         self.save()
+
+    def add_prestataire(self, nom, categorie, contact, telephone, email, lien, tarif_indicatif, poste_budget, notes):
+        fiche = {
+            "nom": nom, "categorie": categorie, "contact": contact, "telephone": telephone, "email": email,
+            "lien": lien, "tarif_indicatif": tarif_indicatif, "notes": notes
+        }
+        prestataire_id = self.annuaire.ajouter(fiche)
+        self.selectionner(prestataire_id, tarif_indicatif, poste_budget)
+
+        return prestataire_id
+
+    def disponibles(self):
+        choisis = {element["prestataire_id"] for element in self.selection}
+        return [fiche for fiche in self.annuaire.prestataires if fiche["id"] not in choisis]
 
     def trouver(self, prestataire_id):
         for prestataire in self.prestataires:
@@ -103,19 +206,24 @@ class Carnet:
 
         return None
 
-    def changer_statut(self, prestataire_id, statut):
-        prestataire = self.trouver(prestataire_id)
+    def changer_statut(self, prestataire_id, statut, depuis=None):
+        element = self.choix(prestataire_id)
 
-        if prestataire:
-            prestataire["statut"] = statut
-            prestataire["statut_depuis"] = date.today().isoformat()
+        if element:
+            element["statut"] = statut
+            element["statut_depuis"] = depuis or date.today().isoformat()
+            self.save()
+
+    def modifier_conditions(self, prestataire_id, tarif_indicatif, poste_budget):
+        element = self.choix(prestataire_id)
+
+        if element:
+            element["tarif_indicatif"] = tarif_indicatif
+            element["poste_budget"] = poste_budget
             self.save()
 
     def supprimer(self, prestataire_id):
-        self.prestataires = [
-            prestataire for prestataire in self.prestataires
-            if prestataire["id"] != prestataire_id
-        ]
+        self.selection = [element for element in self.selection if element["prestataire_id"] != prestataire_id]
         self.save()
 
     def par_categorie(self):
@@ -130,7 +238,8 @@ class Carnet:
         return groupes
 
     def compter_par_statut(self):
+        prestataires = self.prestataires
         return {
-            statut: sum(1 for prestataire in self.prestataires if prestataire["statut"] == statut)
+            statut: sum(1 for prestataire in prestataires if prestataire["statut"] == statut)
             for statut in STATUTS
         }

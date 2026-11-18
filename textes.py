@@ -81,12 +81,34 @@ def format_person_name(nom):
     return "".join(resultat)
 
 
+def noms_courts(noms):
+    return (format_person_name(noms) or "").replace(" et ", " & ")
+
+
 def noms_clients(data, defaut="Les clients"):
     return format_person_name(data.get("noms")) or defaut
 
 
 def date_longue(jour):
     return f"{JOURS[jour.weekday()]} {jour.day} {MOIS[jour.month - 1]}"
+
+
+def montant(valeur):
+    if valeur is None:
+        return ""
+
+    texte = f"{valeur:,.2f}".replace(",", " ").replace(".", ",")
+    return f"{texte.removesuffix(',00')} €"
+
+
+def echeance_texte(jours):
+    if jours == 0:
+        return "aujourd'hui"
+
+    if jours == 1:
+        return "demain"
+
+    return f"dans {pluriel(jours, 'jour')}"
 
 
 def pluriel(nombre, singulier, forme_plurielle=None):

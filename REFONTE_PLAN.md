@@ -25,7 +25,7 @@ Aucune clé en dur. `GROQ_KEY` est lue via `os.environ` (`llm_agent.py:59`), `.e
 ---
 
 ## Arbitrages rendus (18/11/2026)
-- **Vrai multi-dossiers.** Un dossier par client dans `dossiers/<id>/` (fiche, budget, devis, invités, messages, galerie, jour J, inspiration, carnet de prestataires). Un sélecteur « Dossier » et un bouton « Nouveau dossier » dans la barre latérale. **L'agenda est commun** à l'organisateur : chaque rendez-vous porte un `dossier_id`, ce qui permet de détecter les conflits entre clients. Le carnet de prestataires, d'abord prévu commun, est finalement rangé par dossier (voir les décisions de la phase 1). Les données de la racine sont migrées automatiquement dans un premier dossier au lancement. Ce socle est construit au début de la phase 1, car le flux « Nouveau dossier » en dépend.
+- **Vrai multi-dossiers.** Un dossier par client dans `dossiers/<id>/` (fiche, budget, devis, invités, messages, galerie, jour J, inspiration, carnet de prestataires). Un sélecteur « Dossier » et un bouton « Nouveau dossier » dans la barre latérale. **L'agenda est commun** à l'organisateur : chaque rendez-vous porte un `dossier_id`, ce qui permet de détecter les conflits entre clients. Le carnet de prestataires a d'abord été rangé par dossier (phase 1), puis rendu commun à tous les dossiers dans les finitions (voir la dernière section). Les données de la racine sont migrées automatiquement dans un premier dossier au lancement. Ce socle est construit au début de la phase 1, car le flux « Nouveau dossier » en dépend.
 - **Base git** : la PR de `feature/jour-j` est fusionnée dans `main` d'abord, les branches `feature/refonte-*` partent de `main`.
 - **Phase 7** : réorganisation complète en dossiers `config/`, `ui/`, `metier/`, `donnees/`, `llm/`.
 
@@ -142,7 +142,7 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Commits** : je ne lance pas les commandes git, je te donne les commandes à taper à la fin de chaque phase.
 
 ### Phase 1
-- **Carnet de prestataires par dossier** (et non commun comme prévu au départ) : le statut d'un prestataire (« Devis demandé », « Réservé »…) dépend de l'événement. Seul l'agenda est commun à tous les dossiers.
+- **Carnet de prestataires par dossier** (et non commun comme prévu au départ) : le statut d'un prestataire (« Devis demandé », « Réservé »…) dépend de l'événement. Seul l'agenda est commun à tous les dossiers. *Décision revue dans les finitions : carnet commun, et statut, tarif et poste propres à chaque dossier.*
 - **Migration** : au premier lancement, les fichiers JSON de la racine sont *déplacés* dans `dossiers/<id>/`, et les rendez-vous existants sont rattachés à ce dossier. Pour revenir en arrière, il suffit de remettre ces fichiers à la racine.
 - **Champs spécifiques stockés à plat** dans la fiche (`ceremonie`, `gender_reveal`, `age`…) plutôt que dans un sous-objet : `EventSheet.update` et l'extraction par l'IA fonctionnent sans changement de structure.
 - **Lieu et allergies** sont communs à tous les types (présents dans les 4 listes du brief). La musique n'est affichée que pour un mariage, comme demandé.
@@ -228,3 +228,33 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Textes** : les libellés structurants sont dans `textes.py` : onglets, sections, vues, raccourcis, titres d'accueil, baseline, avertissement, messages d'erreur de l'IA, libellés de champs. Les libellés ponctuels (boutons, aides) restent dans les modules `ui/`. Pour une version anglaise, il restera à les y déplacer un par un.
 - **Avertissement conservé** : « AURORE peut se tromper : vérifiez les montants et les dates importantes. »
 - **README** réécrit : produit, vues, flags, lancement, variables d'environnement, tests, structure.
+
+---
+
+## Finitions (branche `feature/refonte-finitions`)
+
+### Prestataires : retour sur la décision de la phase 1
+- **Carnet commun à tous les dossiers** (`annuaire_prestataires.json` à la racine, classe `Annuaire` dans `metier/prestataires.py`) : la fiche d'un prestataire (nom, catégorie, contact, téléphone, email, site, notes) n'existe qu'une fois.
+- **Sélection par dossier** (`dossiers/<id>/selection_prestataires.json`, classe `Carnet`) : chaque dossier choisit ses prestataires et garde ses propres statut, date de statut, tarif et poste de budget. `Carnet` renvoie des fiches fusionnées avec les mêmes clés qu'avant : le reste du code (messages, devis, agent, vues partagées) n'a pas changé.
+- **Retirer un prestataire d'un dossier** ne le supprime pas du carnet commun. On peut ensuite le rechoisir depuis « Choisir dans le carnet commun ».
+- **Double réservation** : un prestataire « Réservé » sur deux dossiers dont l'événement tombe le même jour apparaît dans Accueil › Conflits, et en alerte sur sa carte dans les autres dossiers concernés.
+- **Migration** (`migrer_carnets`, au lancement) : chaque ancien `prestataires_data.json` est versé dans l'annuaire puis supprimé. Deux fiches sont fusionnées si elles ont le même nom (casse et apostrophes ignorées) et aucun téléphone ni email contradictoire ; les champs vides sont complétés par l'autre fiche. Les identifiants fusionnés sont mis à jour dans les messages et les devis du dossier. Le statut et le tarif de chaque dossier sont conservés.
+- **Une seule instance de l'annuaire par session**, comme pour l'agenda, pour que deux dossiers ne s'écrasent pas.
+
+### Autres décisions
+- **Démo** (`donnees/demo.py`) : le mariage est le dossier existant « Léa et Liam », complété ; l'anniversaire de Tom et la baby shower d'Inès & Malik sont créés. Tout ce que la démo ajoute à Léa & Liam (rendez-vous, facture, prestataires choisis, devis, message, postes) est marqué `"demo": true`, ce qui permet de le retirer sans toucher au reste. Le dossier lui-même n'est supprimé que s'il a été créé par la démo. Contenu :
+  - un rendez-vous aujourd'hui ;
+  - une facture en retard ;
+  - un conflit entre deux dossiers (essayage de Léa à 15 h, visite de salle d'Inès à 15 h 30) ;
+  - un DJ réservé le même jour pour le mariage et pour l'anniversaire ;
+  - un lieu manquant pour Léa & Liam, à J-32.
+- **Démo créée une seule fois**, au tout premier lancement (`aurore_etat.json`, clé `demo_initialisee`). Si on la retire, elle ne revient pas toute seule ; le bouton « Ajouter les données de démonstration » la remet.
+- **« À définir » dans À faire** : un dossier dont l'événement est à J-45 ou moins et dont un champ essentiel est vide (date, lieu, invités, budget) apparaît dans « À faire », avec un bouton « Compléter la fiche ».
+- **Changement de type** : un sélecteur demande confirmation et liste les champs qui seront masqués. Ces valeurs restent dans la fiche et réapparaissent si l'on revient au type d'origine (`EventSheet.changer_type`, `champs_masques`).
+- **Noms normalisés à l'enregistrement** (`format_person_name`) : fiche, invités, consentements de droit à l'image. Migration unique des dossiers existants (`migrer_noms`, clé `noms_normalises`) : fiche, consentements, invités, avis, messages et devis adressés aux clients. Les noms de prestataires ne sont pas modifiés.
+- **Sélecteur de dossier** : libellé court « Léa & Liam · 20/12 », sans titre au-dessus (le bloc « Dossier » juste en dessous suffit).
+- **Dates** : tous les champs de saisie sont au format JJ/MM/AAAA (`FORMAT_DATE` dans `ui/commun.py`), ainsi que les dates affichées.
+- **Montants** : `textes.montant` affiche le séparateur de milliers (« 15 000 € », « 471,60 € »). Le champ Budget de la fiche avance par pas de 500 €. Les champs de saisie Streamlit ne savent pas afficher de séparateur de milliers.
+- **Accueil** : la bannière de notification n'apparaît plus sur l'accueil, puisque « À faire » en reprend le contenu. Elle reste sur les autres onglets.
+- **Nouvelle conversation** : le bouton est passé de la barre latérale à la discussion (Messages › Discussion, ou Discussion dans les vues partagées). Il n'apparaît que s'il y a une conversation.
+- **Pétales** : passés sous le contenu (`z-index: -1` dans la zone principale) avec une opacité réduite de moitié environ. Ils ne recouvrent plus le texte.

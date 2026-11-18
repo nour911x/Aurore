@@ -85,6 +85,14 @@ def champs_du_type(data):
     return {cle: CHAMPS_SPECIFIQUES[cle][0] for cle in type_du_dossier(data)["champs"]}
 
 
+def champs_masques(data, nouvelle_cle):
+    gardes = set(TYPES_EVENEMENT[nouvelle_cle]["champs"])
+    return [
+        CHAMPS_SPECIFIQUES[cle][0] for cle in type_du_dossier(data)["champs"]
+        if cle not in gardes and data.get(cle) not in (None, "", [])
+    ]
+
+
 def libelle_evenement(data):
     type_evenement = type_du_dossier(data)
 

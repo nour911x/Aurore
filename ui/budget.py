@@ -4,11 +4,11 @@ from datetime import date, timedelta
 
 from donnees.dossiers import chemin
 from metier.budget import Budget, POSTE_ORGANISATION
-from metier.devis import STATUTS_DEVIS, date_lisible, date_validite, euros, generer_pdf, lignes_valides, totaux
+from metier.devis import STATUTS_DEVIS, date_lisible, date_validite, generer_pdf, lignes_valides, totaux
 from metier.messages import EMETTEUR_AURORE, destinataire_maries, suggestion
 from metier.prestataires import meme_nom
-from textes import NOTES_DEVIS, format_person_name, noms_clients
-from ui.commun import COLONNES_DEVIS, CONFIG_COLONNES_DEVIS, lire_date
+from textes import NOTES_DEVIS, echeance_texte, format_person_name, montant, noms_clients
+from ui.commun import COLONNES_DEVIS, CONFIG_COLONNES_DEVIS, FORMAT_DATE, lire_date
 
 
 class VueBudget:
@@ -16,9 +16,9 @@ class VueBudget:
 	def show_alertes_factures(budget):
 		for facture in budget.factures_a_payer():
 			if facture["jours_restants"] < 0:
-				st.error(f"Facture en retard : {facture['libelle']} ({facture['montant']} €) — échéance dépassée ({facture['echeance']})", icon=":material/error:")
+				st.error(f"Facture en retard : {facture['libelle']} ({montant(facture['montant'])}) — échéance dépassée le {date_lisible(facture['echeance'])}", icon=":material/error:")
 			elif facture["jours_restants"] <= 7:
-				st.warning(f"À payer dans {facture['jours_restants']} jours : {facture['libelle']} ({facture['montant']} €, poste {facture['poste']})", icon=":material/schedule:")
+				st.warning(f"À payer {echeance_texte(facture['jours_restants'])} : {facture['libelle']} ({montant(facture['montant'])}, poste {facture['poste']})", icon=":material/schedule:")
 
 
 	@staticmethod
@@ -27,16 +27,16 @@ class VueBudget:
 
 		if budget_total:
 			st.progress(min(total_engage / budget_total, 1.0))
-			st.markdown(f"**{total_engage} € engagés** sur un budget de **{budget_total} €**")
+			st.markdown(f"**{montant(total_engage)} engagés** sur un budget de **{montant(budget_total)}**")
 
 		for poste in budget.postes:
 			engage = budget.engage_du_poste(poste)
 			icone = ":material/warning:" if poste["montant_prevu"] and engage > poste["montant_prevu"] else ":material/check_circle:"
 
-			with st.expander(f"{poste['nom']} — {engage} € / {poste['montant_prevu']} € {libelle_poste}", icon=icone):
+			with st.expander(f"{poste['nom']} — {montant(engage)} / {montant(poste['montant_prevu'])} {libelle_poste}", icon=icone):
 				for facture in poste["factures"]:
 					statut = ":green[:material/check_circle:] payée" if facture["payee"] else f":material/hourglass_top: à payer avant le {date_lisible(facture['echeance'])}"
-					st.markdown(f"- {facture['libelle']} : {facture['montant']} € ({statut})")
+					st.markdown(f"- {facture['libelle']} : {montant(facture['montant'])} ({statut})")
 
 					if not facture["payee"] and not lecture_seule:
 						if st.button("Marquer payée", key=f"{cle}_payee_{poste['nom']}_{facture['libelle']}"):
@@ -62,7 +62,7 @@ class VueBudget:
 					poste_choisi = st.selectbox("Poste", noms_postes)
 					libelle = st.text_input(f"Libellé (ex : {exemple_facture})")
 					montant = st.number_input("Montant (€)", min_value=0, step=50)
-					echeance = st.date_input("Date d'échéance")
+					echeance = st.date_input("Date d'échéance", format=FORMAT_DATE)
 					payee = st.checkbox("Déjà payée")
 
 					if st.form_submit_button("Ajouter la facture") and libelle:
@@ -175,7 +175,7 @@ class VueBudget:
 			infos, statut = st.columns([3, 2])
 			infos.markdown(f"**{numero}** · {devis['emetteur']} → {format_person_name(devis['destinataire'])}")
 			infos.caption(
-				f"{euros(montants['ttc'])} TTC · acompte {euros(montants['acompte'])} · "
+				f"{montant(montants['ttc'])} TTC · acompte {montant(montants['acompte'])} · "
 				f"valable jusqu'au {date_validite(devis):%d/%m/%Y}"
 			)
 

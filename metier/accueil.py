@@ -3,10 +3,10 @@ from datetime import date, datetime, timedelta
 from metier.agenda import Agenda, bornes, conflits, type_rdv
 from metier.budget import Budget, POSTE_ORGANISATION
 from config.evenements import CHAMPS_ESSENTIELS
-from donnees.dossiers import RACINE, FICHIER_FICHE, chemin, chemin_agenda, lister, libelle_dossier
+from donnees.dossiers import RACINE, FICHIER_FICHE, FICHIER_SELECTION, chemin, chemin_agenda, chemin_annuaire, lister, libelle_dossier
 from donnees.event_state import EventSheet, renseigne
 from metier.messages import MODIFIABLES, Messagerie, detecter_messages
-from metier.prestataires import Carnet
+from metier.prestataires import Annuaire, Carnet, reservations_en_double
 
 
 JOURS_SURVEILLANCE = 45
@@ -48,12 +48,32 @@ def avec_dossier(rdv, libelles):
     return {**rdv, "type": type_rdv(rdv), "dossier": libelles.get(rdv.get("dossier_id"), "Sans dossier")}
 
 
+def reservations(carnet, fiche, origine):
+    return [
+        {"prestataire_id": prestataire["id"], "nom": prestataire["nom"], "date": fiche.get("date"), **origine}
+        for prestataire in carnet.prestataires if prestataire["statut"] == "Réservé"
+    ]
+
+
+def doubles_reservations(racine=RACINE):
+    annuaire = Annuaire(chemin_annuaire(racine))
+    toutes = []
+
+    for dossier in lister(racine):
+        carnet = Carnet(annuaire, chemin(dossier["id"], FICHIER_SELECTION, racine))
+        toutes += reservations(carnet, dossier, {"dossier_id": dossier["id"], "dossier": libelle_dossier(dossier)})
+
+    return reservations_en_double(toutes)
+
+
 def synthese(racine=RACINE, maintenant=None):
     maintenant = maintenant or datetime.now()
     aujourd_hui = maintenant.date()
     agenda = Agenda(chemin_agenda(racine))
+    annuaire = Annuaire(chemin_annuaire(racine))
     libelles = {}
-    resultat = {"rdvs_du_jour": [], "a_faire": [], "paiements": [], "a_surveiller": [], "conflits": []}
+    toutes_reservations = []
+    resultat = {"rdvs_du_jour": [], "a_faire": [], "paiements": [], "a_surveiller": [], "conflits": [], "doubles_reservations": []}
 
     for dossier in lister(racine):
         dossier_id = dossier["id"]
@@ -62,9 +82,10 @@ def synthese(racine=RACINE, maintenant=None):
         agenda.pour_dossier(dossier_id)
         budget = Budget(chemin(dossier_id, "budget_data.json", racine))
         messagerie = Messagerie(chemin(dossier_id, "messages_data.json", racine))
-        carnet = Carnet(chemin(dossier_id, "prestataires_data.json", racine))
+        carnet = Carnet(annuaire, chemin(dossier_id, FICHIER_SELECTION, racine))
         suggestions = messagerie.a_preparer(detecter_messages(fiche, carnet, agenda, budget))
         origine = {"dossier_id": dossier_id, "dossier": libelles[dossier_id]}
+        toutes_reservations += reservations(carnet, fiche, origine)
 
         resultat["a_faire"].append({
             **origine,
@@ -72,7 +93,8 @@ def synthese(racine=RACINE, maintenant=None):
             "a_envoyer": len(messagerie.par_statut("validé")),
             "relances": sum(suggestion["type"] == "relance" for suggestion in suggestions),
             "a_preparer": sum(suggestion["type"] != "relance" for suggestion in suggestions),
-            "confirmations": confirmations_attendues(agenda.rdvs, maintenant)
+            "confirmations": confirmations_attendues(agenda.rdvs, maintenant),
+            "a_definir": champs_a_definir(fiche) if a_surveiller(fiche, aujourd_hui) else []
         })
 
         resultat["paiements"] += [
@@ -88,8 +110,9 @@ def synthese(racine=RACINE, maintenant=None):
 
     resultat["a_faire"] = [
         element for element in resultat["a_faire"]
-        if element["a_valider"] or element["a_envoyer"] or element["relances"] or element["a_preparer"] or element["confirmations"]
+        if any(element[cle] for cle in ("a_valider", "a_envoyer", "relances", "a_preparer", "confirmations", "a_definir"))
     ]
+    resultat["doubles_reservations"] = reservations_en_double(toutes_reservations)
     resultat["a_surveiller"].sort(key=lambda element: element["jours"])
 
     resultat["rdvs_du_jour"] = [

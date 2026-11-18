@@ -1,8 +1,9 @@
 from datetime import date
 
-from config.evenements import CHAMPS_SPECIFIQUES, champs_par_defaut
+from config.evenements import CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, champs_par_defaut
 from metier.rgpd import CHAMPS_CONSENTEMENT, CHAMPS_SANTE, sans_sante
 from donnees.storage import load_json, save_json
+from textes import format_person_name
 
 
 CHAMPS_POUR_PRESTATAIRE = [
@@ -49,6 +50,8 @@ class EventSheet:
         if isinstance(self.data["noms"], list):
             self.data["noms"] = " et ".join(self.data["noms"]) or None
 
+        self.data["noms"] = format_person_name(self.data["noms"]) or None
+
     def save(self):
         save_json(self.file_path, self.data)
 
@@ -74,7 +77,11 @@ class EventSheet:
         for key, value in new_info.items():
             if key in self.data and key not in CHAMPS_PROTEGES:
                 self.data[key] = value
+        self.normaliser_noms()
         self.save()
+
+    def changer_type(self, cle_type):
+        self.remplacer({"type_evenement": TYPES_EVENEMENT[cle_type]["libelle"]})
 
     def set_consentement(self, cle, valeur):
         self.data[cle] = valeur

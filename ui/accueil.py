@@ -2,9 +2,10 @@ import base64
 import streamlit as st
 from datetime import datetime
 
-from donnees.demo import creer_demo, dossiers_demo, retirer_demo
+from donnees.demo import creer_demo, demo_active, retirer_demo
 from metier.accueil import JOURS_SURVEILLANCE, synthese
-from textes import RACCOURCIS, RACCOURCIS_CLIENTS, RACCOURCIS_PRESTATAIRE, pluriel
+from metier.devis import date_lisible
+from textes import RACCOURCIS, RACCOURCIS_CLIENTS, RACCOURCIS_PRESTATAIRE, montant, pluriel
 from ui.commun import echeance_lisible, heure_rdv, ouvrir_dossier
 from ui.habillage import AVERTISSEMENT_HTML, accueil_html, aujourdhui_html
 
@@ -40,10 +41,16 @@ class VueAccueil:
 				self.bouton_ouvrir(f"jour_{index}", rdv["dossier_id"], "planning", "agenda")
 
 
-	def show_conflits(self, paires):
+	def show_conflits(self, paires, doubles):
 		with self.section_accueil("Conflits", "warning"):
-			if not paires:
-				st.caption("Aucun chevauchement dans le calendrier.")
+			if not paires and not doubles:
+				st.caption("Aucun chevauchement dans le calendrier, aucun prestataire réservé deux fois le même jour.")
+
+			for double in doubles:
+				st.markdown(
+					f":orange[:material/event_busy:] **{double['prestataire']}** est réservé deux fois le "
+					f"**{date_lisible(double['date'])}** : {', '.join(double['dossiers'])}"
+				)
 
 			for premier, second in paires:
 				st.markdown(
@@ -67,7 +74,8 @@ class VueAccueil:
 					pluriel(element["a_envoyer"], "message validé à envoyer", "messages validés à envoyer") if element["a_envoyer"] else "",
 					pluriel(element["relances"], "relance") if element["relances"] else "",
 					pluriel(element["a_preparer"], "message à préparer", "messages à préparer") if element["a_preparer"] else "",
-					pluriel(len(element["confirmations"]), "confirmation attendue", "confirmations attendues") if element["confirmations"] else ""
+					pluriel(len(element["confirmations"]), "confirmation attendue", "confirmations attendues") if element["confirmations"] else "",
+					f":orange[à définir : {', '.join(element['a_definir'])}]" if element["a_definir"] else ""
 				]
 				st.markdown(f"**{element['dossier']}** : {', '.join(filter(None, morceaux))}")
 
@@ -78,6 +86,9 @@ class VueAccueil:
 						"Confirmé", key=f"confirmer_{rdv['dossier_id']}_{rdv['date_heure']}_{rdv['titre']}",
 						icon=":material/check:", type="tertiary", on_click=self.confirmer_rdv, args=(rdv,)
 					)
+
+				if element["a_definir"]:
+					self.bouton_ouvrir(f"definir_{element['dossier_id']}", element["dossier_id"], "fiche", libelle="Compléter la fiche")
 
 				if element["a_valider"] or element["a_envoyer"] or element["relances"] or element["a_preparer"]:
 					self.bouton_ouvrir(f"faire_{element['dossier_id']}", element["dossier_id"], "messages", "a_envoyer", "Ouvrir les messages")
@@ -90,7 +101,7 @@ class VueAccueil:
 
 			for index, facture in enumerate(sorted(factures, key=lambda facture: facture["jours_restants"])):
 				sens = "À encaisser auprès du client" if facture["sens"] == "client" else "À régler au prestataire"
-				st.markdown(f"{echeance_lisible(facture['jours_restants'])} · **{facture['libelle']}** · {facture['montant']} €")
+				st.markdown(f"{echeance_lisible(facture['jours_restants'])} · **{facture['libelle']}** · {montant(facture['montant'])}")
 				st.caption(f"{sens} · {facture['dossier']}")
 				self.bouton_ouvrir(f"paiement_{index}", facture["dossier_id"], "budget", "budget")
 
@@ -108,19 +119,22 @@ class VueAccueil:
 
 	def show_demo(self):
 		with st.expander("Données de démonstration", icon=":material/science:"):
-			if dossiers_demo():
-				st.caption("Les trois dossiers de démonstration sont chargés. Les retirer supprime uniquement ces dossiers et leurs rendez-vous.")
+			if demo_active():
+				st.caption(
+					"La démonstration est chargée : l'anniversaire de Tom, la baby shower d'Inès & Malik et des éléments "
+					"ajoutés au mariage de Léa & Liam. Les retirer ne touche pas à vos propres données."
+				)
 
-				if st.button("Retirer les dossiers de démonstration", icon=":material/delete:"):
+				if st.button("Retirer les données de démonstration", icon=":material/delete:"):
 					retirer_demo()
-					self.agenda.load()
+					self.recharger_donnees()
 					st.rerun()
 			else:
-				st.caption("Ajoute trois dossiers fictifs (mariage, baby shower, anniversaire), datés à partir d'aujourd'hui, pour voir l'accueil rempli.")
+				st.caption("Ajoute un anniversaire, une baby shower et des éléments au mariage de Léa & Liam, datés à partir d'aujourd'hui.")
 
-				if st.button("Ajouter les dossiers de démonstration", icon=":material/add:"):
+				if st.button("Ajouter les données de démonstration", icon=":material/add:"):
 					creer_demo()
-					self.agenda.load()
+					self.recharger_donnees()
 					st.rerun()
 
 
@@ -132,13 +146,13 @@ class VueAccueil:
 			":material/today: Rendez-vous aujourd'hui": len(donnees["rdvs_du_jour"]),
 			":material/task_alt: Dossiers à traiter": len(donnees["a_faire"]),
 			":material/payments: Paiements à suivre": len(donnees["paiements"]),
-			":material/warning: Conflits": len(donnees["conflits"])
+			":material/warning: Conflits": len(donnees["conflits"]) + len(donnees["doubles_reservations"])
 		})
 		gauche, droite = st.columns(2)
 
 		with gauche:
 			self.show_rdvs_du_jour(donnees["rdvs_du_jour"])
-			self.show_conflits(donnees["conflits"])
+			self.show_conflits(donnees["conflits"], donnees["doubles_reservations"])
 
 		with droite:
 			self.show_a_faire(donnees["a_faire"])
@@ -177,6 +191,12 @@ class VueAccueil:
 
 	def show_discussion(self, profil):
 		historique = self.conversation_agent_object.get_conversation_history()
+
+		if historique:
+			st.button(
+				"Nouvelle conversation", icon=":material/add_comment:", key="nouvelle_conversation",
+				on_click=self.nouvelle_conversation, args=(profil,)
+			)
 
 		if profil != "Wedding planner":
 			if not historique:

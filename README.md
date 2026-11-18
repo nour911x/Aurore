@@ -12,16 +12,16 @@ Application Streamlit, en Python.
 
 | Onglet | Ce qu'on y fait |
 |---|---|
-| **Accueil** | La journée sur tous les dossiers : rendez-vous du jour, choses à faire (messages à valider, relances, confirmations attendues), paiements en retard ou à 7 jours, dossiers à surveiller (J-45 et moins, champs encore « À définir »), conflits d'agenda. Chaque ligne ouvre le bon dossier. |
+| **Accueil** | La journée sur tous les dossiers : rendez-vous du jour, choses à faire (messages à valider, relances, confirmations attendues, champs encore « À définir » à J-45 et moins), paiements en retard ou à 7 jours, dossiers à surveiller, conflits d'agenda et prestataires réservés deux fois le même jour. Chaque ligne ouvre le bon dossier. |
 | **Messages** | La discussion avec AURORE et les messages à préparer, relire, valider puis envoyer. |
 | **Fiche client** | Les champs du dossier selon le type d'événement, les consentements RGPD, l'historique des échanges, l'export et la suppression des données. |
 | **Planning** | Les rendez-vous, avec type, confirmation et briefing automatique dans les 24 h ; le déroulé du jour J ; le plan de salle. |
-| **Prestataires** | Le carnet, les statuts (à contacter → réservé) et les contacts. |
+| **Prestataires** | Un carnet commun à tous les dossiers. Chaque dossier y choisit ses prestataires, avec un statut (à contacter → réservé), un tarif et un poste de budget propres. Alerte si un prestataire est réservé sur deux événements le même jour. |
 | **Budget & devis** | Les postes, les factures et leurs échéances ; des devis en PDF qui, une fois acceptés, créent l'acompte et le solde. |
 | **Invités** | La liste, l'import de contacts avec aperçu, les faire-parts et le récapitulatif pour le traiteur. |
 | **Inspiration & galerie** | Le moodboard, les photos taguées décor / avec personnes, le droit à l'image, les avis. |
 
-La barre latérale permet de changer de dossier et d'en créer un nouveau (Mariage, Baby shower, Anniversaire ou Autre). La zone de saisie en bas de page comprend le langage naturel : « ajoute une dégustation jeudi 14h ».
+La barre latérale permet de changer de dossier et d'en créer un nouveau (Mariage, Baby shower, Anniversaire ou Autre). Changer le type d'un dossier demande une confirmation : les champs propres à l'ancien type sont masqués, pas supprimés. La zone de saisie en bas de page comprend le langage naturel : « ajoute une dégustation jeudi 14h ».
 
 ### Vues partagées, en lecture seule
 
@@ -68,7 +68,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-L'application s'ouvre sur http://localhost:8501. Pour la découvrir avec des données, ouvrez **Accueil › Données de démonstration** : trois dossiers fictifs, datés à partir d'aujourd'hui, s'ajoutent et se retirent en un clic.
+L'application s'ouvre sur http://localhost:8501. Au tout premier lancement, des données de démonstration sont créées (un mariage, un anniversaire, une baby shower, datés à partir d'aujourd'hui) pour que l'accueil soit rempli. Elles se retirent et se remettent depuis **Accueil › Données de démonstration**, sans toucher à vos propres données.
 
 ## Variables d'environnement
 
@@ -103,3 +103,5 @@ assets/               feuille de style, salle 3D
 tests/                tests unitaires (pytest)
 dossiers/             données des clients, un sous-dossier par client (créé au lancement, ignoré par git)
 ```
+
+À la racine, `agenda_data.json` (agenda commun), `annuaire_prestataires.json` (carnet commun) et `aurore_etat.json` (migrations déjà faites, démo) sont créés au lancement et ignorés par git. Les migrations des anciennes données (dossier unique, carnets par dossier, noms) se font automatiquement.
