@@ -7,11 +7,13 @@ from habillage import (
 	disposition_salle, salle_3d_html
 )
 from event_state import EventSheet
+from config.evenements import TYPES_EVENEMENT, CHAMPS_SPECIFIQUES, type_du_dossier, champs_du_type, libelle_evenement
+from dossiers import FICHIER_FICHE, chemin, chemin_agenda, creer as creer_dossier, lister as lister_dossiers, libelle_dossier, migrer_ancien_dossier
 from budget import Budget
 from agenda import Agenda
 from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email, appliquer_statut, meme_nom
 from messages import (
-	Messagerie, TYPES_MESSAGE, detecter_messages,
+	Messagerie, TYPES_MESSAGE, EMETTEUR_AURORE, detecter_messages,
 	destinataire_maries, destinataire_prestataire, suggestion, fiche_publique
 )
 from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, date_lisible, generer_pdf, lignes_valides
@@ -27,7 +29,7 @@ from jour_j import (
 from galerie import Galerie, CATEGORIES_PHOTO, STATUTS_DROIT, publiable, generer_autorisation_pdf
 from invites import (
 	ListeInvites, GROUPES, STATUTS_INVITE, REGIMES,
-	nettoyer, lire_contacts, message_personnel, generer_faire_part_pdf
+	nettoyer, entier, lire_contacts, message_personnel, generer_faire_part_pdf
 )
 from groq import APIError, APIConnectionError, AuthenticationError, RateLimitError
 from datetime import date, datetime, timedelta
@@ -39,7 +41,6 @@ import uuid
 CHAMPS_LISTES = {
 	"allergies_interdits": "Allergies / interdits (alimentaires, religieux, à éviter absolument…)",
 	"preferences": "Préférences (style, couleurs, fleurs, ambiance…)",
-	"preferences_musicales": "Préférences musicales (styles, chansons, ouverture de bal…)",
 	"prestataires": "Prestataires déjà choisis"
 }
 
@@ -55,10 +56,14 @@ ICONES_STATUT = {
 
 AUCUN = "—"
 
+OUI_NON = {AUCUN: None, "Oui": True, "Non": False}
+
+LIBELLES_PROFIL = {"Wedding planner": "Organisateur", "Mariés": "Clients", "Prestataire": "Prestataire"}
+
 ONGLETS = {
 	"discussion": "💬 Discussion",
-	"fiche": "💑 Fiche couple",
-	"mariage": "💍 Le mariage",
+	"fiche": "🗂️ Fiche client",
+	"evenement": "🎉 L'événement",
 	"inspiration": "✨ Inspiration",
 	"invites": "👥 Invités",
 	"prestataires": "🤝 Prestataires",
@@ -79,41 +84,17 @@ CONFIG_COLONNES_DEROULE = {
 	"details": st.column_config.TextColumn("Détails", width="large")
 }
 
-ONGLETS_MARIES = {"fiche": "💑 Notre mariage"}
+ONGLETS_MARIES = {"fiche": "🗂️ Notre événement"}
 
 ESPACES = {
 	"Wedding planner": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "jourj", "messages", "galerie"],
 	"Mariés": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "jourj", "messages", "galerie"],
-	"Prestataire": ["discussion", "mariage", "agenda", "devis", "achats"]
+	"Prestataire": ["discussion", "evenement", "agenda", "devis", "achats"]
 }
 
 CHAMPS_DOSSIER = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités", "budget": "Budget"}
 
 CHAMPS_DOSSIER_PRESTATAIRE = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités"}
-
-DETAILS_DOSSIER_PRESTATAIRE = {
-	"noms": "Couple",
-	"type_evenement": "Événement",
-	"theme": "Thème",
-	"allergies_interdits": "Allergies",
-	"preferences_musicales": "Musique"
-}
-
-DETAILS_DOSSIER = {
-	"noms": "Couple",
-	"type_evenement": "Événement",
-	"theme": "Thème",
-	"allergies_interdits": "Allergies",
-	"preferences_musicales": "Musique",
-	"prestataires": "Prestataires"
-}
-
-TUILES = [
-	("mariage", ":material/favorite:", "Mariage", "Cérémonie, vin d'honneur, réception", "Je souhaite organiser un mariage."),
-	("baby", ":material/child_care:", "Baby shower", "Gender reveal, naissance", "Je souhaite organiser une baby shower."),
-	("anniversaire", ":material/cake:", "Anniversaire", "Surprise, 30 ans, enfant", "Je souhaite organiser un anniversaire."),
-	("autre", ":material/celebration:", "Autre", "EVJF, fiançailles, crémaillère", "Je souhaite organiser un autre type d'événement.")
-]
 
 RACCOURCIS = [
 	("agenda", ":material/calendar_month:", "Mon agenda de la semaine", "Quels sont mes rendez-vous des 7 prochains jours ?"),
@@ -123,18 +104,16 @@ RACCOURCIS = [
 ]
 
 RACCOURCIS_PRESTATAIRE = [
-	("agenda", ":material/calendar_month:", "Mes rendez-vous", "Quels sont mes prochains rendez-vous pour ce mariage ?"),
+	("agenda", ":material/calendar_month:", "Mes rendez-vous", "Quels sont mes prochains rendez-vous pour cet événement ?"),
 	("couverts", ":material/restaurant:", "Couverts et allergies", "Combien de couverts, quels régimes et quelles allergies ?"),
-	("devis", ":material/request_quote:", "Préparer un devis", "Aide-moi à préparer mon devis pour ce mariage.")
+	("devis", ":material/request_quote:", "Préparer un devis", "Aide-moi à préparer mon devis pour cet événement.")
 ]
 
 PLACEHOLDERS = {
 	"Wedding planner": "Que puis-je faire pour vous ? (ex : ajoute une dégustation jeudi à 14h)",
-	"Mariés": "Parle-moi de ton mariage ! (ex : où en est notre budget ?)",
+	"Mariés": "Parle-moi de ton événement ! (ex : où en est notre budget ?)",
 	"Prestataire": "Que puis-je faire pour vous ? (ex : combien de couverts végétariens ?)"
 }
-
-PLANNER = "AURORE - Wedding planner"
 
 COLONNES_DEVIS = ["designation", "quantite", "prix_unitaire"]
 
@@ -183,30 +162,121 @@ def resume_contexte(contexte):
 	return contexte.get("titre") or contexte.get("libelle") or contexte.get("nom") or ""
 
 
+def details_dossier(data, prive=True):
+	details = {"noms": type_du_dossier(data)["personnes"], "type_evenement": "Événement", "theme": "Thème"}
+	details |= champs_du_type(data)
+	details["allergies_interdits"] = "Allergies"
+
+	if prive:
+		details["prestataires"] = "Prestataires"
+
+	return details
+
+
+def ouvrir_nouveau_dossier(cle_type=None):
+	st.session_state.type_nouveau_dossier = cle_type
+	st.session_state.ouvrir_nouveau_dossier = True
+
+
+def choisir_type(cle_type=None):
+	st.session_state.type_nouveau_dossier = cle_type
+
+
+def fermer_nouveau_dossier():
+	st.session_state.type_nouveau_dossier = None
+	st.session_state.ouvrir_nouveau_dossier = False
+
+
+def show_tuiles(cle, au_clic):
+	with st.container(horizontal=True, key=cle):
+		for cle_type, type_evenement in TYPES_EVENEMENT.items():
+			st.button(
+				f"**{type_evenement['libelle']}**  \n{type_evenement['exemples']}",
+				key=f"{cle}-{cle_type}", icon=type_evenement["icone"], width="stretch",
+				on_click=au_clic, args=(cle_type,)
+			)
+
+
+@st.dialog("Nouveau dossier", width="large", on_dismiss=fermer_nouveau_dossier)
+def nouveau_dossier():
+	cle_type = st.session_state.get("type_nouveau_dossier")
+
+	if not cle_type:
+		st.markdown("Quel type d'événement organisez-vous ?")
+		show_tuiles("tuiles-dialogue", choisir_type)
+		return
+
+	type_evenement = TYPES_EVENEMENT[cle_type]
+
+	with st.form("form_nouveau_dossier"):
+		st.markdown(f"**{type_evenement['libelle']}**")
+		noms = st.text_input(type_evenement["personnes"])
+		jour = st.date_input("Date de l'événement", value=None)
+		sous_type = st.text_input("Type précis (EVJF, fiançailles, crémaillère…)") if cle_type == "autre" else ""
+
+		if st.form_submit_button("Créer le dossier", type="primary"):
+			st.session_state.dossier_actif = creer_dossier({
+				"type_evenement": type_evenement["libelle"],
+				"noms": noms or None,
+				"date": str(jour) if jour else None,
+				"sous_type": sous_type or None
+			})
+			fermer_nouveau_dossier()
+			st.rerun()
+
+	st.button("Changer de type", on_click=choisir_type)
+
+
 class UserInterface:
 	def __init__(self):
 		st.set_page_config(page_title="AURORE", page_icon="🌅", layout="wide")
 		st.html(style_html())
 		self.prestataire = None
-		self.event_sheet = self.get_persistant("event_sheet", EventSheet)
-		self.budget = self.get_persistant("budget", Budget)
-		self.agenda = self.get_persistant("agenda", Agenda)
-		self.carnet = self.get_persistant("carnet", Carnet)
-		self.messagerie = self.get_persistant("messagerie", Messagerie)
-		self.carnet_devis = self.get_persistant("carnet_devis", CarnetDevis)
-		self.liste_invites = self.get_persistant("liste_invites", ListeInvites)
-		self.inspiration = self.get_persistant("inspiration", Inspiration)
-		self.galerie = self.get_persistant("galerie", Galerie)
-		self.jour_j = self.get_persistant("jour_j", JourJ)
+		self.profil = None
+		self.dossier_id = self.choisir_dossier()
+		self.agenda = self.get_persistant("agenda", lambda: Agenda(chemin_agenda()))
 		st.session_state.setdefault("version_galerie", 0)
-		self.outils = Outils(
-			self.event_sheet, self.agenda, self.budget, self.carnet,
-			self.liste_invites, self.messagerie, self.carnet_devis, self.jour_j
-		)
 		st.session_state.setdefault("version_invites", 0)
 		st.session_state.setdefault("briefings", {})
 		st.session_state.setdefault("lignes_devis", [])
 		st.session_state.setdefault("version_lignes", 0)
+
+		if self.dossier_id:
+			self.charger_dossier()
+
+
+	def choisir_dossier(self):
+		migrer_ancien_dossier()
+		self.dossiers = {dossier["id"]: dossier for dossier in lister_dossiers()}
+
+		if st.session_state.get("dossier_actif") not in self.dossiers:
+			st.session_state.dossier_actif = next(iter(self.dossiers), None)
+
+		return st.session_state.dossier_actif
+
+
+	def get_du_dossier(self, cle, classe, fichier):
+		return self.get_persistant(f"{cle}_{self.dossier_id}", lambda: classe(chemin(self.dossier_id, fichier)))
+
+
+	def charger_dossier(self):
+		self.agenda.pour_dossier(self.dossier_id)
+		self.event_sheet = self.get_du_dossier("event_sheet", EventSheet, FICHIER_FICHE)
+		self.budget = self.get_du_dossier("budget", Budget, "budget_data.json")
+		self.carnet = self.get_du_dossier("carnet", Carnet, "prestataires_data.json")
+		self.messagerie = self.get_du_dossier("messagerie", Messagerie, "messages_data.json")
+		self.carnet_devis = self.get_du_dossier("carnet_devis", CarnetDevis, "devis_data.json")
+		self.liste_invites = self.get_du_dossier("liste_invites", ListeInvites, "invites_data.json")
+		self.inspiration = self.get_du_dossier("inspiration", Inspiration, "inspiration_data.json")
+		self.jour_j = self.get_du_dossier("jour_j", JourJ, "jour_j_data.json")
+		self.galerie = self.get_persistant(
+			f"galerie_{self.dossier_id}",
+			lambda: Galerie(chemin(self.dossier_id, "galerie_data.json"), chemin(self.dossier_id, "galerie"))
+		)
+		self.outils = Outils(
+			self.event_sheet, self.agenda, self.budget, self.carnet,
+			self.liste_invites, self.messagerie, self.carnet_devis, self.jour_j
+		)
 
 
 	@staticmethod
@@ -218,12 +288,32 @@ class UserInterface:
 		return st.session_state[cle]
 
 
+	def show_choix_dossier(self):
+		identifiants = list(self.dossiers)
+		choix = st.selectbox(
+			"Dossier", identifiants, index=identifiants.index(self.dossier_id),
+			format_func=lambda dossier_id: libelle_dossier(self.dossiers[dossier_id])
+		)
+
+		if choix != self.dossier_id:
+			st.session_state.dossier_actif = choix
+			st.rerun()
+
+		st.button("Nouveau dossier", icon=":material/create_new_folder:", width="stretch", on_click=ouvrir_nouveau_dossier)
+
+
 	def show_event_sheet(self, profil):
+		data = self.event_sheet.data
+		affichage = {**data, "type_evenement": libelle_evenement(data)}
+
 		with st.sidebar:
+			if profil == "Wedding planner":
+				self.show_choix_dossier()
+
 			if profil == "Prestataire":
-				st.markdown(dossier_html(self.event_sheet.data, CHAMPS_DOSSIER_PRESTATAIRE, DETAILS_DOSSIER_PRESTATAIRE), unsafe_allow_html=True)
+				st.markdown(dossier_html(affichage, CHAMPS_DOSSIER_PRESTATAIRE, details_dossier(data, prive=False)), unsafe_allow_html=True)
 			else:
-				st.markdown(dossier_html(self.event_sheet.data, CHAMPS_DOSSIER, DETAILS_DOSSIER), unsafe_allow_html=True)
+				st.markdown(dossier_html(affichage, CHAMPS_DOSSIER, details_dossier(data)), unsafe_allow_html=True)
 				nombre_echanges = len(self.event_sheet.data["historique"])
 
 				if nombre_echanges:
@@ -237,34 +327,76 @@ class UserInterface:
 
 	def cle_conversation(self, profil):
 		identifiant = self.prestataire["id"] if self.prestataire else ""
-		return f"conversation_{profil}_{identifiant}"
+		return f"conversation_{self.dossier_id}_{profil}_{identifiant}"
+
+
+	def show_type_evenement(self):
+		data = self.event_sheet.data
+		actuel = next(cle for cle, type_evenement in TYPES_EVENEMENT.items() if type_evenement is type_du_dossier(data))
+		choix = st.segmented_control(
+			"Type d'événement", list(TYPES_EVENEMENT), default=actuel,
+			format_func=lambda cle: TYPES_EVENEMENT[cle]["libelle"], key=f"type_{self.dossier_id}_{actuel}"
+		)
+
+		if choix and choix != actuel:
+			self.event_sheet.remplacer({"type_evenement": TYPES_EVENEMENT[choix]["libelle"]})
+			st.rerun()
+
+
+	@staticmethod
+	def champ_specifique(conteneur, cle, valeur):
+		libelle, genre, aide = CHAMPS_SPECIFIQUES[cle]
+
+		if genre == "texte":
+			return conteneur.text_input(libelle, value=valeur or "", help=aide) or None
+
+		if genre == "nombre":
+			return conteneur.number_input(libelle, min_value=0, step=1, value=entier(valeur) or None, help=aide)
+
+		if genre == "date":
+			jour = conteneur.date_input(libelle, value=lire_date(valeur), help=aide)
+			return str(jour) if jour else None
+
+		if genre == "oui_non":
+			choix = conteneur.selectbox(libelle, list(OUI_NON), index=list(OUI_NON.values()).index(valeur if isinstance(valeur, bool) else None), help=aide)
+			return OUI_NON[choix]
+
+		return texte_vers_liste(conteneur.text_area(libelle, value=", ".join(valeur), height=68, help=aide))
 
 
 	def show_fiche_form(self):
 		data = self.event_sheet.data
+		champs = type_du_dossier(data)["champs"]
+		simples = [cle for cle in champs if CHAMPS_SPECIFIQUES[cle][1] != "liste"]
+		listes_du_type = [cle for cle in champs if CHAMPS_SPECIFIQUES[cle][1] == "liste"]
 
 		with st.form("form_fiche"):
 			gauche, droite = st.columns(2)
-			noms = gauche.text_input("Couple / client(s)", value=data["noms"] or "")
-			type_evenement = droite.text_input("Type d'événement", value=data["type_evenement"] or "")
-			telephone = gauche.text_input("Téléphone des mariés", value=data["telephone"] or "")
-			email = droite.text_input("Email des mariés", value=data["email"] or "")
-			date_evenement = gauche.date_input("Date de l'événement", value=lire_date(data["date"]))
+			noms = gauche.text_input(type_du_dossier(data)["personnes"], value=data["noms"] or "")
 			lieu = droite.text_input("Lieu", value=data["lieu"] or "")
+			telephone = gauche.text_input("Téléphone du client", value=data["telephone"] or "")
+			email = droite.text_input("Email du client", value=data["email"] or "")
+			date_evenement = gauche.date_input("Date de l'événement", value=lire_date(data["date"]))
+			theme = droite.text_input("Thème", value=data["theme"] or "")
 			budget = gauche.number_input("Budget (€)", min_value=0, step=500, value=int(data["budget"]) if data["budget"] else None)
 			invites = droite.number_input("Nombre d'invités", min_value=0, step=5, value=int(data["nombre_invites"]) if data["nombre_invites"] else None)
-			theme = st.text_input("Thème", value=data["theme"] or "")
+			colonnes = st.columns(2)
+			specifiques = {
+				cle: self.champ_specifique(colonnes[index % 2], cle, data[cle])
+				for index, cle in enumerate(simples)
+			}
 
 			st.caption("Pour les listes, sépare les éléments par des virgules.")
 			listes = {
 				key: st.text_area(label, value=", ".join(data[key]), height=68)
 				for key, label in CHAMPS_LISTES.items()
 			}
+			specifiques |= {cle: self.champ_specifique(st, cle, data[cle]) for cle in listes_du_type}
 
 			if st.form_submit_button("💾 Enregistrer la fiche"):
 				nouvelle_fiche = {
+					**specifiques,
 					"noms": noms or None,
-					"type_evenement": type_evenement or None,
 					"telephone": telephone or None,
 					"email": email or None,
 					"date": str(date_evenement) if date_evenement else None,
@@ -313,7 +445,8 @@ class UserInterface:
 				st.markdown(echange["resume"])
 
 
-	def show_fiche_couple(self):
+	def show_fiche_client(self):
+		self.show_type_evenement()
 		self.show_fiche_form()
 		self.show_historique()
 
@@ -334,15 +467,6 @@ class UserInterface:
 
 	def show_accueil(self, profil):
 		st.markdown(accueil_html(profil), unsafe_allow_html=True)
-
-		if profil == "Prestataire":
-			return
-
-		tuiles = [
-			(identifiant, icone, f"**{titre}**  \n{exemples}", message)
-			for identifiant, icone, titre, exemples, message in TUILES
-		]
-		self.show_boutons_messages("tuiles", tuiles, width="stretch")
 
 
 	def show_discussion_history(self, profil):
@@ -425,8 +549,10 @@ class UserInterface:
 
 	def show_achats(self):
 		identifiant = self.prestataire["id"]
-		achats = self.get_persistant(f"achats_{identifiant}", lambda: Budget(f"./achats_{identifiant}.json"))
-		st.caption("Vos achats pour ce mariage (denrées, boissons, location…) et les factures de vos fournisseurs, avec leurs échéances.")
+		achats = self.get_persistant(
+			f"achats_{self.dossier_id}_{identifiant}", lambda: Budget(chemin(self.dossier_id, f"achats_{identifiant}.json"))
+		)
+		st.caption("Vos achats pour cet événement (denrées, boissons, location…) et les factures de vos fournisseurs, avec leurs échéances.")
 		self.show_alertes_factures(achats)
 		self.show_budget_postes(achats, None, "achats", "budgétés")
 		self.show_budget_forms(achats, "achats", "viandes et poissons", "facture grossiste")
@@ -546,19 +672,28 @@ class UserInterface:
 				else:
 					noms_prestataires = [AUCUN] + [prestataire["nom"] for prestataire in self.carnet.prestataires]
 					prestataire_choisi = st.selectbox("Avec quel prestataire", noms_prestataires)
-					autre = st.text_input("Ou avec quelqu'un d'autre (ex : les mariés, la témoin)")
+					autre = st.text_input("Ou avec quelqu'un d'autre (ex : les clients, la témoin)")
 					avec = autre or ("" if prestataire_choisi == AUCUN else prestataire_choisi)
 
 				if st.form_submit_button("Ajouter le rendez-vous") and titre:
 					date_heure = datetime.combine(jour, heure).isoformat()
 					conflit = self.agenda.add_rdv(titre, date_heure, duree, lieu, avec)
 
-					if conflit and self.prestataire:
-						st.error("⚠️ Ce créneau est déjà pris dans l'agenda du mariage. Choisissez un autre horaire.")
+					if conflit and self.profil != "Wedding planner":
+						st.error("⚠️ Ce créneau est déjà pris dans l'agenda de l'organisateur. Choisissez un autre horaire.")
 					elif conflit:
-						st.error(f"⚠️ Conflit avec « {conflit['titre']} » déjà prévu à ce moment-là. Choisis un autre créneau.")
+						st.error(f"⚠️ Conflit avec « {conflit['titre']} »{self.precision_dossier(conflit)} déjà prévu à ce moment-là. Choisissez un autre créneau.")
 					else:
 						st.rerun()
+
+
+	def precision_dossier(self, rdv):
+		dossier = self.dossiers.get(rdv.get("dossier_id"))
+
+		if not dossier or dossier["id"] == self.dossier_id:
+			return ""
+
+		return f" (dossier {libelle_dossier(dossier)})"
 
 
 	def show_agenda(self):
@@ -863,7 +998,7 @@ class UserInterface:
 
 	def accepter_devis(self, devis, montants):
 		prestataire = self.carnet.trouver(devis["prestataire_id"])
-		poste = (prestataire["poste_budget"] or prestataire["categorie"]) if prestataire else "Wedding planner"
+		poste = (prestataire["poste_budget"] or prestataire["categorie"]) if prestataire else "Organisation"
 
 		if poste not in [poste_existant["nom"] for poste_existant in self.budget.postes]:
 			self.budget.add_poste(poste, montants["ttc"])
@@ -886,14 +1021,14 @@ class UserInterface:
 		if self.prestataire:
 			emetteurs = {self.prestataire["nom"]: self.prestataire}
 		else:
-			emetteurs = {PLANNER: None} | {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires}
+			emetteurs = {EMETTEUR_AURORE: None} | {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires}
 
 		with st.expander("➕ Nouveau devis", expanded=not deja_des_devis):
 			emetteur = st.selectbox("Émis par", list(emetteurs), disabled=bool(self.prestataire))
 			prestataire = emetteurs[emetteur]
 
 			if st.button("✨ Proposer les lignes avec AURORE"):
-				categorie = prestataire["categorie"] if prestataire else "Wedding planner"
+				categorie = prestataire["categorie"] if prestataire else "Organisation d'événements"
 				infos = self.infos_pour_destinataire(self.prestataire["id"]) if self.prestataire else self.event_sheet.infos_sans_historique()
 
 				with st.spinner("AURORE prépare les lignes du devis…"):
@@ -924,7 +1059,7 @@ class UserInterface:
 					self.carnet_devis.add_devis(
 						emetteur,
 						prestataire["id"] if prestataire else None,
-						self.event_sheet.data["noms"] or "Les mariés",
+						self.event_sheet.data["noms"] or "Les clients",
 						lignes, tva, acompte, validite, notes
 					)
 					self.nouvelles_lignes_devis([])
@@ -1119,7 +1254,7 @@ class UserInterface:
 			self.rediger(suggestion(cle, "recap_traiteur", destinataire_prestataire(traiteur), recap))
 
 
-	def show_le_mariage(self):
+	def show_evenement(self):
 		infos = self.infos_pour_destinataire(self.prestataire["id"])
 		self.show_compteurs({
 			"📅 Date": date_lisible(infos["date"]) or "À définir",
@@ -1129,7 +1264,7 @@ class UserInterface:
 
 		for cle, titre in [
 			("allergies_interdits", "⚠️ Allergies et interdits"),
-			("preferences", "🎨 Préférences du couple"),
+			("preferences", "🎨 Préférences des clients"),
 			("preferences_musicales", "🎵 Goûts musicaux")
 		]:
 			if infos[cle]:
@@ -1250,7 +1385,7 @@ class UserInterface:
 			width="stretch"
 		)
 
-		if bouton_envoi.button("✉️ Préparer l'envoi aux mariés", width="stretch"):
+		if bouton_envoi.button("✉️ Préparer l'envoi aux clients", width="stretch"):
 			cle = f"moodboard_{uuid.uuid4().hex[:8]}"
 			self.rediger(
 				suggestion(cle, "envoi_moodboard", destinataire_maries(self.event_sheet.data), moodboard),
@@ -1400,7 +1535,7 @@ class UserInterface:
 
 	def show_droit_image(self, profil):
 		statut = self.galerie.droit_image
-		st.metric("Droit à l'image des mariés", statut)
+		st.metric("Droit à l'image des clients", statut)
 		st.caption(
 			"Sans accord, seules les photos sans personne reconnaissable (salle, déco, buffet, détails) peuvent être publiées. "
 			"Les photos où des invités sont reconnaissables ne sont jamais publiées."
@@ -1425,7 +1560,7 @@ class UserInterface:
 				self.galerie.set_droit_image(nouveau)
 				st.rerun()
 
-			if st.button("✉️ Préparer la demande d'autorisation aux mariés"):
+			if st.button("✉️ Préparer la demande d'autorisation aux clients"):
 				if statut == "Non demandé":
 					self.galerie.set_droit_image("Demandé")
 
@@ -1494,14 +1629,14 @@ class UserInterface:
 		if profil == "Mariés":
 			with st.form("form_avis", clear_on_submit=True):
 				note = st.slider("Votre note", 1, 5, 5)
-				commentaire = st.text_area("Votre avis sur l'organisation de votre mariage")
+				commentaire = st.text_area("Votre avis sur l'organisation de votre événement")
 
 				if st.form_submit_button("Envoyer notre avis") and commentaire:
-					self.galerie.ajouter_avis(self.event_sheet.data["noms"] or "Les mariés", note, commentaire)
+					self.galerie.ajouter_avis(self.event_sheet.data["noms"] or "Les clients", note, commentaire)
 					st.rerun()
-		elif st.button("✉️ Demander un avis aux mariés"):
+		elif st.button("✉️ Demander un avis aux clients"):
 			cle = f"avis_manuel_{uuid.uuid4().hex[:8]}"
-			self.rediger(suggestion(cle, "demande_avis", destinataire_maries(self.event_sheet.data), {"date_mariage": self.event_sheet.data["date"]}))
+			self.rediger(suggestion(cle, "demande_avis", destinataire_maries(self.event_sheet.data), {"date_evenement": self.event_sheet.data["date"]}))
 
 		if not self.galerie.avis:
 			st.caption("Aucun avis pour l'instant.")
@@ -1515,13 +1650,13 @@ class UserInterface:
 					continue
 
 				if self.galerie.droit_image != "Accordé":
-					st.caption("🔒 Pour en faire un post Instagram, il faut l'accord des mariés (droit à l'image).")
+					st.caption("🔒 Pour en faire un post Instagram, il faut l'accord des clients (droit à l'image).")
 					continue
 
 				if st.button("✨ Transformer en post témoignage", key=f"post_avis_{avis['id']}"):
 					with st.spinner("AURORE prépare le post…"):
 						post = self.conversation_agent_object.write_legende(
-							f"témoignage des mariés, note {avis['note']}/5 : « {avis['commentaire']} »",
+							f"témoignage des clients, note {avis['note']}/5 : « {avis['commentaire']} »",
 							self.event_sheet.infos_pour_prestataire(),
 							"Cite un court extrait de leur avis entre guillemets."
 						)
@@ -1547,8 +1682,8 @@ class UserInterface:
 			{"nom": prestataire["nom"], "categorie": prestataire["categorie"]}
 			for prestataire in self.carnet.prestataires if prestataire["statut"] == "Réservé"
 		]
-		date_mariage = self.event_sheet.data["date"] or ""
-		rdvs_jour_j = [rdv for rdv in self.agenda.rdvs if date_mariage and rdv["date_heure"].startswith(date_mariage)]
+		date_evenement = self.event_sheet.data["date"] or ""
+		rdvs_jour_j = [rdv for rdv in self.agenda.rdvs if date_evenement and rdv["date_heure"].startswith(date_evenement)]
 
 		with st.spinner("AURORE construit le déroulé de la journée…"):
 			deroule = self.conversation_agent_object.suggest_deroule(self.event_sheet.infos_pour_prestataire(), reserves, rdvs_jour_j)
@@ -1747,9 +1882,10 @@ class UserInterface:
 
 			with st.container(horizontal=True, key="barre-actions"):
 				profil = st.segmented_control(
-					"Je suis…", list(PROFILS), default="Wedding planner", key="profil",
+					"Je suis…", list(PROFILS), default="Wedding planner", key="profil", format_func=LIBELLES_PROFIL.get,
 					bind="query-params", required=True, label_visibility="collapsed"
 				)
+				self.profil = profil
 
 				if profil == "Prestataire" and self.carnet.prestataires:
 					nom = st.selectbox(
@@ -1803,11 +1939,29 @@ class UserInterface:
 			st.session_state.version_invites += 1
 
 
+	@staticmethod
+	def ouvrir_dialogue_si_demande():
+		if st.session_state.get("ouvrir_nouveau_dossier"):
+			nouveau_dossier()
+
+
+	def show_premier_dossier(self):
+		st.markdown(marque_html({}), unsafe_allow_html=True)
+		st.markdown(accueil_html("Wedding planner"), unsafe_allow_html=True)
+		show_tuiles("tuiles", ouvrir_nouveau_dossier)
+
+
 	def run(self):
+		if not self.dossier_id:
+			self.show_premier_dossier()
+			self.ouvrir_dialogue_si_demande()
+			return
+
 		profil = self.show_barre_haut()
 
 		if profil == "Prestataire" and not self.prestataire:
-			st.info("Aucun prestataire dans le carnet : ajoutez-en depuis l'espace Wedding planner (onglet 🤝 Prestataires).")
+			st.info("Aucun prestataire dans le carnet : ajoutez-en depuis l'espace Organisateur (onglet 🤝 Prestataires).")
+			self.show_event_sheet(profil)
 			return
 
 		self.traiter_message(profil)
@@ -1820,8 +1974,8 @@ class UserInterface:
 
 		afficheurs = {
 			"discussion": lambda: self.show_discussion_history(profil),
-			"fiche": self.show_fiche_couple,
-			"mariage": self.show_le_mariage,
+			"fiche": self.show_fiche_client,
+			"evenement": self.show_evenement,
 			"inspiration": self.show_inspiration,
 			"invites": self.show_invites,
 			"prestataires": self.show_prestataires,
@@ -1841,6 +1995,7 @@ class UserInterface:
 				afficheurs[onglet]()
 
 		self.show_event_sheet(profil)
+		self.ouvrir_dialogue_si_demande()
 
 
 

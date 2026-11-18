@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from devis import date_lisible, euros
+from event_state import renseigne
 from jour_j import TABLE_HONNEUR
 
 
@@ -39,9 +40,11 @@ THEME_PRO = """<style>
 button[role="tab"][aria-selected="true"] { background: var(--accent); }
 </style>"""
 
+BASELINE = "Vos événements, organisés de bout en bout."
+
 ACCUEILS = {
     "Wedding planner": (
-        "Quel mariage préparez-vous pour vos clients ?",
+        "Quel événement préparez-vous pour vos clients ?",
         "Rendez-vous, prestataires, devis et invités : tout le suivi de vos clients au même endroit."
     ),
     "Mariés": (
@@ -49,7 +52,7 @@ ACCUEILS = {
         "Budget, prestataires, invités, inspiration : je t'accompagne de la première idée au jour J."
     ),
     "Prestataire": (
-        "Sur quel mariage travaillez-vous ?",
+        "Sur quel événement travaillez-vous ?",
         "Couverts, allergies, rendez-vous et devis : les infos utiles pour votre prestation."
     )
 }
@@ -118,15 +121,15 @@ def particules_html(type_evenement):
 
 
 def marque_html(event_data):
-    compte = compte_a_rebours(jours_restants(event_data["date"]))
-    noms = (event_data["noms"] or "").replace(" et ", " & ")
+    compte = compte_a_rebours(jours_restants(event_data.get("date")))
+    noms = (event_data.get("noms") or "").replace(" et ", " & ")
     pastille = " · ".join(filter(None, [compte, escape(noms)]))
     pastille_html = f'<span class="aurore-compte">{pastille}</span>' if pastille else ""
 
     return (
         '<div class="aurore-marque"><span class="aurore-sceau">A</span>'
         '<div><div class="aurore-nom">AURORE</div>'
-        '<div class="aurore-sous-titre">A Unique Real Organisation Running your Events</div></div>'
+        f'<div class="aurore-sous-titre">{BASELINE}</div></div>'
         f"{pastille_html}</div>"
     )
 
@@ -274,10 +277,13 @@ def dossier_html(event_data, champs_essentiels, champs_details):
     def valeur(cle):
         contenu = event_data[cle]
 
+        if isinstance(contenu, bool):
+            return "Oui" if contenu else "Non"
+
         if isinstance(contenu, list):
             return ", ".join(contenu)
 
-        if cle == "date":
+        if cle.startswith("date"):
             return date_lisible(contenu)
 
         if cle == "budget" and contenu:
@@ -285,8 +291,8 @@ def dossier_html(event_data, champs_essentiels, champs_details):
 
         return contenu
 
-    connus = [(label, valeur(cle)) for cle, label in {**champs_essentiels, **champs_details}.items() if event_data[cle]]
-    manquants = [label.lower() for cle, label in champs_essentiels.items() if not event_data[cle]]
+    connus = [(label, valeur(cle)) for cle, label in {**champs_essentiels, **champs_details}.items() if renseigne(event_data[cle])]
+    manquants = [label.lower() for cle, label in champs_essentiels.items() if not renseigne(event_data[cle])]
 
     lignes = "".join(f"<div><dt>{escape(label)}</dt><dd>{escape(str(contenu))}</dd></div>" for label, contenu in connus)
     corps = f"<dl>{lignes}</dl>" if connus else '<p class="a-definir">AURORE remplit ce dossier au fil de la discussion.</p>'

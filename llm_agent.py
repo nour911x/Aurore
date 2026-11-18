@@ -2,6 +2,8 @@ from groq import Groq, APIError, BadRequestError
 from PIL import Image, ImageOps
 
 from dotenv import load_dotenv
+
+from config.evenements import description_champs_llm, type_du_dossier
 from datetime import datetime
 import base64
 import io
@@ -23,9 +25,9 @@ JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 
 PROFILS = {
-    "Wedding planner": "un ou une wedding planner professionnel(le) qui gère le mariage de ses clients. Vouvoie-le ou la, ton professionnel.",
-    "Mariés": "les futurs mariés qui organisent eux-mêmes leur mariage. Tutoie-les, ton chaleureux et complice.",
-    "Prestataire": "un prestataire (traiteur, DJ, domaine...) qui travaille sur ce mariage. Vouvoie-le ou la, ton professionnel."
+    "Wedding planner": "un organisateur ou une organisatrice d'événements professionnel(le) qui gère l'événement de ses clients. Vouvoie-le ou la, ton professionnel.",
+    "Mariés": "les clients dont on organise l'événement (mariage, baby shower, anniversaire…). Tutoie-les, ton chaleureux et complice.",
+    "Prestataire": "un prestataire (traiteur, DJ, domaine...) qui travaille sur cet événement. Vouvoie-le ou la, ton professionnel."
 }
 
 
@@ -132,8 +134,8 @@ class ConversationAgent:
             fiche = avec_outils.event_sheet.infos_pour_prestataire()
             consignes += (
                 f" Ce prestataire est {prestataire['nom']} ({prestataire['categorie']}). "
-                "Ne lui révèle jamais le budget du mariage, les autres prestataires, les notes internes "
-                "ni les coordonnées des mariés. Tu ne vois et ne gères que ses propres rendez-vous et devis."
+                "Ne lui révèle jamais le budget de l'événement, les autres prestataires, les notes internes "
+                "ni les coordonnées des clients. Tu ne vois et ne gères que ses propres rendez-vous et devis."
             )
         elif avec_outils:
             fiche = avec_outils.event_sheet.infos_sans_historique()
@@ -147,7 +149,7 @@ class ConversationAgent:
         return {"role": "system", "content": consignes}
 
 
-    def ask_llm(self, text_interaction, profil="Mariés", outils=None, image=None):
+    def ask_llm(self, text_interaction, profil="Wedding planner", outils=None, image=None):
 
         texte = text_interaction or TEXTE_PHOTO_SEULE
         image = preparer_image(image) if image else None
@@ -198,10 +200,12 @@ class ConversationAgent:
             "Garde exactement les mêmes clés. "
             "Garde les valeurs déjà connues sauf si la conversation les contredit. "
             "budget et nombre_invites sont des nombres, date au format AAAA-MM-JJ, "
-            "noms est un texte avec les prénoms du couple ou des personnes fêtées (ex : \"Léa et Karim\"), "
+            "noms est un texte avec les prénoms du ou des clients : couple, parents, personne qui organise (ex : \"Léa et Karim\"), "
+            "type_evenement vaut Mariage, Baby shower, Anniversaire, ou le type précis s'il s'agit d'autre chose (EVJF, fiançailles…), "
             "telephone et email sont des textes, "
-            "allergies_interdits, preferences, preferences_musicales et prestataires "
-            "sont des listes de textes courts."
+            "allergies_interdits, preferences et prestataires sont des listes de textes courts. "
+            f"Champs propres à chaque type d'événement : {description_champs_llm()}. "
+            "Laisse à null les champs qui ne concernent pas le type de cet événement."
         )
 
         response = self.complete(self.historique_api() + [{"role": "user", "content": instruction}])
@@ -243,7 +247,7 @@ class ConversationAgent:
 
     def analyser_photo(self, contenu, categories):
         instruction = (
-            "Analyse cette photo prise lors d'un mariage. Réponds UNIQUEMENT avec un JSON ayant les clés : "
+            "Analyse cette photo prise lors d'un événement. Réponds UNIQUEMENT avec un JSON ayant les clés : "
             f"categorie (une valeur parmi {json.dumps(categories, ensure_ascii=False)}), "
             "personnes (true si au moins un visage ou une personne est reconnaissable, sinon false), "
             "description (une phrase courte)."
@@ -273,13 +277,10 @@ class ConversationAgent:
             f"Rendez-vous déjà prévus le jour J : {json.dumps(rdvs, ensure_ascii=False)}\n\n"
             "Construis le déroulé heure par heure du jour J, des préparatifs à la fin de soirée "
             "(12 à 18 moments), adapté à ce type d'événement, au lieu et aux prestataires réservés. "
-            "Pour un mariage en France, repères habituels : préparatifs le matin, cérémonie vers 15h-16h, "
-            "vin d'honneur ensuite pendant 2h environ, entrée des mariés et dîner vers 19h30-20h30, "
-            "discours entre les plats, dessert et pièce montée vers 23h, ouverture du bal après le dessert, "
-            "fin de soirée vers 3h-4h. Les prestataires arrivent avant les invités pour l'installation. "
+            f"{type_du_dossier(event_data)['deroule']} Les prestataires arrivent avant les invités pour l'installation. "
             "Réponds UNIQUEMENT avec un JSON : une liste d'objets ayant les clés heure (format HH:MM), "
             "moment (titre court), lieu, intervenants (noms exacts des prestataires concernés, séparés par des virgules, "
-            "ou les rôles comme « mariés », « témoins ») et details (une phrase)."
+            "ou les rôles comme « clients », « témoins ») et details (une phrase)."
         )
 
         response = self.complete([{"role": "user", "content": instruction}])
@@ -327,7 +328,7 @@ class ConversationAgent:
             "couleurs (liste de 5 objets avec nom et hex au format #RRGGBB), "
             "mots_cles (liste de 6 à 8 mots), "
             f"recherches (objet avec exactement les clés {json.dumps(elements, ensure_ascii=False)}, "
-            "chaque valeur est une recherche Pinterest précise en français, ex : \"centre de table mariage bohème terracotta\")."
+            "chaque valeur est une recherche Pinterest précise en français, ex : \"centre de table bohème terracotta\")."
         )
 
         response = self.complete(self.historique_api() + [{"role": "user", "content": instruction}])
@@ -337,7 +338,7 @@ class ConversationAgent:
 
     def recommend_adresses(self, categorie, event_data, postes_budget):
         instruction = (
-            f"Les mariés cherchent : {categorie}.\n\n"
+            f"Les clients cherchent : {categorie}.\n\n"
             f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
             f"Budget par poste : {json.dumps(postes_budget, ensure_ascii=False)}\n\n"
             "Conseille-les selon leur style et leur budget. Ne cite AUCUN nom de boutique ou de personne réelle. "
@@ -386,7 +387,7 @@ class ConversationAgent:
     def summarize_conversation(self):
         instruction = (
             "Résume cette conversation pour l'historique du dossier client, en 3 à 6 puces markdown : "
-            "les décisions prises, les nouvelles informations sur le couple et ce qu'il reste à faire. "
+            "les décisions prises, les nouvelles informations sur les clients et ce qu'il reste à faire. "
             "Réponds uniquement avec les puces."
         )
 
@@ -418,7 +419,7 @@ class ConversationAgent:
 
     def write_message(self, type_message, destinataire, contexte, event_data, consigne=""):
         instruction = (
-            f"Tu es AURORE, wedding planner. Rédige un message de type « {type_message} » "
+            f"Tu es AURORE, assistante d'organisation d'événements. Rédige un message de type « {type_message} » "
             f"à envoyer par WhatsApp ou email à : {destinataire}.\n\n"
             f"Contexte : {json.dumps(contexte, ensure_ascii=False)}\n\n"
             f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"

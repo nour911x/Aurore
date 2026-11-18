@@ -1,12 +1,17 @@
 from datetime import date
 
+from config.evenements import CHAMPS_SPECIFIQUES, champs_par_defaut
 from storage import load_json, save_json
 
 
 CHAMPS_POUR_PRESTATAIRE = [
     "type_evenement", "noms", "date", "lieu", "nombre_invites", "theme",
-    "allergies_interdits", "preferences", "preferences_musicales"
+    "allergies_interdits", "preferences", *CHAMPS_SPECIFIQUES
 ]
+
+
+def renseigne(valeur):
+    return valeur is False or bool(valeur)
 
 
 class EventSheet:
@@ -24,9 +29,9 @@ class EventSheet:
             "theme": None,
             "allergies_interdits": [],
             "preferences": [],
-            "preferences_musicales": [],
             "prestataires": [],
-            "historique": []
+            "historique": [],
+            **champs_par_defaut()
         }
         self.load()
 
@@ -49,7 +54,7 @@ class EventSheet:
 
     def update(self, new_info):
         for key, value in new_info.items():
-            if key in self.data and key != "historique" and value:
+            if key in self.data and key != "historique" and renseigne(value):
                 self.data[key] = value
         self.normaliser_noms()
         self.save()

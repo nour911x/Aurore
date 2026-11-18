@@ -173,7 +173,7 @@
     margin: 0.5rem auto 0;
 }
 
-.st-key-tuiles button {
+[class*="st-key-tuiles"] button {
     min-height: 92px;
     border-radius: 20px;
     background: var(--surface);
@@ -181,7 +181,7 @@
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.st-key-tuiles button:hover {
+[class*="st-key-tuiles"] button:hover {
     transform: translateY(-3px);
     box-shadow: 0 22px 44px -22px rgba(58, 39, 49, 0.5);
 }

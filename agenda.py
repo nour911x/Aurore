@@ -4,22 +4,30 @@ from storage import load_json, save_json
 
 
 class Agenda:
-    def __init__(self, file_path="./agenda_data.json"):
+    def __init__(self, file_path="./agenda_data.json", dossier_id=None):
         self.file_path = file_path
-        self.rdvs = []
+        self.dossier_id = dossier_id
+        self.tous = []
         self.load()
 
+    @property
+    def rdvs(self):
+        return [rdv for rdv in self.tous if rdv.get("dossier_id") == self.dossier_id]
+
+    def pour_dossier(self, dossier_id):
+        self.dossier_id = dossier_id
+
     def load(self):
-        self.rdvs = load_json(self.file_path, [])
+        self.tous = load_json(self.file_path, [])
 
     def save(self):
-        save_json(self.file_path, self.rdvs)
+        save_json(self.file_path, self.tous)
 
     def detecter_conflit(self, date_heure, duree_minutes):
         debut = datetime.fromisoformat(date_heure)
         fin = debut + timedelta(minutes=duree_minutes)
 
-        for rdv in self.rdvs:
+        for rdv in self.tous:
             autre_debut = datetime.fromisoformat(rdv["date_heure"])
             autre_fin = autre_debut + timedelta(minutes=rdv["duree_minutes"])
 
@@ -34,21 +42,22 @@ class Agenda:
         if conflit:
             return conflit
 
-        self.rdvs.append({
+        self.tous.append({
             "titre": titre,
             "date_heure": date_heure,
             "duree_minutes": duree_minutes,
             "lieu": lieu,
-            "avec": avec
+            "avec": avec,
+            "dossier_id": self.dossier_id
         })
         self.save()
 
         return None
 
     def supprimer_rdv(self, titre, date_heure):
-        self.rdvs = [
-            rdv for rdv in self.rdvs
-            if not (rdv["titre"] == titre and rdv["date_heure"] == date_heure)
+        self.tous = [
+            rdv for rdv in self.tous
+            if not (rdv["titre"] == titre and rdv["date_heure"] == date_heure and rdv.get("dossier_id") == self.dossier_id)
         ]
         self.save()
 
