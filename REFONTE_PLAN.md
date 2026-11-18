@@ -24,7 +24,24 @@ Aucune clé en dur. `GROQ_KEY` est lue via `os.environ` (`llm_agent.py:59`), `.e
 
 ---
 
+## Arbitrages rendus (18/11/2026)
+- **Vrai multi-dossiers.** Un dossier par client dans `dossiers/<id>/` (fiche, budget, devis, invités, messages, galerie, jour J, inspiration, carnet de prestataires). Un sélecteur « Dossier » et un bouton « Nouveau dossier » dans la barre latérale. **L'agenda est commun** à l'organisateur : chaque rendez-vous porte un `dossier_id`, ce qui permet de détecter les conflits entre clients. Le carnet de prestataires, d'abord prévu commun, est finalement rangé par dossier (voir les décisions de la phase 1). Les données de la racine sont migrées automatiquement dans un premier dossier au lancement. Ce socle est construit au début de la phase 1, car le flux « Nouveau dossier » en dépend.
+- **Base git** : la PR de `feature/jour-j` est fusionnée dans `main` d'abord, les branches `feature/refonte-*` partent de `main`.
+- **Phase 7** : réorganisation complète en dossiers `config/`, `ui/`, `metier/`, `donnees/`, `llm/`.
+
+---
+
 ## Fichiers concernés par phase
+
+Cette liste date d'avant la phase 7 et cite donc les fichiers à leur ancien emplacement. Correspondance avec la structure actuelle :
+
+| Avant | Aujourd'hui |
+|---|---|
+| `user_interface.py` | `app.py` et un module par onglet dans `ui/` (`ui/commun.py` pour les constantes et fonctions partagées) |
+| `habillage.py` | `ui/habillage.py` |
+| `storage.py`, `dossiers.py`, `event_state.py`, `demo.py` | `donnees/` |
+| `agenda.py`, `budget.py`, `devis.py`, `messages.py`, `invites.py`, `galerie.py`, `jour_j.py`, `accueil.py`, `rgpd.py`, `prestataires.py`, `inspiration.py` | `metier/` |
+| `llm_agent.py`, `outils.py`, `outlook.py`, `context.txt` | `llm/` |
 
 ### Phase 1 — Positionnement multi-événements
 - `dossiers.py` (nouveau) : liste des dossiers, création, dossier actif, migration des JSON de la racine
@@ -57,7 +74,7 @@ Aucune clé en dur. `GROQ_KEY` est lue via `os.environ` (`llm_agent.py:59`), `.e
 ### Phase 5 — Validation humaine des messages
 - `messages.py` : statuts `brouillon → à valider → validé → envoyé (+ annulé)`, migration des anciens statuts, historique par dossier
 - `user_interface.py` : boutons « Valider », « Marquer comme envoyé » actif seulement après validation
-- `outils.py` : `preparer_message` crée un `brouillon`, jamais plus
+- `outils.py` : `preparer_message` enregistre le message « à valider », il n'envoie jamais rien
 
 ### Phase 6 — RGPD
 - `event_state.py` : `consentement_sante`, `droit_image` (par personne : date + périmètre)
@@ -148,24 +165,19 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Pluriels** : plus aucun « (s) » dans l'interface, grâce à `textes.pluriel`.
 - **Rendu à 1280 px (phase 2)** : les libellés d'onglets ne passent plus à la ligne (`white-space: nowrap`). Si les onglets dépassent, Streamlit les fait défiler horizontalement. La vérification visuelle reste à faire dans le navigateur, l'extension Chrome n'étant pas connectée.
 
-## Arbitrages rendus (18/11/2026)
-- **Vrai multi-dossiers.** Un dossier par client dans `dossiers/<id>/` (fiche, budget, devis, invités, messages, galerie, jour J, inspiration). Un sélecteur « Dossier » et un bouton « Nouveau dossier » dans la barre latérale. **L'agenda et le carnet de prestataires restent communs** à l'organisateur : chaque rendez-vous porte un `dossier_id`, ce qui permet de détecter les conflits entre clients. Les données actuelles à la racine sont migrées automatiquement dans un premier dossier au lancement. Ce socle est construit au début de la phase 1, car le flux « Nouveau dossier » en dépend.
-- **Base git** : la PR de `feature/jour-j` est fusionnée dans `main` d'abord, les branches `feature/refonte-*` partent de `main`.
-- **Phase 7** : réorganisation complète en dossiers `config/`, `ui/`, `metier/`, `donnees/`, `llm/`.
-
 ### Phase 3
 - **L'accueil regroupe tous les dossiers** (`accueil.synthese`) : un organisateur voit sa journée entière, pas seulement le dossier ouvert. Chaque ligne a un bouton « Ouvrir le dossier » qui sélectionne le dossier et ouvre le bon onglet.
-- **Fenêtre de surveillance à J-45** (constante `JOURS_SURVEILLANCE` dans `accueil.py`) et non J-30 : l'exemple du brief (« lieu non défini à J-32 = alerte ») sortait de la fenêtre à 30 jours.
+- **Fenêtre de surveillance à J-45** (constante `JOURS_SURVEILLANCE` dans `metier/accueil.py`) et non J-30 : l'exemple du brief (« lieu non défini à J-32 = alerte ») sortait de la fenêtre à 30 jours.
 - **Paiements** : une facture du poste « Organisation » est « à encaisser auprès du client », toutes les autres sont « à régler au prestataire ». Sont affichées les factures en retard et celles dont l'échéance tombe dans les 7 jours.
 - **À faire** : pour chaque dossier, les messages prêts à valider, les relances, les messages à préparer et les confirmations de rendez-vous attendues (rendez-vous avec un interlocuteur, dans les 7 jours, non confirmés). Le bouton « Confirmé » valide un rendez-vous sans quitter l'accueil.
 - **Rendez-vous** : nouveaux champs `type` (Essayage, Visite, Dégustation, Réunion, Appel, Autre ; deviné depuis le titre si rien n'est choisi) et `confirme`. Les anciens rendez-vous fonctionnent sans migration.
 - **Conflits** : l'ajout reste refusé en cas de chevauchement, mais l'accueil détecte aussi ceux qui existent déjà dans le fichier (anciennes données, imports).
-- **Données de démonstration à la demande** (`demo.py`) : trois dossiers fictifs marqués `"demo": true`, datés à partir du jour courant. Ils s'ajoutent et se retirent depuis l'accueil, et ne sont jamais créés automatiquement, pour ne pas mélanger des données fictives à tes vrais dossiers.
+- **Données de démonstration à la demande** (`donnees/demo.py`) : trois dossiers fictifs marqués `"demo": true`, datés à partir du jour courant. Ils s'ajoutent et se retirent depuis l'accueil, et ne sont jamais créés automatiquement, pour ne pas mélanger des données fictives à tes vrais dossiers.
 - **Vue Clients** : l'accueil garde la salutation et les raccourcis. La vue partagée en lecture seule arrive en phase 4.
 - **Chat** : la zone de saisie reste en bas de page, et les raccourcis sont sous l'accueil. Le dernier échange s'affiche sous l'accueil, la discussion complète est dans Messages.
 
 ### Phase 4
-- **Flags dans `config/features.py`.** Chaque section liée à un flag est retirée des onglets (`SECTIONS_ACTIVES` dans `user_interface.py`), mais son code reste en place : repasser le flag à `True` suffit à la réafficher.
+- **Flags dans `config/features.py`.** Chaque section liée à un flag est retirée des onglets (`SECTIONS_ACTIVES` dans `ui/commun.py`), mais son code reste en place : repasser le flag à `True` suffit à la réafficher.
   - `INSTAGRAM_FEEDBACK` : sous-onglet Instagram et bouton « Transformer en post témoignage ». La saisie des avis reste, et elle se fait maintenant côté organisateur (« Enregistrer un avis reçu »).
   - `PINTEREST_MOODBOARD_AUTO` : liens Pinterest du moodboard, dans l'écran, le PDF et le message d'envoi.
   - `DIGITAL_EVENT_REPRESENTATION` : sous-onglet « Salle en 3D ». Le plan de salle reste.
@@ -178,7 +190,7 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Démo enrichie** : une fleuriste au statut « Devis reçu » avec un devis envoyé, pour tester la brique 4 (devis accepté → acompte et solde au budget → prestataire réservé → paiement sur l'accueil). Vérifié de bout en bout.
 
 ### Phase 5
-- **Signification des statuts**, définis dans `messages.py` avec leurs transitions :
+- **Signification des statuts**, définis dans `metier/messages.py` avec leurs transitions :
   - `brouillon` : texte écrit ou remis en chantier par l'organisateur, librement modifiable ;
   - `à valider` : texte prêt à relire ; c'est là qu'arrive tout ce qu'AURORE rédige (suggestion, message libre, chat) ;
   - `validé` : approuvé, le texte est verrouillé et les boutons WhatsApp / email apparaissent ;
@@ -193,12 +205,12 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Notifications conservées** : la bannière et l'accueil distinguent « à préparer », « à valider » et « validés à envoyer ».
 
 ### Phase 6
-- **Données de santé** (`rgpd.py`) : le champ `allergies_interdits` de la fiche, et les régimes et allergies des invités. Les régimes halal et casher révèlent une conviction religieuse, une autre catégorie particulière du RGPD : ils suivent donc la même règle.
+- **Données de santé** (`metier/rgpd.py`) : le champ `allergies_interdits` de la fiche, et les régimes et allergies des invités. Les régimes halal et casher révèlent une conviction religieuse, une autre catégorie particulière du RGPD : ils suivent donc la même règle.
   - **Consentement explicite** sur le dossier (Fiche client › Consentements), avec sa date. Seul l'organisateur peut le modifier, jamais l'IA : `consentement_sante` et `droit_image` sont des champs protégés dans `EventSheet.update`.
   - **Partage limité** : seul un prestataire de catégorie « Traiteur » reçoit ces données, et seulement avec le consentement. C'est vrai dans sa vue, dans la barre latérale, dans les messages qu'on lui écrit, dans son chat et dans le récapitulatif invités. Sans accord, le traiteur ne voit que le nombre de couverts, et on lui explique pourquoi.
   - **IA** : par défaut, la fiche envoyée au LLM ne contient plus les allergies (`infos_sans_historique` / `infos_pour_prestataire`, paramètre `avec_sante=False`). Exceptions : le briefing d'une dégustation ou d'un rendez-vous avec le traiteur, avec consentement. Les allergies des invités partent sans les noms (`recap_anonyme`). Le plan de table n'envoie plus les régimes, inutiles pour placer les invités.
   - **Extraction depuis le chat** : les allergies déjà connues ne sont plus envoyées au LLM. Celles qu'il trouve dans la conversation s'*ajoutent* à la liste, il ne peut plus en effacer.
-  - **Journaux** : le seul `print` du projet (le bloc `__main__` de `llm_agent.py`, qui affichait les réponses de l'IA en console) est supprimé. Il n'y a aucun autre log.
+  - **Journaux** : le seul `print` du projet (le bloc `__main__` de `llm/llm_agent.py`, qui affichait les réponses de l'IA en console) est supprimé. Il n'y a aucun autre log.
 - **Droit à l'image** : un consentement par personne (nom, périmètre « Aucun / Portfolio / Réseaux sociaux et portfolio », date), stocké dans la fiche et géré dans Fiche client et dans Inspiration & galerie › Droit à l'image. Chaque photo a un tag `decor` / `avec_personnes`, qui découle du champ `personnes` déjà renseigné par l'analyse IA.
   - Une photo de décor est toujours publiable.
   - Une photo avec les clients est publiable seulement si **chaque** client a consenti à cet usage (portfolio ou réseaux sociaux).
