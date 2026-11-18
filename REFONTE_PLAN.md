@@ -137,6 +137,17 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Émetteur des devis d'AURORE** : « AURORE - Organisation d'événements », et poste budgétaire « Organisation » à l'acceptation (au lieu de « Wedding planner »).
 - **Émojis des onglets** : seuls les libellés changent en phase 1 ; les icônes sont unifiées en phase 2.
 
+### Phase 2
+- **Noms normalisés à l'affichage seulement** (`textes.format_person_name`) : la donnée saisie n'est jamais modifiée. Les noms de prestataires ne sont pas touchés, pour ne pas transformer « DJ SoundBox » en « Dj Soundbox ».
+- **Ancres des titres** masquées en CSS, à un seul endroit (`assets/style.css`), plutôt qu'avec `anchor=False` sur chaque titre.
+- **Icônes** : tous les émojis de l'interface sont remplacés par des icônes Material, sur les onglets, les boutons, les sections dépliables, les alertes et les métriques. Les pastilles de statut deviennent des icônes colorées. L'enveloppe cassée a disparu. Les titres du briefing généré par l'IA n'ont plus d'émojis.
+- **8 onglets** côté Organisateur et Clients : Accueil, Messages, Fiche client, Planning, Prestataires, Budget & devis, Invités, Inspiration & galerie. Les anciens sous-onglets imbriqués (Jour J, Galerie, Inspiration) sont mis à plat pour éviter trois niveaux d'onglets.
+- **Vue Prestataire** : Discussion, L'événement, Rendez-vous, Devis & achats (elle sera revue en phase 4).
+- **Accueil provisoire** : salutation, raccourcis et dernier échange avec AURORE. La discussion complète est dans Messages. La phase 3 ajoute le tableau de bord.
+- **Onglets « paresseux »** (`on_change="rerun"` + `.open`) : seul l'onglet affiché est calculé. La bannière ouvre directement « Messages › À préparer et à envoyer ».
+- **Pluriels** : plus aucun « (s) » dans l'interface, grâce à `textes.pluriel`.
+- **Rendu à 1280 px** : les libellés d'onglets ne passent plus à la ligne (`white-space: nowrap`). Si les onglets dépassent, Streamlit les fait défiler horizontalement. La vérification visuelle reste à faire dans le navigateur, l'extension Chrome n'étant pas connectée.
+
 ## Arbitrages rendus (18/11/2026)
 - **Vrai multi-dossiers.** Un dossier par client dans `dossiers/<id>/` (fiche, budget, devis, invités, messages, galerie, jour J, inspiration). Un sélecteur « Dossier » et un bouton « Nouveau dossier » dans la barre latérale. **L'agenda et le carnet de prestataires restent communs** à l'organisateur : chaque rendez-vous porte un `dossier_id`, ce qui permet de détecter les conflits entre clients. Les données actuelles à la racine sont migrées automatiquement dans un premier dossier au lancement. Ce socle est construit au début de la phase 1, car le flux « Nouveau dossier » en dépend.
 - **Base git** : la PR de `feature/jour-j` est fusionnée dans `main` d'abord, les branches `feature/refonte-*` partent de `main`.

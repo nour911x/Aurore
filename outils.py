@@ -6,6 +6,7 @@ from devis import totaux, lignes_valides
 from invites import GROUPES, STATUTS_INVITE, REGIMES, nouvel_invite
 from messages import TYPES_MESSAGE, EMETTEUR_AURORE, NOMS_CLIENTS, destinataire_maries, destinataire_prestataire, suggestion
 from prestataires import CATEGORIES, STATUTS, appliquer_statut, meme_nom
+from textes import noms_clients
 
 
 FORMAT_DATE = "%Y-%m-%d %H:%M"
@@ -311,7 +312,7 @@ class Outils:
         self.carnet_devis.add_devis(
             nom_emetteur,
             prestataire["id"] if prestataire else None,
-            self.event_sheet.data["noms"] or "Les clients",
+            noms_clients(self.event_sheet.data),
             lignes, tva, acompte_pourcent, validite_jours, notes
         )
         devis = self.carnet_devis.devis[-1]

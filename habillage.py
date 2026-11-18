@@ -5,6 +5,7 @@ from pathlib import Path
 
 from devis import date_lisible, euros
 from event_state import renseigne
+from textes import format_person_name
 from jour_j import TABLE_HONNEUR
 
 
@@ -88,10 +89,10 @@ def compte_a_rebours(jours):
         return None
 
     if jours == 0:
-        return "C'est aujourd'hui ✨"
+        return "C'est aujourd'hui"
 
     if jours == 1:
-        return "C'est demain ✨"
+        return "C'est demain"
 
     return f"J-{jours}"
 
@@ -122,7 +123,7 @@ def particules_html(type_evenement):
 
 def marque_html(event_data):
     compte = compte_a_rebours(jours_restants(event_data.get("date")))
-    noms = (event_data.get("noms") or "").replace(" et ", " & ")
+    noms = format_person_name(event_data.get("noms") or "").replace(" et ", " & ")
     pastille = " · ".join(filter(None, [compte, escape(noms)]))
     pastille_html = f'<span class="aurore-compte">{pastille}</span>' if pastille else ""
 
@@ -277,6 +278,9 @@ def dossier_html(event_data, champs_essentiels, champs_details):
     def valeur(cle):
         contenu = event_data[cle]
 
+        if cle == "noms":
+            return format_person_name(contenu)
+
         if isinstance(contenu, bool):
             return "Oui" if contenu else "Non"
 
@@ -300,5 +304,5 @@ def dossier_html(event_data, champs_essentiels, champs_details):
 
     return (
         '<section class="aurore-dossier"><header>'
-        f'<span class="titre-dossier">📋 Dossier</span>{badge}</header>{corps}{a_definir}</section>'
+        f'<span class="titre-dossier">Dossier</span>{badge}</header>{corps}{a_definir}</section>'
     )

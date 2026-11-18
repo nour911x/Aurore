@@ -2,6 +2,7 @@ import uuid
 from datetime import date, datetime
 
 from storage import load_json, save_json
+from textes import noms_clients
 
 
 TYPES_MESSAGE = {
@@ -44,7 +45,7 @@ def fiche_publique(prestataire):
 
 def destinataire_maries(event_data):
     return {
-        "destinataire": event_data["noms"] or "Les clients",
+        "destinataire": noms_clients(event_data),
         "prestataire_id": None,
         "telephone": event_data["telephone"],
         "email": event_data["email"]

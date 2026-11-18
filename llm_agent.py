@@ -404,13 +404,13 @@ class ConversationAgent:
             f"Historique des échanges : {json.dumps(historique, ensure_ascii=False)}\n\n"
             f"Budget par poste (prévu et déjà engagé) : {json.dumps(postes_budget, ensure_ascii=False)}\n\n"
             "Rédige en français et en markdown, court et concret, avec ces sections :\n"
-            "### 👥 Le dossier en bref\n"
-            "### 🎯 Ce qui compte pour ce rendez-vous\n"
+            "### Le dossier en bref\n"
+            "### Ce qui compte pour ce rendez-vous\n"
             "(seulement les infos utiles ici : allergies pour une dégustation, goûts musicaux pour le DJ, "
             "style pour un essayage, nombre d'invités pour une visite de salle...)\n"
-            "### 💶 Budget du poste concerné\n"
-            "### ❓ Questions à poser\n"
-            "### ⚠️ Points de vigilance\n\n"
+            "### Budget du poste concerné\n"
+            "### Questions à poser\n"
+            "### Points de vigilance\n\n"
             "N'invente rien : si une information manque, dis-le et propose de la demander pendant le rendez-vous."
         )
 

@@ -388,3 +388,26 @@ button[role="tab"][aria-selected="true"] p { color: #FFFFFF; }
     font-size: 11px;
     fill: var(--encre-douce);
 }
+
+[data-testid="stHeaderActionElements"],
+.stMarkdown h1 a,
+.stMarkdown h2 a,
+.stMarkdown h3 a {
+    display: none;
+}
+
+.st-key-notification {
+    justify-content: space-between;
+    padding: 0.6rem 1rem;
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: var(--ombre);
+}
+
+.st-key-notification [data-testid="stMarkdownContainer"] p {
+    margin: 0;
+}
+
+[role="tablist"] button p {
+    white-space: nowrap;
+}

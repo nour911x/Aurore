@@ -7,6 +7,7 @@ from fpdf import FPDF
 from config.evenements import libelle_evenement
 from devis import texte_pdf, date_lisible
 from storage import load_json, save_json
+from textes import noms_clients
 
 
 CATEGORIES_PHOTO = ["Salle & déco", "Buffet & repas", "Clients", "Invités", "Détails", "Autre"]
@@ -130,7 +131,7 @@ class Galerie:
 
 
 def generer_autorisation_pdf(event_data):
-    noms = event_data["noms"] or "les clients"
+    noms = noms_clients(event_data, "les clients")
     evenement = " ".join(filter(None, [
         f"notre {libelle_evenement(event_data).lower()}",
         f"du {date_lisible(event_data['date'])}" if event_data["date"] else "",

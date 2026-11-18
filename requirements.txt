@@ -1,5 +1,5 @@
 python-dotenv
-streamlit
+streamlit>=1.67
 groq
 pandas
 fpdf2

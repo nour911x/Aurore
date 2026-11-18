@@ -7,6 +7,7 @@ from fpdf import FPDF
 
 from devis import texte_pdf, date_lisible
 from storage import load_json, save_json
+from textes import format_person_name
 
 
 GROUPES = ["Famille", "Amis", "Collègues", "Autre"]
@@ -197,7 +198,7 @@ def generer_faire_part_pdf(faire_part, event_data):
     pdf.set_y(50)
     pdf.set_text_color(150, 100, 125)
     pdf.set_font("Times", "BI", 26)
-    noms = (event_data["noms"] or "").replace(" et ", " & ")
+    noms = format_person_name(event_data["noms"] or "").replace(" et ", " & ")
     pdf.multi_cell(0, 12, texte_pdf(noms), align="C")
 
     pdf.line(54, pdf.get_y() + 4, 94, pdf.get_y() + 4)

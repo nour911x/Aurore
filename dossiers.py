@@ -5,6 +5,7 @@ from pathlib import Path
 from config.evenements import libelle_evenement
 from devis import date_lisible
 from storage import load_json, save_json
+from textes import format_person_name
 
 
 RACINE = Path(__file__).parent
@@ -54,7 +55,7 @@ def creer(fiche, racine=RACINE):
 
 
 def libelle_dossier(dossier):
-    morceaux = [dossier.get("noms") or "Sans nom", libelle_evenement(dossier), date_lisible(dossier.get("date"))]
+    morceaux = [format_person_name(dossier.get("noms")) or "Sans nom", libelle_evenement(dossier), date_lisible(dossier.get("date"))]
     return " · ".join(filter(None, morceaux))
 
 
