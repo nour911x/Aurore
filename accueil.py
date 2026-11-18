@@ -5,7 +5,7 @@ from budget import Budget, POSTE_ORGANISATION
 from config.evenements import CHAMPS_ESSENTIELS
 from dossiers import RACINE, FICHIER_FICHE, chemin, chemin_agenda, lister, libelle_dossier
 from event_state import EventSheet, renseigne
-from messages import Messagerie, detecter_messages
+from messages import MODIFIABLES, Messagerie, detecter_messages
 from prestataires import Carnet
 
 
@@ -68,7 +68,8 @@ def synthese(racine=RACINE, maintenant=None):
 
         resultat["a_faire"].append({
             **origine,
-            "a_envoyer": len(messagerie.par_statut("à envoyer")),
+            "a_valider": len(messagerie.par_statut(*MODIFIABLES)),
+            "a_envoyer": len(messagerie.par_statut("validé")),
             "relances": sum(suggestion["type"] == "relance" for suggestion in suggestions),
             "a_preparer": sum(suggestion["type"] != "relance" for suggestion in suggestions),
             "confirmations": confirmations_attendues(agenda.rdvs, maintenant)
@@ -87,7 +88,7 @@ def synthese(racine=RACINE, maintenant=None):
 
     resultat["a_faire"] = [
         element for element in resultat["a_faire"]
-        if element["a_envoyer"] or element["relances"] or element["a_preparer"] or element["confirmations"]
+        if element["a_valider"] or element["a_envoyer"] or element["relances"] or element["a_preparer"] or element["confirmations"]
     ]
     resultat["a_surveiller"].sort(key=lambda element: element["jours"])
 

@@ -102,7 +102,8 @@ OUTILS = [
     ),
     outil(
         "preparer_message",
-        "Range un message rédigé dans l'onglet Messages, prêt à être envoyé par l'utilisateur. "
+        "Range un message rédigé dans l'onglet Messages, au statut « à valider ». Il n'est jamais envoyé : "
+        "l'organisateur le relit, le valide puis l'envoie lui-même. "
         "Le destinataire est le nom d'un prestataire du carnet, ou « clients »." + CONFIRMATION,
         {"destinataire": TEXTE, "type": choix_parmi(list(TYPES_MESSAGE)), "contenu": TEXTE},
         ["destinataire", "contenu"]
@@ -145,8 +146,8 @@ OUTILS_OUTLOOK = [
 
 
 OUTILS_PAR_ESPACE = {
-    "Mariés": {schema["function"]["name"] for schema in OUTILS} - {"creer_devis"},
-    "Prestataire": {"consulter_agenda", "creer_rdv", "supprimer_rdv", "consulter_invites", "consulter_deroule", "creer_devis"}
+    "Mariés": {"consulter_agenda", "consulter_budget", "consulter_invites", "consulter_deroule"},
+    "Prestataire": {"consulter_agenda", "consulter_invites", "consulter_deroule"}
 }
 
 
@@ -299,7 +300,10 @@ class Outils:
         cle = f"agent_{datetime.now():%Y%m%d%H%M%S}_{contact['destinataire']}"
         self.messagerie.ajouter(suggestion(cle, type, contact, {}), contenu)
 
-        return {"statut": "message prêt dans l'onglet Messages", "destinataire": contact["destinataire"]}
+        return {
+            "statut": "message enregistré « à valider » dans l'onglet Messages : l'organisateur doit le relire, le valider puis l'envoyer lui-même",
+            "destinataire": contact["destinataire"]
+        }
 
     def creer_devis(self, emetteur, lignes, tva=20, acompte_pourcent=30, validite_jours=30, notes=""):
         prestataire = None if emetteur.strip().upper() == "AURORE" else chercher_par_nom(self.carnet.prestataires, emetteur)

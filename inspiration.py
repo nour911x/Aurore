@@ -81,7 +81,7 @@ def hex_vers_rgb(code):
     return tuple(int(code[index:index + 2], 16) for index in (1, 3, 5))
 
 
-def generer_moodboard_pdf(moodboard, noms):
+def generer_moodboard_pdf(moodboard, noms, avec_liens=True):
     pdf = FPDF()
     pdf.add_page()
 
@@ -115,6 +115,9 @@ def generer_moodboard_pdf(moodboard, noms):
         pdf.set_font("Helvetica", "", 11)
         pdf.multi_cell(0, 6, texte_pdf(" · ".join(moodboard["mots_cles"]).replace("·", "-")))
         pdf.ln(4)
+
+    if not avec_liens:
+        return bytes(pdf.output())
 
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 7, texte_pdf("Inspirations Pinterest (cliquer pour ouvrir)"), new_x="LMARGIN", new_y="NEXT")
