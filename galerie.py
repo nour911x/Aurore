@@ -5,6 +5,7 @@ from pathlib import Path
 from fpdf import FPDF
 
 from config.evenements import libelle_evenement
+from rgpd import consentements_manquants
 from devis import texte_pdf, date_lisible
 from storage import load_json, save_json
 from textes import noms_clients
@@ -14,25 +15,33 @@ CATEGORIES_PHOTO = ["Salle & déco", "Buffet & repas", "Clients", "Invités", "D
 
 ANCIENNES_CATEGORIES = {"Couple": "Clients"}
 
+TAGS_PHOTO = {"decor": "Décor, sans personne", "avec_personnes": "Avec personnes"}
+
 STATUTS_DROIT = ["Non demandé", "Demandé", "Accordé", "Refusé"]
 
 EXTENSIONS = {"image/png": ".png", "image/webp": ".webp"}
 
 
-def publiable(photo, droit_image):
+def tag(personnes):
+    return None if personnes is None else "avec_personnes" if personnes else "decor"
+
+
+def publiable(photo, droit_image, usage="Réseaux sociaux"):
     if photo["personnes"] is None:
         return False, "à analyser avant publication"
 
     if not photo["personnes"]:
-        return True, "aucune personne reconnaissable"
+        return True, "décor, aucune personne reconnaissable"
 
-    if photo["categorie"] == "Clients" and droit_image == "Accordé":
-        return True, "droit à l'image accordé par les clients"
+    if photo["categorie"] != "Clients":
+        return False, "des invités sont reconnaissables et n'ont pas donné leur accord"
 
-    if photo["categorie"] == "Clients":
-        return False, "les clients n'ont pas accordé leur droit à l'image"
+    manquants = consentements_manquants(droit_image, usage)
 
-    return False, "des invités sont reconnaissables et n'ont pas donné leur accord"
+    if manquants:
+        return False, f"consentement insuffisant pour cet usage ({', '.join(manquants)})"
+
+    return True, "consentement de droit à l'image de chaque client pour cet usage"
 
 
 class Galerie:
@@ -50,6 +59,7 @@ class Galerie:
 
         for photo in self.photos:
             photo["categorie"] = ANCIENNES_CATEGORIES.get(photo["categorie"], photo["categorie"])
+            photo["tag"] = tag(photo["personnes"])
 
         self.avis = data["avis"]
         self.droit_image = data["droit_image"]
@@ -92,6 +102,7 @@ class Galerie:
 
         if photo:
             photo.update(champs)
+            photo["tag"] = tag(photo["personnes"])
             self.save()
 
     def supprimer(self, photo_id):
@@ -105,8 +116,8 @@ class Galerie:
     def a_analyser(self):
         return [photo for photo in self.photos if photo["personnes"] is None]
 
-    def publiables(self):
-        return [photo for photo in self.photos if publiable(photo, self.droit_image)[0]]
+    def publiables(self, droit_image, usage="Réseaux sociaux"):
+        return [photo for photo in self.photos if publiable(photo, droit_image, usage)[0]]
 
     def set_droit_image(self, statut):
         self.droit_image = statut

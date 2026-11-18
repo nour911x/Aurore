@@ -4,6 +4,7 @@ from PIL import Image, ImageOps
 from dotenv import load_dotenv
 
 from config.evenements import description_champs_llm, type_du_dossier
+from rgpd import peut_recevoir_sante
 from textes import date_longue
 from datetime import datetime
 import base64
@@ -135,7 +136,8 @@ class ConversationAgent:
         fiche = None
 
         if prestataire:
-            fiche = avec_outils.event_sheet.infos_pour_prestataire()
+            event_sheet = avec_outils.event_sheet
+            fiche = event_sheet.infos_pour_prestataire(avec_sante=peut_recevoir_sante(event_sheet.data, prestataire))
             consignes += (
                 f" Ce prestataire est {prestataire['nom']} ({prestataire['categorie']}). "
                 "Ne lui révèle jamais le budget de l'événement, les autres prestataires, les notes internes "
@@ -436,38 +438,3 @@ class ConversationAgent:
         )
 
         return self.complete([{"role": "user", "content": instruction}])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-if __name__ == "__main__":
-    agent = ConversationAgent()
-    question = input("Pose ta question :\n")
-    response = agent.ask_llm(question)
-    print("\n")
-    print(response)

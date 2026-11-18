@@ -191,3 +191,19 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Migration** : les anciens `à envoyer` deviennent `à valider`, les anciens `ignoré` deviennent `annulé`.
 - **Faire-parts** : même principe. Le texte doit être validé avant que les liens d'envoi par invité apparaissent, et le modifier annule la validation.
 - **Notifications conservées** : la bannière et l'accueil distinguent « à préparer », « à valider » et « validés à envoyer ».
+
+### Phase 6
+- **Données de santé** (`rgpd.py`) : le champ `allergies_interdits` de la fiche, et les régimes et allergies des invités. Les régimes halal et casher révèlent une conviction religieuse, une autre catégorie particulière du RGPD : ils suivent donc la même règle.
+  - **Consentement explicite** sur le dossier (Fiche client › Consentements), avec sa date. Seul l'organisateur peut le modifier, jamais l'IA : `consentement_sante` et `droit_image` sont des champs protégés dans `EventSheet.update`.
+  - **Partage limité** : seul un prestataire de catégorie « Traiteur » reçoit ces données, et seulement avec le consentement. C'est vrai dans sa vue, dans la barre latérale, dans les messages qu'on lui écrit, dans son chat et dans le récapitulatif invités. Sans accord, le traiteur ne voit que le nombre de couverts, et on lui explique pourquoi.
+  - **IA** : par défaut, la fiche envoyée au LLM ne contient plus les allergies (`infos_sans_historique` / `infos_pour_prestataire`, paramètre `avec_sante=False`). Exceptions : le briefing d'une dégustation ou d'un rendez-vous avec le traiteur, avec consentement. Les allergies des invités partent sans les noms (`recap_anonyme`). Le plan de table n'envoie plus les régimes, inutiles pour placer les invités.
+  - **Extraction depuis le chat** : les allergies déjà connues ne sont plus envoyées au LLM. Celles qu'il trouve dans la conversation s'*ajoutent* à la liste, il ne peut plus en effacer.
+  - **Journaux** : le seul `print` du projet (le bloc `__main__` de `llm_agent.py`, qui affichait les réponses de l'IA en console) est supprimé. Il n'y a aucun autre log.
+- **Droit à l'image** : un consentement par personne (nom, périmètre « Aucun / Portfolio / Réseaux sociaux et portfolio », date), stocké dans la fiche et géré dans Fiche client et dans Inspiration & galerie › Droit à l'image. Chaque photo a un tag `decor` / `avec_personnes`, qui découle du champ `personnes` déjà renseigné par l'analyse IA.
+  - Une photo de décor est toujours publiable.
+  - Une photo avec les clients est publiable seulement si **chaque** client a consenti à cet usage (portfolio ou réseaux sociaux).
+  - Une photo avec des invités reconnaissables n'est jamais publiable.
+  - L'ancien statut global de la galerie (« Accordé », « Refusé »…) n'est plus utilisé et n'a pas été converti : aucun dossier existant n'avait de photos.
+- **Import de contacts** : aperçu obligatoire (nombre de contacts, doublons ignorés, tableau nom / téléphone / email), puis bouton explicite « Importer N contacts ». Seuls ces trois champs sont repris.
+- **Export / suppression** (Fiche client › Données personnelles) : export JSON de tous les fichiers du dossier, de ses rendez-vous et de la liste de ses photos (les images elles-mêmes ne sont pas dans le JSON). La suppression est définitive : dossier, photos et rendez-vous. Elle demande de cocher une case de confirmation qui reprend le nom du dossier.
+- **Clés API** : aucune clé dans le code, les prompts ou la documentation. `GROQ_KEY` est lue depuis l'environnement (`.env`, ignoré par git) et `OUTLOOK_ACCOUNT` est optionnelle. `GEMINI_KEY` est présente dans `.env` mais n'est utilisée nulle part : à retirer si elle ne sert plus.

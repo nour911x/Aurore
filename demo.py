@@ -7,6 +7,7 @@ from dossiers import RACINE, FICHIER_FICHE, chemin, chemin_agenda, creer, lister
 from event_state import EventSheet
 from messages import Messagerie, destinataire_prestataire, suggestion
 from prestataires import Carnet
+from rgpd import consentement
 
 
 def a_heure(jour, heure, minute=0):
@@ -38,6 +39,13 @@ def mariage(racine, aujourd_hui):
         "allergies_interdits": ["arachides"], "preferences_musicales": ["soul", "disco"],
         "ceremonie": "Laïque, dans le parc à 15h", "reception": "Dîner assis dans l'orangerie"
     }, racine)
+
+    fiche = EventSheet(chemin(dossier_id, FICHIER_FICHE, racine))
+    fiche.set_consentement("consentement_sante", consentement(True))
+    fiche.set_consentement("droit_image", [
+        {"personne": "Camille", "perimetre": "Réseaux sociaux et portfolio", "date": str(aujourd_hui)},
+        {"personne": "Hugo", "perimetre": "Portfolio", "date": str(aujourd_hui)}
+    ])
 
     carnet = Carnet(chemin(dossier_id, "prestataires_data.json", racine))
     carnet.add_prestataire("Saveurs d'Orient", "Traiteur", "Nadia", "06 12 34 56 78", "contact@saveurs.fr", "", 9500, "Traiteur", "")

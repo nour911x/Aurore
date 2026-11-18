@@ -1,6 +1,7 @@
 from datetime import date
 
 from config.evenements import CHAMPS_SPECIFIQUES, champs_par_defaut
+from rgpd import CHAMPS_CONSENTEMENT, CHAMPS_SANTE, sans_sante
 from storage import load_json, save_json
 
 
@@ -8,6 +9,9 @@ CHAMPS_POUR_PRESTATAIRE = [
     "type_evenement", "noms", "date", "lieu", "nombre_invites", "theme",
     "allergies_interdits", "preferences", *CHAMPS_SPECIFIQUES
 ]
+
+
+CHAMPS_PROTEGES = {"historique", "demo", *CHAMPS_CONSENTEMENT}
 
 
 def renseigne(valeur):
@@ -31,6 +35,8 @@ class EventSheet:
             "preferences": [],
             "prestataires": [],
             "historique": [],
+            "consentement_sante": None,
+            "droit_image": [],
             **champs_par_defaut()
         }
         self.load()
@@ -46,23 +52,32 @@ class EventSheet:
     def save(self):
         save_json(self.file_path, self.data)
 
-    def infos_pour_prestataire(self):
-        return {key: self.data[key] for key in CHAMPS_POUR_PRESTATAIRE}
+    def infos_pour_prestataire(self, avec_sante=False):
+        infos = {key: self.data[key] for key in CHAMPS_POUR_PRESTATAIRE}
+        return infos if avec_sante else sans_sante(infos)
 
-    def infos_sans_historique(self):
-        return {key: value for key, value in self.data.items() if key != "historique"}
+    def infos_sans_historique(self, avec_sante=False):
+        infos = {key: value for key, value in self.data.items() if key not in CHAMPS_PROTEGES}
+        return infos if avec_sante else sans_sante(infos)
 
     def update(self, new_info):
         for key, value in new_info.items():
-            if key in self.data and key != "historique" and renseigne(value):
+            if key in CHAMPS_SANTE and isinstance(value, list):
+                value = self.data[key] + [element for element in value if element not in self.data[key]]
+
+            if key in self.data and key not in CHAMPS_PROTEGES and renseigne(value):
                 self.data[key] = value
         self.normaliser_noms()
         self.save()
 
     def remplacer(self, new_info):
         for key, value in new_info.items():
-            if key in self.data and key != "historique":
+            if key in self.data and key not in CHAMPS_PROTEGES:
                 self.data[key] = value
+        self.save()
+
+    def set_consentement(self, cle, valeur):
+        self.data[cle] = valeur
         self.save()
 
     def ajouter_prestataire(self, description):
