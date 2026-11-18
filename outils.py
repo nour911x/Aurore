@@ -145,8 +145,8 @@ OUTILS_OUTLOOK = [
 
 
 OUTILS_PAR_ESPACE = {
-    "Mariés": {schema["function"]["name"] for schema in OUTILS} - {"creer_devis"},
-    "Prestataire": {"consulter_agenda", "creer_rdv", "supprimer_rdv", "consulter_invites", "consulter_deroule", "creer_devis"}
+    "Mariés": {"consulter_agenda", "consulter_budget", "consulter_invites", "consulter_deroule"},
+    "Prestataire": {"consulter_agenda", "consulter_invites", "consulter_deroule"}
 }
 
 

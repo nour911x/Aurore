@@ -2,6 +2,7 @@ from datetime import date, datetime, time, timedelta
 
 from agenda import Agenda
 from budget import Budget, POSTE_ORGANISATION
+from devis import CarnetDevis
 from dossiers import RACINE, FICHIER_FICHE, chemin, chemin_agenda, creer, lister, supprimer
 from event_state import EventSheet
 from messages import Messagerie, destinataire_prestataire, suggestion
@@ -41,6 +42,9 @@ def mariage(racine, aujourd_hui):
     carnet = Carnet(chemin(dossier_id, "prestataires_data.json", racine))
     carnet.add_prestataire("Saveurs d'Orient", "Traiteur", "Nadia", "06 12 34 56 78", "contact@saveurs.fr", "", 9500, "Traiteur", "")
     carnet.add_prestataire("Studio Lumière", "Photographe", "Julien", "06 98 76 54 32", "", "", 2400, "Photographe", "")
+    carnet.add_prestataire("Fleurs de Lune", "Fleuriste", "Léna", "06 11 22 33 44", "", "", 1500, "Fleuriste", "")
+    fleuriste = carnet.trouver_par_nom("Fleurs de Lune")
+    carnet.changer_statut(fleuriste["id"], "Devis reçu")
     carnet.changer_statut(carnet.trouver_par_nom("Saveurs d'Orient")["id"], "Réservé")
     photographe = carnet.trouver_par_nom("Studio Lumière")
     photographe["statut"] = "Devis demandé"
@@ -49,11 +53,20 @@ def mariage(racine, aujourd_hui):
 
     budget = Budget(chemin(dossier_id, "budget_data.json", racine))
     budget.add_poste("Traiteur", 9500)
+    budget.add_poste("Fleuriste", 1500)
     budget.add_poste(POSTE_ORGANISATION, 3500)
     budget.add_facture("Traiteur", "Acompte Saveurs d'Orient", 2850, str(aujourd_hui - timedelta(days=3)), False)
     budget.add_facture(POSTE_ORGANISATION, "Acompte organisation", 1050, str(aujourd_hui + timedelta(days=2)), False)
 
     traiteur = carnet.trouver_par_nom("Saveurs d'Orient")
+    devis = CarnetDevis(chemin(dossier_id, "devis_data.json", racine))
+    devis.add_devis(
+        "Fleurs de Lune", fleuriste["id"], "Camille et Hugo",
+        [{"designation": "Arche de cérémonie", "quantite": 1, "prix_unitaire": 650},
+         {"designation": "Centres de table", "quantite": 12, "prix_unitaire": 55}],
+        20.0, 30, 30, "Acompte à la signature, solde le jour de l'événement."
+    )
+    devis.changer_statut(devis.devis[-1]["numero"], "Envoyé")
     Messagerie(chemin(dossier_id, "messages_data.json", racine)).ajouter(
         suggestion("demo_menu", "libre", destinataire_prestataire(traiteur), {}),
         "Bonjour Nadia, pourriez-vous nous envoyer la version finale du menu avec l'option sans arachides ? Merci !"

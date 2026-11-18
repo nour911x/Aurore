@@ -163,3 +163,16 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Données de démonstration à la demande** (`demo.py`) : trois dossiers fictifs marqués `"demo": true`, datés à partir du jour courant. Ils s'ajoutent et se retirent depuis l'accueil, et ne sont jamais créés automatiquement, pour ne pas mélanger des données fictives à tes vrais dossiers.
 - **Vue Clients** : l'accueil garde la salutation et les raccourcis. La vue partagée en lecture seule arrive en phase 4.
 - **Chat** : la zone de saisie reste en bas de page, et les raccourcis sont sous l'accueil. Le dernier échange s'affiche sous l'accueil, la discussion complète est dans Messages.
+
+### Phase 4
+- **Flags dans `config/features.py`.** Chaque section liée à un flag est retirée des onglets (`SECTIONS_ACTIVES` dans `user_interface.py`), mais son code reste en place : repasser le flag à `True` suffit à la réafficher.
+  - `INSTAGRAM_FEEDBACK` : sous-onglet Instagram et bouton « Transformer en post témoignage ». La saisie des avis reste, et elle se fait maintenant côté organisateur (« Enregistrer un avis reçu »).
+  - `PINTEREST_MOODBOARD_AUTO` : liens Pinterest du moodboard, dans l'écran, le PDF et le message d'envoi.
+  - `DIGITAL_EVENT_REPRESENTATION` : sous-onglet « Salle en 3D ». Le plan de salle reste.
+  - `VENDOR_RECOMMENDATIONS` : sous-onglet « Boutiques & beauté ».
+  - `WHATSAPP_AUTO_SEND` : aucun code d'envoi automatique n'existe. Les boutons WhatsApp ouvrent un lien que l'organisateur clique lui-même. Un test vérifie que le flag reste à `False`.
+  - `CLIENT_PORTAL` / `VENDOR_PORTAL` : affichent ou masquent les vues Clients et Prestataire dans le sélecteur.
+- **Vue Clients, en lecture seule** : Notre événement (récap et prochains rendez-vous), Budget (postes et factures, sans bouton « Marquer payée »), Invitations (compteurs, liste sans coordonnées, texte du faire-part), Discussion. Aucun formulaire. Le chat n'utilise que des outils `consulter_*`, et il ne remplit plus la fiche (l'extraction automatique est réservée à l'organisateur). Le droit à l'image n'est plus accordé par un bouton côté client : il sera saisi par l'organisateur sur le dossier (phase 6).
+- **Vue Prestataire, en lecture seule** : Discussion, L'événement, Mes rendez-vous (sans formulaire ni suppression), Devis & factures (ses devis et les factures du budget liées à sa prestation). Ce qu'il voit dépend de son métier (`INFOS_PAR_CATEGORIE`) : allergies, invités et tables pour le traiteur, musique pour le DJ, couverts pour la salle. Le même filtre s'applique au dossier dans la barre latérale. L'onglet « Achats & factures » du prestataire est retiré de la vue, mais le code reste.
+- **Briefing automatique (brique 1)** : pour l'organisateur, chaque rendez-vous dans les 24 h reçoit un briefing généré à l'ouverture du Planning. Il est enregistré avec le rendez-vous et affiché aussi sur l'accueil. La version prestataire est générée à la demande, avec ses données filtrées, et n'est jamais enregistrée, pour qu'elle ne remplace pas celle de l'organisateur (qui contient le budget).
+- **Démo enrichie** : une fleuriste au statut « Devis reçu » avec un devis envoyé, pour tester la brique 4 (devis accepté → acompte et solde au budget → prestataire réservé → paiement sur l'accueil). Vérifié de bout en bout.

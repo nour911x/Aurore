@@ -117,7 +117,13 @@ class ConversationAgent:
     def consignes_session(profil, avec_outils):
         consignes = f"Nous sommes le {date_du_jour()}. Tu parles à {PROFILS[profil]}"
 
-        if avec_outils:
+        if avec_outils and profil != "Wedding planner":
+            consignes += (
+                " Tu es dans une vue partagée en lecture seule : tu consultes et tu expliques, mais tu ne crées, "
+                "ne modifies et ne supprimes rien. Si on te demande un changement, propose de transmettre la demande "
+                "à l'organisateur."
+            )
+        elif avec_outils:
             consignes += (
                 " Tu as des outils pour agir sur l'agenda, le budget, les prestataires, les invités, "
                 "les messages et les devis. Consulte avant d'agir (par exemple le carnet pour retrouver "
@@ -133,7 +139,7 @@ class ConversationAgent:
             consignes += (
                 f" Ce prestataire est {prestataire['nom']} ({prestataire['categorie']}). "
                 "Ne lui révèle jamais le budget de l'événement, les autres prestataires, les notes internes "
-                "ni les coordonnées des clients. Tu ne vois et ne gères que ses propres rendez-vous et devis."
+                "ni les coordonnées des clients. Tu ne vois que ses propres rendez-vous et devis."
             )
         elif avec_outils:
             fiche = avec_outils.event_sheet.infos_sans_historique()
