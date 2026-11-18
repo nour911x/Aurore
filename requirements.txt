@@ -1,6 +1,8 @@
-groq
 python-dotenv
-streamlit
+streamlit>=1.67
+groq
+pandas
 fpdf2
 pywin32; sys_platform == "win32"
 pillow
+pytest

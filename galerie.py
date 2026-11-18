@@ -4,11 +4,15 @@ from pathlib import Path
 
 from fpdf import FPDF
 
+from config.evenements import libelle_evenement
 from devis import texte_pdf, date_lisible
 from storage import load_json, save_json
+from textes import noms_clients
 
 
-CATEGORIES_PHOTO = ["Salle & déco", "Buffet & repas", "Couple", "Invités", "Détails", "Autre"]
+CATEGORIES_PHOTO = ["Salle & déco", "Buffet & repas", "Clients", "Invités", "Détails", "Autre"]
+
+ANCIENNES_CATEGORIES = {"Couple": "Clients"}
 
 STATUTS_DROIT = ["Non demandé", "Demandé", "Accordé", "Refusé"]
 
@@ -22,11 +26,11 @@ def publiable(photo, droit_image):
     if not photo["personnes"]:
         return True, "aucune personne reconnaissable"
 
-    if photo["categorie"] == "Couple" and droit_image == "Accordé":
-        return True, "droit à l'image accordé par les mariés"
+    if photo["categorie"] == "Clients" and droit_image == "Accordé":
+        return True, "droit à l'image accordé par les clients"
 
-    if photo["categorie"] == "Couple":
-        return False, "les mariés n'ont pas accordé leur droit à l'image"
+    if photo["categorie"] == "Clients":
+        return False, "les clients n'ont pas accordé leur droit à l'image"
 
     return False, "des invités sont reconnaissables et n'ont pas donné leur accord"
 
@@ -43,6 +47,10 @@ class Galerie:
     def load(self):
         data = load_json(self.file_path, {"photos": [], "avis": [], "droit_image": STATUTS_DROIT[0]})
         self.photos = data["photos"]
+
+        for photo in self.photos:
+            photo["categorie"] = ANCIENNES_CATEGORIES.get(photo["categorie"], photo["categorie"])
+
         self.avis = data["avis"]
         self.droit_image = data["droit_image"]
 
@@ -123,9 +131,9 @@ class Galerie:
 
 
 def generer_autorisation_pdf(event_data):
-    noms = event_data["noms"] or "les mariés"
+    noms = noms_clients(event_data, "les clients")
     evenement = " ".join(filter(None, [
-        f"notre {event_data['type_evenement'] or 'mariage'}",
+        f"notre {libelle_evenement(event_data).lower()}",
         f"du {date_lisible(event_data['date'])}" if event_data["date"] else "",
         f"à {event_data['lieu']}" if event_data["lieu"] else ""
     ]))

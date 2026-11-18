@@ -7,11 +7,14 @@ from habillage import (
 	disposition_salle, salle_3d_html
 )
 from event_state import EventSheet
+from textes import format_person_name, noms_clients, pluriel
+from config.evenements import TYPES_EVENEMENT, CHAMPS_SPECIFIQUES, type_du_dossier, champs_du_type, libelle_evenement
+from dossiers import FICHIER_FICHE, chemin, chemin_agenda, creer as creer_dossier, lister as lister_dossiers, libelle_dossier, migrer_ancien_dossier
 from budget import Budget
 from agenda import Agenda
 from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email, appliquer_statut, meme_nom
 from messages import (
-	Messagerie, TYPES_MESSAGE, detecter_messages,
+	Messagerie, TYPES_MESSAGE, EMETTEUR_AURORE, detecter_messages,
 	destinataire_maries, destinataire_prestataire, suggestion, fiche_publique
 )
 from devis import CarnetDevis, STATUTS_DEVIS, totaux, euros, date_validite, date_lisible, generer_pdf, lignes_valides
@@ -27,7 +30,7 @@ from jour_j import (
 from galerie import Galerie, CATEGORIES_PHOTO, STATUTS_DROIT, publiable, generer_autorisation_pdf
 from invites import (
 	ListeInvites, GROUPES, STATUTS_INVITE, REGIMES,
-	nettoyer, lire_contacts, message_personnel, generer_faire_part_pdf
+	nettoyer, entier, lire_contacts, message_personnel, generer_faire_part_pdf
 )
 from groq import APIError, APIConnectionError, AuthenticationError, RateLimitError
 from datetime import date, datetime, timedelta
@@ -39,37 +42,67 @@ import uuid
 CHAMPS_LISTES = {
 	"allergies_interdits": "Allergies / interdits (alimentaires, religieux, à éviter absolument…)",
 	"preferences": "Préférences (style, couleurs, fleurs, ambiance…)",
-	"preferences_musicales": "Préférences musicales (styles, chansons, ouverture de bal…)",
 	"prestataires": "Prestataires déjà choisis"
 }
 
 SOURCES_ECHANGE = ["Rendez-vous", "Appel", "Message", "Email", "Autre"]
 
 ICONES_STATUT = {
-	"À contacter": "⚪",
-	"Devis demandé": "🟡",
-	"Devis reçu": "🟠",
-	"Réservé": "🟢",
-	"Refusé": "🔴"
+	"À contacter": ":gray[:material/radio_button_unchecked:]",
+	"Devis demandé": ":orange[:material/hourglass_top:]",
+	"Devis reçu": ":blue[:material/description:]",
+	"Réservé": ":green[:material/check_circle:]",
+	"Refusé": ":red[:material/cancel:]"
 }
 
 AUCUN = "—"
 
+OUI_NON = {AUCUN: None, "Oui": True, "Non": False}
+
+LIBELLES_PROFIL = {"Wedding planner": "Organisateur", "Mariés": "Clients", "Prestataire": "Prestataire"}
+
 ONGLETS = {
-	"discussion": "💬 Discussion",
-	"fiche": "💑 Fiche couple",
-	"mariage": "💍 Le mariage",
-	"inspiration": "✨ Inspiration",
-	"invites": "👥 Invités",
-	"prestataires": "🤝 Prestataires",
-	"budget": "💰 Budget",
-	"devis": "📄 Devis",
-	"agenda": "📅 Rendez-vous",
-	"messages": "✉️ Messages",
-	"achats": "🧾 Achats & factures",
-	"galerie": "📸 Galerie",
-	"jourj": "🏰 Jour J"
+	"accueil": ":material/home: Accueil",
+	"messages": ":material/mail: Messages",
+	"fiche": ":material/folder_shared: Fiche client",
+	"planning": ":material/event: Planning",
+	"prestataires": ":material/handshake: Prestataires",
+	"budget": ":material/payments: Budget & devis",
+	"invites": ":material/groups: Invités",
+	"inspiration": ":material/palette: Inspiration & galerie",
+	"discussion": ":material/chat: Discussion",
+	"evenement": ":material/celebration: L'événement",
+	"agenda": ":material/event: Rendez-vous",
+	"devis_achats": ":material/request_quote: Devis & achats"
 }
+
+SECTIONS = {
+	"messages": ["discussion", "a_envoyer"],
+	"planning": ["agenda", "deroule", "plan_salle", "salle_3d"],
+	"budget": ["budget", "devis"],
+	"inspiration": ["moodboard", "adresses", "photos", "droit_image", "avis", "instagram"],
+	"devis_achats": ["devis", "achats"]
+}
+
+LIBELLES_SECTIONS = {
+	"discussion": ":material/chat: Discussion avec AURORE",
+	"a_envoyer": ":material/outbox: À préparer et à envoyer",
+	"agenda": ":material/event: Rendez-vous",
+	"deroule": ":material/schedule: Déroulé du jour J",
+	"plan_salle": ":material/table_restaurant: Plan de salle",
+	"salle_3d": ":material/view_in_ar: Salle en 3D",
+	"budget": ":material/payments: Budget",
+	"devis": ":material/request_quote: Devis",
+	"achats": ":material/receipt_long: Achats & factures",
+	"moodboard": ":material/palette: Moodboard",
+	"adresses": ":material/storefront: Boutiques & beauté",
+	"photos": ":material/photo_library: Photos",
+	"droit_image": ":material/verified_user: Droit à l'image",
+	"avis": ":material/star: Avis",
+	"instagram": ":material/share: Instagram"
+}
+
+SECTIONS_EXCLUES = {"Mariés": {"instagram"}}
 
 CONFIG_COLONNES_DEROULE = {
 	"heure": st.column_config.TextColumn("Heure", help="Format 14:30", width="small"),
@@ -79,41 +112,17 @@ CONFIG_COLONNES_DEROULE = {
 	"details": st.column_config.TextColumn("Détails", width="large")
 }
 
-ONGLETS_MARIES = {"fiche": "💑 Notre mariage"}
+ONGLETS_MARIES = {"fiche": ":material/folder_shared: Notre événement"}
 
 ESPACES = {
-	"Wedding planner": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "jourj", "messages", "galerie"],
-	"Mariés": ["discussion", "fiche", "inspiration", "invites", "prestataires", "budget", "devis", "agenda", "jourj", "messages", "galerie"],
-	"Prestataire": ["discussion", "mariage", "agenda", "devis", "achats"]
+	"Wedding planner": ["accueil", "messages", "fiche", "planning", "prestataires", "budget", "invites", "inspiration"],
+	"Mariés": ["accueil", "messages", "fiche", "planning", "prestataires", "budget", "invites", "inspiration"],
+	"Prestataire": ["discussion", "evenement", "agenda", "devis_achats"]
 }
 
 CHAMPS_DOSSIER = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités", "budget": "Budget"}
 
 CHAMPS_DOSSIER_PRESTATAIRE = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités"}
-
-DETAILS_DOSSIER_PRESTATAIRE = {
-	"noms": "Couple",
-	"type_evenement": "Événement",
-	"theme": "Thème",
-	"allergies_interdits": "Allergies",
-	"preferences_musicales": "Musique"
-}
-
-DETAILS_DOSSIER = {
-	"noms": "Couple",
-	"type_evenement": "Événement",
-	"theme": "Thème",
-	"allergies_interdits": "Allergies",
-	"preferences_musicales": "Musique",
-	"prestataires": "Prestataires"
-}
-
-TUILES = [
-	("mariage", ":material/favorite:", "Mariage", "Cérémonie, vin d'honneur, réception", "Je souhaite organiser un mariage."),
-	("baby", ":material/child_care:", "Baby shower", "Gender reveal, naissance", "Je souhaite organiser une baby shower."),
-	("anniversaire", ":material/cake:", "Anniversaire", "Surprise, 30 ans, enfant", "Je souhaite organiser un anniversaire."),
-	("autre", ":material/celebration:", "Autre", "EVJF, fiançailles, crémaillère", "Je souhaite organiser un autre type d'événement.")
-]
 
 RACCOURCIS = [
 	("agenda", ":material/calendar_month:", "Mon agenda de la semaine", "Quels sont mes rendez-vous des 7 prochains jours ?"),
@@ -123,18 +132,16 @@ RACCOURCIS = [
 ]
 
 RACCOURCIS_PRESTATAIRE = [
-	("agenda", ":material/calendar_month:", "Mes rendez-vous", "Quels sont mes prochains rendez-vous pour ce mariage ?"),
+	("agenda", ":material/calendar_month:", "Mes rendez-vous", "Quels sont mes prochains rendez-vous pour cet événement ?"),
 	("couverts", ":material/restaurant:", "Couverts et allergies", "Combien de couverts, quels régimes et quelles allergies ?"),
-	("devis", ":material/request_quote:", "Préparer un devis", "Aide-moi à préparer mon devis pour ce mariage.")
+	("devis", ":material/request_quote:", "Préparer un devis", "Aide-moi à préparer mon devis pour cet événement.")
 ]
 
 PLACEHOLDERS = {
 	"Wedding planner": "Que puis-je faire pour vous ? (ex : ajoute une dégustation jeudi à 14h)",
-	"Mariés": "Parle-moi de ton mariage ! (ex : où en est notre budget ?)",
+	"Mariés": "Parle-moi de ton événement ! (ex : où en est notre budget ?)",
 	"Prestataire": "Que puis-je faire pour vous ? (ex : combien de couverts végétariens ?)"
 }
-
-PLANNER = "AURORE - Wedding planner"
 
 COLONNES_DEVIS = ["designation", "quantite", "prix_unitaire"]
 
@@ -145,10 +152,10 @@ CONFIG_COLONNES_DEVIS = {
 }
 
 ICONES_INVITE = {
-	"À inviter": "⚪",
-	"Invité": "📨",
-	"Confirmé": "✅",
-	"Décliné": "❌"
+	"À inviter": ":gray[:material/radio_button_unchecked:]",
+	"Invité": ":blue[:material/send:]",
+	"Confirmé": ":green[:material/check_circle:]",
+	"Décliné": ":red[:material/cancel:]"
 }
 
 COLONNES_INVITES = ["id", "nom", "groupe", "telephone", "email", "accompagnants", "regime", "allergies", "statut"]
@@ -183,30 +190,130 @@ def resume_contexte(contexte):
 	return contexte.get("titre") or contexte.get("libelle") or contexte.get("nom") or ""
 
 
+def details_dossier(data, prive=True):
+	details = {"noms": type_du_dossier(data)["personnes"], "type_evenement": "Événement", "theme": "Thème"}
+	details |= champs_du_type(data)
+	details["allergies_interdits"] = "Allergies"
+
+	if prive:
+		details["prestataires"] = "Prestataires"
+
+	return details
+
+
+def ouvrir_messages(profil):
+	st.session_state[f"onglets_{profil}"] = ONGLETS["messages"]
+	st.session_state[f"sections_{profil}_messages"] = LIBELLES_SECTIONS["a_envoyer"]
+
+
+def nom_affiche(message):
+	return message["destinataire"] if message["prestataire_id"] else format_person_name(message["destinataire"])
+
+
+def ouvrir_nouveau_dossier(cle_type=None):
+	st.session_state.type_nouveau_dossier = cle_type
+	st.session_state.ouvrir_nouveau_dossier = True
+
+
+def choisir_type(cle_type=None):
+	st.session_state.type_nouveau_dossier = cle_type
+
+
+def fermer_nouveau_dossier():
+	st.session_state.type_nouveau_dossier = None
+	st.session_state.ouvrir_nouveau_dossier = False
+
+
+def show_tuiles(cle, au_clic):
+	with st.container(horizontal=True, key=cle):
+		for cle_type, type_evenement in TYPES_EVENEMENT.items():
+			st.button(
+				f"**{type_evenement['libelle']}**  \n{type_evenement['exemples']}",
+				key=f"{cle}-{cle_type}", icon=type_evenement["icone"], width="stretch",
+				on_click=au_clic, args=(cle_type,)
+			)
+
+
+@st.dialog("Nouveau dossier", width="large", on_dismiss=fermer_nouveau_dossier)
+def nouveau_dossier():
+	cle_type = st.session_state.get("type_nouveau_dossier")
+
+	if not cle_type:
+		st.markdown("Quel type d'événement organisez-vous ?")
+		show_tuiles("tuiles-dialogue", choisir_type)
+		return
+
+	type_evenement = TYPES_EVENEMENT[cle_type]
+
+	with st.form("form_nouveau_dossier"):
+		st.markdown(f"**{type_evenement['libelle']}**")
+		noms = st.text_input(type_evenement["personnes"])
+		jour = st.date_input("Date de l'événement", value=None)
+		sous_type = st.text_input("Type précis (EVJF, fiançailles, crémaillère…)") if cle_type == "autre" else ""
+
+		if st.form_submit_button("Créer le dossier", type="primary"):
+			st.session_state.dossier_actif = creer_dossier({
+				"type_evenement": type_evenement["libelle"],
+				"noms": noms or None,
+				"date": str(jour) if jour else None,
+				"sous_type": sous_type or None
+			})
+			fermer_nouveau_dossier()
+			st.rerun()
+
+	st.button("Changer de type", on_click=choisir_type)
+
+
 class UserInterface:
 	def __init__(self):
-		st.set_page_config(page_title="AURORE", page_icon="🌅", layout="wide")
+		st.set_page_config(page_title="AURORE", page_icon=":material/wb_twilight:", layout="wide")
 		st.html(style_html())
 		self.prestataire = None
-		self.event_sheet = self.get_persistant("event_sheet", EventSheet)
-		self.budget = self.get_persistant("budget", Budget)
-		self.agenda = self.get_persistant("agenda", Agenda)
-		self.carnet = self.get_persistant("carnet", Carnet)
-		self.messagerie = self.get_persistant("messagerie", Messagerie)
-		self.carnet_devis = self.get_persistant("carnet_devis", CarnetDevis)
-		self.liste_invites = self.get_persistant("liste_invites", ListeInvites)
-		self.inspiration = self.get_persistant("inspiration", Inspiration)
-		self.galerie = self.get_persistant("galerie", Galerie)
-		self.jour_j = self.get_persistant("jour_j", JourJ)
+		self.profil = None
+		self.dossier_id = self.choisir_dossier()
+		self.agenda = self.get_persistant("agenda", lambda: Agenda(chemin_agenda()))
 		st.session_state.setdefault("version_galerie", 0)
-		self.outils = Outils(
-			self.event_sheet, self.agenda, self.budget, self.carnet,
-			self.liste_invites, self.messagerie, self.carnet_devis, self.jour_j
-		)
 		st.session_state.setdefault("version_invites", 0)
 		st.session_state.setdefault("briefings", {})
 		st.session_state.setdefault("lignes_devis", [])
 		st.session_state.setdefault("version_lignes", 0)
+
+		if self.dossier_id:
+			self.charger_dossier()
+
+
+	def choisir_dossier(self):
+		migrer_ancien_dossier()
+		self.dossiers = {dossier["id"]: dossier for dossier in lister_dossiers()}
+
+		if st.session_state.get("dossier_actif") not in self.dossiers:
+			st.session_state.dossier_actif = next(iter(self.dossiers), None)
+
+		return st.session_state.dossier_actif
+
+
+	def get_du_dossier(self, cle, classe, fichier):
+		return self.get_persistant(f"{cle}_{self.dossier_id}", lambda: classe(chemin(self.dossier_id, fichier)))
+
+
+	def charger_dossier(self):
+		self.agenda.pour_dossier(self.dossier_id)
+		self.event_sheet = self.get_du_dossier("event_sheet", EventSheet, FICHIER_FICHE)
+		self.budget = self.get_du_dossier("budget", Budget, "budget_data.json")
+		self.carnet = self.get_du_dossier("carnet", Carnet, "prestataires_data.json")
+		self.messagerie = self.get_du_dossier("messagerie", Messagerie, "messages_data.json")
+		self.carnet_devis = self.get_du_dossier("carnet_devis", CarnetDevis, "devis_data.json")
+		self.liste_invites = self.get_du_dossier("liste_invites", ListeInvites, "invites_data.json")
+		self.inspiration = self.get_du_dossier("inspiration", Inspiration, "inspiration_data.json")
+		self.jour_j = self.get_du_dossier("jour_j", JourJ, "jour_j_data.json")
+		self.galerie = self.get_persistant(
+			f"galerie_{self.dossier_id}",
+			lambda: Galerie(chemin(self.dossier_id, "galerie_data.json"), chemin(self.dossier_id, "galerie"))
+		)
+		self.outils = Outils(
+			self.event_sheet, self.agenda, self.budget, self.carnet,
+			self.liste_invites, self.messagerie, self.carnet_devis, self.jour_j
+		)
 
 
 	@staticmethod
@@ -218,16 +325,36 @@ class UserInterface:
 		return st.session_state[cle]
 
 
+	def show_choix_dossier(self):
+		identifiants = list(self.dossiers)
+		choix = st.selectbox(
+			"Dossier", identifiants, index=identifiants.index(self.dossier_id),
+			format_func=lambda dossier_id: libelle_dossier(self.dossiers[dossier_id])
+		)
+
+		if choix != self.dossier_id:
+			st.session_state.dossier_actif = choix
+			st.rerun()
+
+		st.button("Nouveau dossier", icon=":material/create_new_folder:", width="stretch", on_click=ouvrir_nouveau_dossier)
+
+
 	def show_event_sheet(self, profil):
+		data = self.event_sheet.data
+		affichage = {**data, "type_evenement": libelle_evenement(data)}
+
 		with st.sidebar:
+			if profil == "Wedding planner":
+				self.show_choix_dossier()
+
 			if profil == "Prestataire":
-				st.markdown(dossier_html(self.event_sheet.data, CHAMPS_DOSSIER_PRESTATAIRE, DETAILS_DOSSIER_PRESTATAIRE), unsafe_allow_html=True)
+				st.markdown(dossier_html(affichage, CHAMPS_DOSSIER_PRESTATAIRE, details_dossier(data, prive=False)), unsafe_allow_html=True)
 			else:
-				st.markdown(dossier_html(self.event_sheet.data, CHAMPS_DOSSIER, DETAILS_DOSSIER), unsafe_allow_html=True)
+				st.markdown(dossier_html(affichage, CHAMPS_DOSSIER, details_dossier(data)), unsafe_allow_html=True)
 				nombre_echanges = len(self.event_sheet.data["historique"])
 
 				if nombre_echanges:
-					st.caption(f"🗂️ {nombre_echanges} échange(s) dans l'historique")
+					st.caption(f":material/history: {pluriel(nombre_echanges, 'échange')} dans l'historique")
 
 			if st.button("Nouvelle conversation", icon=":material/add:", width="stretch"):
 				st.session_state.pop(self.cle_conversation(profil), None)
@@ -237,34 +364,76 @@ class UserInterface:
 
 	def cle_conversation(self, profil):
 		identifiant = self.prestataire["id"] if self.prestataire else ""
-		return f"conversation_{profil}_{identifiant}"
+		return f"conversation_{self.dossier_id}_{profil}_{identifiant}"
+
+
+	def show_type_evenement(self):
+		data = self.event_sheet.data
+		actuel = next(cle for cle, type_evenement in TYPES_EVENEMENT.items() if type_evenement is type_du_dossier(data))
+		choix = st.segmented_control(
+			"Type d'événement", list(TYPES_EVENEMENT), default=actuel,
+			format_func=lambda cle: TYPES_EVENEMENT[cle]["libelle"], key=f"type_{self.dossier_id}_{actuel}"
+		)
+
+		if choix and choix != actuel:
+			self.event_sheet.remplacer({"type_evenement": TYPES_EVENEMENT[choix]["libelle"]})
+			st.rerun()
+
+
+	@staticmethod
+	def champ_specifique(conteneur, cle, valeur):
+		libelle, genre, aide = CHAMPS_SPECIFIQUES[cle]
+
+		if genre == "texte":
+			return conteneur.text_input(libelle, value=valeur or "", help=aide) or None
+
+		if genre == "nombre":
+			return conteneur.number_input(libelle, min_value=0, step=1, value=entier(valeur) or None, help=aide)
+
+		if genre == "date":
+			jour = conteneur.date_input(libelle, value=lire_date(valeur), help=aide)
+			return str(jour) if jour else None
+
+		if genre == "oui_non":
+			choix = conteneur.selectbox(libelle, list(OUI_NON), index=list(OUI_NON.values()).index(valeur if isinstance(valeur, bool) else None), help=aide)
+			return OUI_NON[choix]
+
+		return texte_vers_liste(conteneur.text_area(libelle, value=", ".join(valeur), height=68, help=aide))
 
 
 	def show_fiche_form(self):
 		data = self.event_sheet.data
+		champs = type_du_dossier(data)["champs"]
+		simples = [cle for cle in champs if CHAMPS_SPECIFIQUES[cle][1] != "liste"]
+		listes_du_type = [cle for cle in champs if CHAMPS_SPECIFIQUES[cle][1] == "liste"]
 
 		with st.form("form_fiche"):
 			gauche, droite = st.columns(2)
-			noms = gauche.text_input("Couple / client(s)", value=data["noms"] or "")
-			type_evenement = droite.text_input("Type d'événement", value=data["type_evenement"] or "")
-			telephone = gauche.text_input("Téléphone des mariés", value=data["telephone"] or "")
-			email = droite.text_input("Email des mariés", value=data["email"] or "")
-			date_evenement = gauche.date_input("Date de l'événement", value=lire_date(data["date"]))
+			noms = gauche.text_input(type_du_dossier(data)["personnes"], value=data["noms"] or "")
 			lieu = droite.text_input("Lieu", value=data["lieu"] or "")
+			telephone = gauche.text_input("Téléphone du client", value=data["telephone"] or "")
+			email = droite.text_input("Email du client", value=data["email"] or "")
+			date_evenement = gauche.date_input("Date de l'événement", value=lire_date(data["date"]))
+			theme = droite.text_input("Thème", value=data["theme"] or "")
 			budget = gauche.number_input("Budget (€)", min_value=0, step=500, value=int(data["budget"]) if data["budget"] else None)
 			invites = droite.number_input("Nombre d'invités", min_value=0, step=5, value=int(data["nombre_invites"]) if data["nombre_invites"] else None)
-			theme = st.text_input("Thème", value=data["theme"] or "")
+			colonnes = st.columns(2)
+			specifiques = {
+				cle: self.champ_specifique(colonnes[index % 2], cle, data[cle])
+				for index, cle in enumerate(simples)
+			}
 
 			st.caption("Pour les listes, sépare les éléments par des virgules.")
 			listes = {
 				key: st.text_area(label, value=", ".join(data[key]), height=68)
 				for key, label in CHAMPS_LISTES.items()
 			}
+			specifiques |= {cle: self.champ_specifique(st, cle, data[cle]) for cle in listes_du_type}
 
-			if st.form_submit_button("💾 Enregistrer la fiche"):
+			if st.form_submit_button("Enregistrer la fiche", icon=":material/save:"):
 				nouvelle_fiche = {
+					**specifiques,
 					"noms": noms or None,
-					"type_evenement": type_evenement or None,
 					"telephone": telephone or None,
 					"email": email or None,
 					"date": str(date_evenement) if date_evenement else None,
@@ -282,17 +451,17 @@ class UserInterface:
 
 
 	def show_historique(self):
-		st.subheader("🗂️ Historique des échanges")
+		st.subheader(":material/history: Historique des échanges")
 
 		if self.conversation_agent_object.get_conversation_history():
-			if st.button("📝 Ajouter un résumé de la discussion avec AURORE"):
+			if st.button("Ajouter un résumé de la discussion avec AURORE", icon=":material/summarize:"):
 				with st.spinner("AURORE résume la discussion…"):
 					resume = self.conversation_agent_object.summarize_conversation()
 
 				self.event_sheet.add_echange("Discussion avec AURORE", resume)
 				st.rerun()
 
-		with st.expander("➕ Noter un échange (rendez-vous, appel, message…)"):
+		with st.expander("Noter un échange (rendez-vous, appel, message…)", icon=":material/add:"):
 			with st.form("form_echange", clear_on_submit=True):
 				source = st.selectbox("Type d'échange", SOURCES_ECHANGE)
 				resume = st.text_area("Ce qui a été dit ou décidé")
@@ -313,7 +482,8 @@ class UserInterface:
 				st.markdown(echange["resume"])
 
 
-	def show_fiche_couple(self):
+	def show_fiche_client(self):
+		self.show_type_evenement()
 		self.show_fiche_form()
 		self.show_historique()
 
@@ -335,25 +505,10 @@ class UserInterface:
 	def show_accueil(self, profil):
 		st.markdown(accueil_html(profil), unsafe_allow_html=True)
 
-		if profil == "Prestataire":
-			return
 
-		tuiles = [
-			(identifiant, icone, f"**{titre}**  \n{exemples}", message)
-			for identifiant, icone, titre, exemples, message in TUILES
-		]
-		self.show_boutons_messages("tuiles", tuiles, width="stretch")
-
-
-	def show_discussion_history(self, profil):
-		historique = self.conversation_agent_object.get_conversation_history()
-
-		if not historique:
-			self.show_accueil(profil)
-
-		self.show_boutons_messages("raccourcis", RACCOURCIS_PRESTATAIRE if self.prestataire else RACCOURCIS)
-
-		for message in historique:
+	@staticmethod
+	def show_conversation(messages):
+		for message in messages:
 			with st.chat_message(message["role"]):
 				if message.get("image"):
 					st.image(base64.b64decode(message["image"]), width=280)
@@ -363,13 +518,40 @@ class UserInterface:
 		st.markdown(AVERTISSEMENT_HTML, unsafe_allow_html=True)
 
 
+	def show_tableau_de_bord(self, profil):
+		historique = self.conversation_agent_object.get_conversation_history()
+
+		if not historique:
+			self.show_accueil(profil)
+
+		self.show_boutons_messages("raccourcis", RACCOURCIS)
+
+		if historique:
+			st.caption("Dernier échange avec AURORE. Toute la discussion est dans l'onglet Messages.")
+			self.show_conversation(historique[-2:])
+
+
+	def show_discussion(self, profil):
+		historique = self.conversation_agent_object.get_conversation_history()
+
+		if self.prestataire:
+			if not historique:
+				self.show_accueil(profil)
+
+			self.show_boutons_messages("raccourcis", RACCOURCIS_PRESTATAIRE)
+		elif not historique:
+			st.caption("Aucune discussion pour l'instant : écrivez à AURORE dans la zone de saisie en bas de page.")
+
+		self.show_conversation(historique)
+
+
 	@staticmethod
 	def show_alertes_factures(budget):
 		for facture in budget.factures_a_payer():
 			if facture["jours_restants"] < 0:
-				st.error(f"🚨 Facture en retard : {facture['libelle']} ({facture['montant']} €) — échéance dépassée ({facture['echeance']})")
+				st.error(f"Facture en retard : {facture['libelle']} ({facture['montant']} €) — échéance dépassée ({facture['echeance']})", icon=":material/error:")
 			elif facture["jours_restants"] <= 7:
-				st.warning(f"📬 À payer dans {facture['jours_restants']} jours : {facture['libelle']} ({facture['montant']} €, poste {facture['poste']})")
+				st.warning(f"À payer dans {facture['jours_restants']} jours : {facture['libelle']} ({facture['montant']} €, poste {facture['poste']})", icon=":material/schedule:")
 
 
 	@staticmethod
@@ -382,11 +564,11 @@ class UserInterface:
 
 		for poste in budget.postes:
 			engage = budget.engage_du_poste(poste)
-			icone = "🔴" if poste["montant_prevu"] and engage > poste["montant_prevu"] else "🟢"
+			icone = ":material/warning:" if poste["montant_prevu"] and engage > poste["montant_prevu"] else ":material/check_circle:"
 
-			with st.expander(f"{icone} {poste['nom']} — {engage} € / {poste['montant_prevu']} € {libelle_poste}"):
+			with st.expander(f"{poste['nom']} — {engage} € / {poste['montant_prevu']} € {libelle_poste}", icon=icone):
 				for facture in poste["factures"]:
-					statut = "✅ payée" if facture["payee"] else f"⏳ à payer avant le {facture['echeance']}"
+					statut = ":green[:material/check_circle:] payée" if facture["payee"] else f":material/hourglass_top: à payer avant le {date_lisible(facture['echeance'])}"
 					st.markdown(f"- {facture['libelle']} : {facture['montant']} € ({statut})")
 
 					if not facture["payee"]:
@@ -397,7 +579,7 @@ class UserInterface:
 
 	@staticmethod
 	def show_budget_forms(budget, cle, exemple_poste="traiteur", exemple_facture="acompte traiteur"):
-		with st.expander("➕ Ajouter un poste"):
+		with st.expander("Ajouter un poste", icon=":material/add:"):
 			with st.form(f"{cle}_form_poste", clear_on_submit=True):
 				nom = st.text_input(f"Nom du poste (ex : {exemple_poste})")
 				montant = st.number_input("Montant prévu (€)", min_value=0, step=100)
@@ -406,7 +588,7 @@ class UserInterface:
 					budget.add_poste(nom, montant)
 					st.rerun()
 
-		with st.expander("🧾 Ajouter une facture"):
+		with st.expander("Ajouter une facture", icon=":material/receipt_long:"):
 			if budget.postes:
 				with st.form(f"{cle}_form_facture", clear_on_submit=True):
 					noms_postes = [poste["nom"] for poste in budget.postes]
@@ -425,8 +607,10 @@ class UserInterface:
 
 	def show_achats(self):
 		identifiant = self.prestataire["id"]
-		achats = self.get_persistant(f"achats_{identifiant}", lambda: Budget(f"./achats_{identifiant}.json"))
-		st.caption("Vos achats pour ce mariage (denrées, boissons, location…) et les factures de vos fournisseurs, avec leurs échéances.")
+		achats = self.get_persistant(
+			f"achats_{self.dossier_id}_{identifiant}", lambda: Budget(chemin(self.dossier_id, f"achats_{identifiant}.json"))
+		)
+		st.caption("Vos achats pour cet événement (denrées, boissons, location…) et les factures de vos fournisseurs, avec leurs échéances.")
 		self.show_alertes_factures(achats)
 		self.show_budget_postes(achats, None, "achats", "budgétés")
 		self.show_budget_forms(achats, "achats", "viandes et poissons", "facture grossiste")
@@ -439,7 +623,7 @@ class UserInterface:
 			st.info("Aucun poste de budget pour l'instant.")
 
 			if self.event_sheet.data["budget"]:
-				if st.button("💡 Proposer une répartition adaptée à mon événement"):
+				if st.button("Proposer une répartition adaptée à mon événement", icon=":material/lightbulb:"):
 					postes = self.conversation_agent_object.suggest_budget_postes(self.event_sheet.data)
 
 					for poste in postes:
@@ -460,7 +644,7 @@ class UserInterface:
 	def show_rappels_rdv(self):
 		for rdv in self.rdvs_visibles(self.agenda.rdvs_proches()):
 			date_lisible = datetime.fromisoformat(rdv["date_heure"]).strftime("%d/%m à %H:%M")
-			st.info(f"📅 Bientôt : {rdv['titre']} le {date_lisible} avec {rdv['avec']}")
+			st.info(f"Bientôt : {rdv['titre']} le {date_lisible} avec {rdv['avec']}", icon=":material/event:")
 
 
 	def resume_budget(self):
@@ -500,11 +684,11 @@ class UserInterface:
 
 			with st.container(border=True):
 				st.markdown(f"**{rdv['titre']}** — {date_lisible} ({rdv['duree_minutes']} min)")
-				st.markdown(f"📍 {rdv['lieu']} · 👤 {rdv['avec']}")
+				st.markdown(f":material/location_on: {rdv['lieu'] or 'Lieu à préciser'} · :material/person: {rdv['avec'] or '—'}")
 
 				bouton_briefing, bouton_supprimer = st.columns([3, 1])
 
-				if bouton_briefing.button("📋 Préparer le briefing", key=f"brief_{cle}"):
+				if bouton_briefing.button("Préparer le briefing", icon=":material/assignment:", key=f"brief_{cle}"):
 					with st.spinner("AURORE rassemble tout ce qu'il faut savoir…"):
 						st.session_state.briefings[cle] = self.generer_briefing(rdv)
 
@@ -514,26 +698,26 @@ class UserInterface:
 					st.rerun()
 
 				if cle in st.session_state.briefings:
-					with st.expander("📋 Briefing avant le rendez-vous", expanded=True):
+					with st.expander("Briefing avant le rendez-vous", icon=":material/assignment:", expanded=True):
 						st.markdown(st.session_state.briefings[cle])
 
 		if rdvs:
 			st.download_button(
-				"📥 Exporter vers mon calendrier (.ics)",
+				"Exporter vers mon calendrier (.ics)", icon=":material/download:",
 				data=self.agenda.export_ics(rdvs),
 				file_name="aurore_rendez_vous.ics",
 				mime="text/calendar"
 			)
 
-		if self.outils.avec_outlook and not self.prestataire and st.button("📤 Envoyer mes rendez-vous vers Outlook"):
+		if self.outils.avec_outlook and not self.prestataire and st.button("Envoyer mes rendez-vous vers Outlook", icon=":material/outbox:"):
 			with st.spinner("Synchronisation avec Outlook…"):
 				nombre_envoyes = self.outils.synchroniser_outlook()
 
-			st.success(f"{nombre_envoyes} rendez-vous ajouté(s) à Outlook.")
+			st.success(f"{pluriel(nombre_envoyes, 'rendez-vous ajouté', 'rendez-vous ajoutés')} à Outlook.")
 
 
 	def show_rdv_form(self):
-		with st.expander("➕ Ajouter un rendez-vous"):
+		with st.expander("Ajouter un rendez-vous", icon=":material/add:"):
 			with st.form("form_rdv", clear_on_submit=True):
 				titre = st.text_input("Titre (ex : essayage robe, visite de salle, dégustation)")
 				jour = st.date_input("Date")
@@ -546,19 +730,28 @@ class UserInterface:
 				else:
 					noms_prestataires = [AUCUN] + [prestataire["nom"] for prestataire in self.carnet.prestataires]
 					prestataire_choisi = st.selectbox("Avec quel prestataire", noms_prestataires)
-					autre = st.text_input("Ou avec quelqu'un d'autre (ex : les mariés, la témoin)")
+					autre = st.text_input("Ou avec quelqu'un d'autre (ex : les clients, la témoin)")
 					avec = autre or ("" if prestataire_choisi == AUCUN else prestataire_choisi)
 
 				if st.form_submit_button("Ajouter le rendez-vous") and titre:
 					date_heure = datetime.combine(jour, heure).isoformat()
 					conflit = self.agenda.add_rdv(titre, date_heure, duree, lieu, avec)
 
-					if conflit and self.prestataire:
-						st.error("⚠️ Ce créneau est déjà pris dans l'agenda du mariage. Choisissez un autre horaire.")
+					if conflit and self.profil != "Wedding planner":
+						st.error("Ce créneau est déjà pris dans l'agenda de l'organisateur. Choisissez un autre horaire.", icon=":material/warning:")
 					elif conflit:
-						st.error(f"⚠️ Conflit avec « {conflit['titre']} » déjà prévu à ce moment-là. Choisis un autre créneau.")
+						st.error(f"Conflit avec « {conflit['titre']} »{self.precision_dossier(conflit)} déjà prévu à ce moment-là. Choisissez un autre créneau.", icon=":material/warning:")
 					else:
 						st.rerun()
+
+
+	def precision_dossier(self, rdv):
+		dossier = self.dossiers.get(rdv.get("dossier_id"))
+
+		if not dossier or dossier["id"] == self.dossier_id:
+			return ""
+
+		return f" (dossier {libelle_dossier(dossier)})"
 
 
 	def show_agenda(self):
@@ -583,16 +776,16 @@ class UserInterface:
 		liens = []
 
 		if telephone:
-			liens.append(("💬 WhatsApp", lien_whatsapp(telephone, message)))
+			liens.append((":material/chat: WhatsApp", lien_whatsapp(telephone, message)))
 
 			if not message:
-				liens.append(("📞 Appeler", f"tel:{telephone}"))
+				liens.append((":material/call: Appeler", f"tel:{telephone}"))
 
 		if email:
-			liens.append(("✉️ Email", lien_email(email, sujet, message)))
+			liens.append((":material/mail: Email", lien_email(email, sujet, message)))
 
 		if lien:
-			liens.append(("🔗 Site / Instagram", lien))
+			liens.append((":material/link: Site / Instagram", lien))
 
 		if liens:
 			for colonne, (texte, url) in zip(st.columns(len(liens)), liens):
@@ -600,9 +793,9 @@ class UserInterface:
 
 
 	def show_ajout_facture_prestataire(self, prestataire):
-		with st.expander("🧾 Ajouter son devis / acompte au budget"):
+		with st.expander("Ajouter son devis / acompte au budget", icon=":material/receipt_long:"):
 			if not self.budget.postes:
-				st.caption("Crée d'abord tes postes dans l'onglet 💰 Budget.")
+				st.caption("Créez d'abord les postes dans l'onglet Budget & devis.")
 				return
 
 			with st.form(f"facture_{prestataire['id']}", clear_on_submit=True):
@@ -616,7 +809,7 @@ class UserInterface:
 
 				if st.form_submit_button("Ajouter au budget") and libelle:
 					self.budget.add_facture(poste_choisi, libelle, montant, str(echeance), payee)
-					st.success("Ajouté au budget ✅")
+					st.success("Ajouté au budget", icon=":material/check_circle:")
 
 
 	def changer_statut_prestataire(self, prestataire, statut):
@@ -630,9 +823,9 @@ class UserInterface:
 
 			details = [
 				texte for texte in [
-					f"👤 {prestataire['contact']}" if prestataire["contact"] else "",
-					f"💶 ~{prestataire['tarif_indicatif']} €" if prestataire["tarif_indicatif"] else "",
-					f"📂 {prestataire['poste_budget']}" if prestataire["poste_budget"] else ""
+					f":material/person: {prestataire['contact']}" if prestataire["contact"] else "",
+					f":material/euro: ~{prestataire['tarif_indicatif']} €" if prestataire["tarif_indicatif"] else "",
+					f":material/folder: {prestataire['poste_budget']}" if prestataire["poste_budget"] else ""
 				] if texte
 			]
 
@@ -652,7 +845,7 @@ class UserInterface:
 				st.rerun()
 
 			if prestataire["notes"]:
-				st.markdown(f"📝 {prestataire['notes']}")
+				st.markdown(f":material/notes: {prestataire['notes']}")
 
 			self.show_boutons_contact(prestataire["telephone"], prestataire["email"], prestataire["lien"])
 
@@ -664,8 +857,8 @@ class UserInterface:
 				st.rerun()
 
 
-	def show_prestataire_form(self, titre="➕ Ajouter un prestataire", cle="form_prestataire", categorie_defaut=CATEGORIES[0]):
-		with st.expander(titre):
+	def show_prestataire_form(self, titre="Ajouter un prestataire", cle="form_prestataire", categorie_defaut=CATEGORIES[0]):
+		with st.expander(titre, icon=":material/add:"):
 			with st.form(cle, clear_on_submit=True):
 				gauche, droite = st.columns(2)
 				nom = gauche.text_input("Nom (ex : Traiteur Saveurs d'Orient)")
@@ -689,7 +882,7 @@ class UserInterface:
 
 	def show_prestataires(self):
 		if not self.carnet.prestataires:
-			st.info("Ton carnet est vide. Ajoute ton premier prestataire ci-dessous 👇")
+			st.info("Le carnet est vide. Ajoutez un premier prestataire ci-dessous.")
 		else:
 			self.show_resume_carnet()
 
@@ -750,7 +943,7 @@ class UserInterface:
 		self.messagerie.modifier(message["id"], statut="envoyé", date=date.today().isoformat())
 		self.event_sheet.add_echange(
 			"Message",
-			f"**{TYPES_MESSAGE[message['type']]}** envoyé à {message['destinataire']} :\n\n{message['contenu']}"
+			f"**{TYPES_MESSAGE[message['type']]}** envoyé à {nom_affiche(message)} :\n\n{message['contenu']}"
 		)
 
 		prestataire = self.carnet.trouver(message["prestataire_id"])
@@ -762,18 +955,18 @@ class UserInterface:
 
 
 	def show_suggestions(self, suggestions):
-		st.subheader("🔔 À préparer")
+		st.subheader(":material/notifications: À préparer")
 
 		if not suggestions:
-			st.caption("Rien à préparer pour l'instant 👌")
+			st.caption("Rien à préparer pour l'instant.")
 
 		for suggestion_message in suggestions:
 			with st.container(border=True):
-				st.markdown(f"**{TYPES_MESSAGE[suggestion_message['type']]}** → {suggestion_message['destinataire']}")
+				st.markdown(f"**{TYPES_MESSAGE[suggestion_message['type']]}** → {nom_affiche(suggestion_message)}")
 				st.caption(resume_contexte(suggestion_message["contexte"]))
 				bouton_rediger, bouton_ignorer = st.columns([3, 1])
 
-				if bouton_rediger.button("✍️ Rédiger avec AURORE", key=f"rediger_{suggestion_message['cle']}"):
+				if bouton_rediger.button("Rédiger avec AURORE", icon=":material/edit:", key=f"rediger_{suggestion_message['cle']}"):
 					self.rediger(suggestion_message)
 
 				if bouton_ignorer.button("Ignorer", key=f"ignorer_{suggestion_message['cle']}"):
@@ -782,7 +975,7 @@ class UserInterface:
 
 
 	def show_a_envoyer(self):
-		st.subheader("📤 À envoyer")
+		st.subheader(":material/outbox: À envoyer")
 		messages = self.messagerie.par_statut("à envoyer")
 
 		if not messages:
@@ -792,7 +985,7 @@ class UserInterface:
 			type_message = TYPES_MESSAGE[message["type"]]
 
 			with st.container(border=True):
-				st.markdown(f"**{type_message}** → {message['destinataire']}")
+				st.markdown(f"**{type_message}** → {nom_affiche(message)}")
 				contenu = st.text_area(
 					"Message", value=message["contenu"], height=180, label_visibility="collapsed",
 					key=f"contenu_{message['id']}_{hash(message['contenu'])}"
@@ -807,10 +1000,10 @@ class UserInterface:
 				self.show_boutons_contact(message["telephone"], message["email"], message=contenu, sujet=type_message)
 				bouton_envoye, bouton_reecrire, bouton_supprimer = st.columns([2, 2, 1])
 
-				if bouton_envoye.button("✅ Marquer comme envoyé", key=f"envoye_{message['id']}"):
+				if bouton_envoye.button("Marquer comme envoyé", icon=":material/check_circle:", key=f"envoye_{message['id']}"):
 					self.marquer_envoye(message)
 
-				if bouton_reecrire.button("🔄 Réécrire avec AURORE", key=f"reecrire_{message['id']}"):
+				if bouton_reecrire.button("Réécrire avec AURORE", icon=":material/refresh:", key=f"reecrire_{message['id']}"):
 					self.reecrire(message)
 
 				if bouton_supprimer.button("Supprimer", key=f"suppr_msg_{message['id']}"):
@@ -824,7 +1017,7 @@ class UserInterface:
 		]
 		par_nom = {destinataire["destinataire"]: destinataire for destinataire in destinataires}
 
-		with st.expander("✍️ Écrire un message libre"):
+		with st.expander("Écrire un message libre", icon=":material/edit:"):
 			with st.form("form_message_libre", clear_on_submit=True):
 				choix = st.selectbox("Destinataire", list(par_nom))
 				consigne = st.text_area("Que veux-tu lui dire ? (AURORE s'occupe de la formulation)")
@@ -838,9 +1031,9 @@ class UserInterface:
 		envoyes = self.messagerie.par_statut("envoyé")
 
 		if envoyes:
-			with st.expander(f"📨 Messages envoyés ({len(envoyes)})"):
+			with st.expander(f"Messages envoyés ({len(envoyes)})", icon=":material/send:"):
 				for message in reversed(envoyes):
-					st.markdown(f"**{TYPES_MESSAGE[message['type']]}** → {message['destinataire']} · {message['date']}")
+					st.markdown(f"**{TYPES_MESSAGE[message['type']]}** → {nom_affiche(message)} · {message['date']}")
 					st.caption(message["contenu"])
 
 
@@ -863,7 +1056,7 @@ class UserInterface:
 
 	def accepter_devis(self, devis, montants):
 		prestataire = self.carnet.trouver(devis["prestataire_id"])
-		poste = (prestataire["poste_budget"] or prestataire["categorie"]) if prestataire else "Wedding planner"
+		poste = (prestataire["poste_budget"] or prestataire["categorie"]) if prestataire else "Organisation"
 
 		if poste not in [poste_existant["nom"] for poste_existant in self.budget.postes]:
 			self.budget.add_poste(poste, montants["ttc"])
@@ -886,14 +1079,14 @@ class UserInterface:
 		if self.prestataire:
 			emetteurs = {self.prestataire["nom"]: self.prestataire}
 		else:
-			emetteurs = {PLANNER: None} | {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires}
+			emetteurs = {EMETTEUR_AURORE: None} | {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires}
 
-		with st.expander("➕ Nouveau devis", expanded=not deja_des_devis):
+		with st.expander("Nouveau devis", icon=":material/add:", expanded=not deja_des_devis):
 			emetteur = st.selectbox("Émis par", list(emetteurs), disabled=bool(self.prestataire))
 			prestataire = emetteurs[emetteur]
 
-			if st.button("✨ Proposer les lignes avec AURORE"):
-				categorie = prestataire["categorie"] if prestataire else "Wedding planner"
+			if st.button("Proposer les lignes avec AURORE", icon=":material/auto_awesome:"):
+				categorie = prestataire["categorie"] if prestataire else "Organisation d'événements"
 				infos = self.infos_pour_destinataire(self.prestataire["id"]) if self.prestataire else self.event_sheet.infos_sans_historique()
 
 				with st.spinner("AURORE prépare les lignes du devis…"):
@@ -915,7 +1108,7 @@ class UserInterface:
 			validite = droite.number_input("Validité (jours)", min_value=1, value=30)
 			notes = st.text_area("Conditions / notes", value=NOTES_DEVIS)
 
-			if st.button("📄 Créer le devis"):
+			if st.button("Créer le devis", icon=":material/description:"):
 				lignes = lignes_valides(tableau.to_dict("records"))
 
 				if not lignes:
@@ -924,7 +1117,7 @@ class UserInterface:
 					self.carnet_devis.add_devis(
 						emetteur,
 						prestataire["id"] if prestataire else None,
-						self.event_sheet.data["noms"] or "Les mariés",
+						noms_clients(self.event_sheet.data),
 						lignes, tva, acompte, validite, notes
 					)
 					self.nouvelles_lignes_devis([])
@@ -937,7 +1130,7 @@ class UserInterface:
 
 		with st.container(border=True):
 			infos, statut = st.columns([3, 2])
-			infos.markdown(f"**{numero}** · {devis['emetteur']} → {devis['destinataire']}")
+			infos.markdown(f"**{numero}** · {devis['emetteur']} → {format_person_name(devis['destinataire'])}")
 			infos.caption(
 				f"{euros(montants['ttc'])} TTC · acompte {euros(montants['acompte'])} · "
 				f"valable jusqu'au {date_validite(devis):%d/%m/%Y}"
@@ -965,7 +1158,7 @@ class UserInterface:
 
 			bouton_pdf, bouton_envoi, bouton_supprimer = st.columns([2, 3, 1])
 			bouton_pdf.download_button(
-				"📥 Télécharger le PDF",
+				"Télécharger le PDF", icon=":material/download:",
 				data=generer_pdf(devis, self.event_sheet.data),
 				file_name=f"{numero}.pdf",
 				mime="application/pdf",
@@ -976,7 +1169,7 @@ class UserInterface:
 			if profil != "Wedding planner":
 				return
 
-			if bouton_envoi.button("✉️ Préparer le message d'envoi", key=f"envoi_{numero}", width="stretch"):
+			if bouton_envoi.button("Préparer le message d'envoi", icon=":material/mail:", key=f"envoi_{numero}", width="stretch"):
 				contexte = {**devis, "totaux": montants}
 				self.rediger(suggestion(f"envoi_devis_{numero}", "envoi_devis", destinataire_maries(self.event_sheet.data), contexte))
 
@@ -1010,12 +1203,12 @@ class UserInterface:
 		compteurs = self.liste_invites.compter_par_statut()
 		self.show_compteurs(
 			{f"{ICONES_INVITE[statut]} {statut}": compteurs[statut] for statut in STATUTS_INVITE}
-			| {"👥 Personnes attendues": self.liste_invites.personnes(["Invité", "Confirmé"])}
+			| {":material/groups: Personnes attendues": self.liste_invites.personnes(["Invité", "Confirmé"])}
 		)
 
 
 	def show_import_contacts(self):
-		with st.expander("📇 Importer des contacts (.vcf ou .csv)"):
+		with st.expander("Importer des contacts (.vcf ou .csv)", icon=":material/contacts:"):
 			st.caption("Depuis ton téléphone ou Google Contacts : Exporter → fichier .vcf ou .csv.")
 			fichier = st.file_uploader("Fichier de contacts", type=["vcf", "csv"])
 			groupe = st.selectbox("Groupe à attribuer", GROUPES)
@@ -1053,7 +1246,7 @@ class UserInterface:
 
 
 	def show_redaction_faire_part(self):
-		if st.button("✨ Rédiger le faire-part avec AURORE"):
+		if st.button("Rédiger le faire-part avec AURORE", icon=":material/auto_awesome:"):
 			with st.spinner("AURORE écrit votre faire-part…"):
 				self.liste_invites.set_faire_part(
 					self.conversation_agent_object.write_faire_part(self.event_sheet.infos_sans_historique())
@@ -1066,7 +1259,7 @@ class UserInterface:
 
 		if faire_part:
 			st.download_button(
-				"📥 Télécharger le faire-part (PDF)",
+				"Télécharger le faire-part (PDF)", icon=":material/download:",
 				data=generer_faire_part_pdf(faire_part, self.event_sheet.data),
 				file_name="faire-part.pdf",
 				mime="application/pdf"
@@ -1074,7 +1267,7 @@ class UserInterface:
 
 
 	def show_envoi_faire_parts(self):
-		st.subheader("📨 Envoyer les faire-parts")
+		st.subheader(":material/send: Envoyer les faire-parts")
 
 		if not self.liste_invites.faire_part:
 			st.info("Rédige d'abord le texte du faire-part ci-dessus.")
@@ -1085,7 +1278,7 @@ class UserInterface:
 			invite for invite in self.liste_invites.invites
 			if invite["statut"] == "À inviter" and invite["groupe"] in groupes
 		]
-		st.caption(f"{len(selection)} invité(s) n'ont pas encore reçu leur faire-part.")
+		st.caption(f"{pluriel(len(selection), "invité n'a", "invités n'ont")} pas encore reçu le faire-part.")
 
 		for invite in selection:
 			with st.container(border=True):
@@ -1099,7 +1292,7 @@ class UserInterface:
 				else:
 					st.caption("Pas de téléphone ni d'email : ajoute-les dans la liste.")
 
-				if st.button("✅ Marquer comme invité", key=f"invite_{invite['id']}"):
+				if st.button("Marquer comme invité", icon=":material/check_circle:", key=f"invite_{invite['id']}"):
 					self.liste_invites.changer_statut(invite["id"], "Invité")
 					self.apres_modif_invites()
 
@@ -1109,37 +1302,37 @@ class UserInterface:
 		traiteurs = {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires if prestataire["categorie"] == "Traiteur"}
 
 		if not traiteurs:
-			st.caption("Ajoute ton traiteur dans 🤝 Prestataires pour lui envoyer ce récapitulatif.")
+			st.caption("Ajoutez le traiteur dans l'onglet Prestataires pour lui envoyer ce récapitulatif.")
 			return
 
 		traiteur = traiteurs[st.selectbox("Traiteur", list(traiteurs))]
 
-		if st.button("✉️ Préparer le message pour le traiteur"):
+		if st.button("Préparer le message pour le traiteur", icon=":material/mail:"):
 			cle = f"recap_traiteur_{uuid.uuid4().hex[:8]}"
 			self.rediger(suggestion(cle, "recap_traiteur", destinataire_prestataire(traiteur), recap))
 
 
-	def show_le_mariage(self):
+	def show_evenement(self):
 		infos = self.infos_pour_destinataire(self.prestataire["id"])
 		self.show_compteurs({
-			"📅 Date": date_lisible(infos["date"]) or "À définir",
-			"📍 Lieu": infos["lieu"] or "À définir",
-			"👥 Invités prévus": infos["nombre_invites"] or "À définir"
+			":material/event: Date": date_lisible(infos["date"]) or "À définir",
+			":material/location_on: Lieu": infos["lieu"] or "À définir",
+			":material/groups: Invités prévus": infos["nombre_invites"] or "À définir"
 		})
 
 		for cle, titre in [
-			("allergies_interdits", "⚠️ Allergies et interdits"),
-			("preferences", "🎨 Préférences du couple"),
-			("preferences_musicales", "🎵 Goûts musicaux")
+			("allergies_interdits", ":material/warning: Allergies et interdits"),
+			("preferences", ":material/palette: Préférences des clients"),
+			("preferences_musicales", ":material/music_note: Goûts musicaux")
 		]:
 			if infos[cle]:
 				st.markdown(f"**{titre}** : {', '.join(infos[cle])}")
 
-		st.subheader("🍽️ Les invités")
+		st.subheader(":material/restaurant: Les invités")
 		self.show_recap_invites()
 
 		if self.jour_j.salle["tables"]:
-			st.subheader("🪑 Couverts par table")
+			st.subheader(":material/chair: Couverts par table")
 			repartition = self.jour_j.par_table(self.liste_invites.invites)
 			st.dataframe(
 				pd.DataFrame([
@@ -1155,7 +1348,7 @@ class UserInterface:
 			)
 
 		if self.jour_j.deroule:
-			st.subheader("⏱️ Déroulé du jour J")
+			st.subheader(":material/schedule: Déroulé du jour J")
 			st.caption("Vos créneaux sont mis en avant.")
 			st.markdown(frise_html(self.jour_j.deroule, self.prestataire["nom"]), unsafe_allow_html=True)
 
@@ -1163,7 +1356,7 @@ class UserInterface:
 	def show_recap_invites(self):
 		recap = self.liste_invites.recap_traiteur()
 		self.show_compteurs({
-			"🍽️ Couverts confirmés": recap["couverts_confirmes"],
+			":material/restaurant: Couverts confirmés": recap["couverts_confirmes"],
 			"⏳ Couverts attendus": recap["couverts_attendus"]
 		})
 
@@ -1177,13 +1370,13 @@ class UserInterface:
 			st.markdown("**Allergies**")
 
 			for nom, allergies in recap["allergies"].items():
-				st.markdown(f"- ⚠️ {nom} : {allergies}")
+				st.markdown(f"- :orange[:material/warning:] {nom} : {allergies}")
 
 		return recap
 
 
 	def show_invites(self):
-		liste_tab, faire_part_tab, traiteur_tab = st.tabs(["📋 Liste", "💌 Faire-parts", "🍽️ Pour le traiteur"])
+		liste_tab, faire_part_tab, traiteur_tab = st.tabs([":material/assignment: Liste", ":material/mail: Faire-parts", ":material/restaurant: Pour le traiteur"])
 
 		with liste_tab:
 			if self.liste_invites.invites:
@@ -1221,7 +1414,7 @@ class UserInterface:
 
 
 	def show_moodboard(self):
-		if st.button("✨ Créer le moodboard à partir de la discussion"):
+		if st.button("Créer le moodboard à partir de la discussion", icon=":material/auto_awesome:"):
 			with st.spinner("AURORE compose votre moodboard…"):
 				self.inspiration.set_moodboard(
 					self.conversation_agent_object.suggest_moodboard(self.event_sheet.infos_sans_historique(), ELEMENTS_MOODBOARD)
@@ -1238,19 +1431,19 @@ class UserInterface:
 		self.show_palette(moodboard["couleurs"])
 		st.markdown(" ".join(f"`{mot}`" for mot in moodboard["mots_cles"]))
 
-		st.markdown("**📌 Inspirations Pinterest**")
-		self.show_liens({f"📌 {element}": lien for element, lien in moodboard["liens"].items()})
+		st.markdown("**:material/push_pin: Inspirations Pinterest**")
+		self.show_liens({f":material/push_pin: {element}": lien for element, lien in moodboard["liens"].items()})
 
 		bouton_pdf, bouton_envoi = st.columns(2)
 		bouton_pdf.download_button(
-			"📥 Télécharger le moodboard (PDF)",
-			data=generer_moodboard_pdf(moodboard, self.event_sheet.data["noms"]),
+			"Télécharger le moodboard (PDF)", icon=":material/download:",
+			data=generer_moodboard_pdf(moodboard, format_person_name(self.event_sheet.data["noms"])),
 			file_name="moodboard.pdf",
 			mime="application/pdf",
 			width="stretch"
 		)
 
-		if bouton_envoi.button("✉️ Préparer l'envoi aux mariés", width="stretch"):
+		if bouton_envoi.button("Préparer l'envoi aux clients", icon=":material/mail:", width="stretch"):
 			cle = f"moodboard_{uuid.uuid4().hex[:8]}"
 			self.rediger(
 				suggestion(cle, "envoi_moodboard", destinataire_maries(self.event_sheet.data), moodboard),
@@ -1259,17 +1452,17 @@ class UserInterface:
 
 
 	def show_recommandation(self, categorie, recommandation, lieu):
-		st.markdown(f"**💶 Budget à prévoir :** {recommandation.get('fourchette', '')}")
+		st.markdown(f"**:material/euro: Budget à prévoir :** {recommandation.get('fourchette', '')}")
 		st.markdown(recommandation.get("conseil", ""))
 
 		for type_adresse in recommandation.get("types", []):
 			with st.container(border=True):
 				st.markdown(f"**{type_adresse.get('type', '')}**")
 				st.caption(type_adresse.get("pourquoi", ""))
-				st.link_button("📍 Trouver près de chez vous", lien_maps(type_adresse.get("recherche", categorie), lieu))
+				st.link_button("Trouver près de chez vous", lien_maps(type_adresse.get("recherche", categorie), lieu), icon=":material/location_on:")
 
 		if recommandation.get("questions"):
-			st.markdown("**❓ Questions à poser**")
+			st.markdown("**:material/help: Questions à poser**")
 
 			for question in recommandation["questions"]:
 				st.markdown(f"- {question}")
@@ -1279,7 +1472,7 @@ class UserInterface:
 		categorie = st.selectbox("Que cherchez-vous ?", list(CATEGORIES_BEAUTE))
 		lieu = st.text_input("Ville ou secteur de recherche", value=self.event_sheet.data["lieu"] or "")
 
-		if st.button("✨ Demander conseil à AURORE"):
+		if st.button("Demander conseil à AURORE", icon=":material/auto_awesome:"):
 			with st.spinner("AURORE réfléchit à ce qui vous correspond…"):
 				self.inspiration.set_recommandation(
 					categorie,
@@ -1293,20 +1486,10 @@ class UserInterface:
 		if recommandation:
 			self.show_recommandation(categorie, recommandation, lieu)
 			self.show_prestataire_form(
-				"➕ Vous avez trouvé une adresse ? Ajoutez-la au carnet",
+				"Vous avez trouvé une adresse ? Ajoutez-la au carnet",
 				f"form_adresse_{categorie}",
 				CATEGORIES_BEAUTE[categorie]
 			)
-
-
-	def show_inspiration(self):
-		moodboard_tab, adresses_tab = st.tabs(["🎨 Moodboard", "💄 Boutiques & beauté"])
-
-		with moodboard_tab:
-			self.show_moodboard()
-
-		with adresses_tab:
-			self.show_adresses()
 
 
 	def analyser_photos(self, photos):
@@ -1332,10 +1515,10 @@ class UserInterface:
 			key=f"photos_{st.session_state.version_galerie}"
 		)
 
-		if fichiers and st.button("📥 Ajouter à la galerie et trier avec AURORE", type="primary"):
+		if fichiers and st.button("Ajouter à la galerie et trier avec AURORE", icon=":material/download:", type="primary"):
 			nouvelles = [self.galerie.ajouter_photo(fichier.getvalue(), fichier.type) for fichier in fichiers]
 
-			with st.spinner(f"AURORE trie {len(nouvelles)} photo(s)…"):
+			with st.spinner(f"AURORE trie {pluriel(len(nouvelles), 'photo')}…"):
 				self.analyser_photos(nouvelles)
 
 			st.session_state.version_galerie += 1
@@ -1343,7 +1526,7 @@ class UserInterface:
 
 		restantes = self.galerie.a_analyser()
 
-		if restantes and st.button(f"🔍 Analyser les {len(restantes)} photo(s) restante(s)"):
+		if restantes and st.button(f"Analyser {pluriel(len(restantes), 'photo restante', 'photos restantes')}", icon=":material/search:"):
 			with st.spinner("AURORE analyse les photos…"):
 				self.analyser_photos(restantes)
 
@@ -1354,7 +1537,7 @@ class UserInterface:
 		with st.container(border=True):
 			st.image(self.galerie.lire(photo), width="stretch")
 			ok, raison = publiable(photo, self.galerie.droit_image)
-			st.caption(f"{'✅ Publiable' if ok else '🔒 Non publiable'} : {raison}")
+			st.caption(f"{':green[:material/check_circle:] Publiable' if ok else ':material/lock: Non publiable'} : {raison}")
 
 			categorie = st.selectbox(
 				"Catégorie", CATEGORIES_PHOTO, index=CATEGORIES_PHOTO.index(photo["categorie"]),
@@ -1400,7 +1583,7 @@ class UserInterface:
 
 	def show_droit_image(self, profil):
 		statut = self.galerie.droit_image
-		st.metric("Droit à l'image des mariés", statut)
+		st.metric("Droit à l'image des clients", statut)
 		st.caption(
 			"Sans accord, seules les photos sans personne reconnaissable (salle, déco, buffet, détails) peuvent être publiées. "
 			"Les photos où des invités sont reconnaissables ne sont jamais publiées."
@@ -1409,11 +1592,11 @@ class UserInterface:
 		if profil == "Mariés":
 			accorder, refuser = st.columns(2)
 
-			if accorder.button("✅ Nous accordons notre droit à l'image", width="stretch"):
+			if accorder.button("Nous accordons notre droit à l'image", icon=":material/check_circle:", width="stretch"):
 				self.galerie.set_droit_image("Accordé")
 				st.rerun()
 
-			if refuser.button("❌ Nous refusons", width="stretch"):
+			if refuser.button("Nous refusons", icon=":material/cancel:", width="stretch"):
 				self.galerie.set_droit_image("Refusé")
 				st.rerun()
 		else:
@@ -1425,7 +1608,7 @@ class UserInterface:
 				self.galerie.set_droit_image(nouveau)
 				st.rerun()
 
-			if st.button("✉️ Préparer la demande d'autorisation aux mariés"):
+			if st.button("Préparer la demande d'autorisation aux clients", icon=":material/mail:"):
 				if statut == "Non demandé":
 					self.galerie.set_droit_image("Demandé")
 
@@ -1433,7 +1616,7 @@ class UserInterface:
 				self.rediger(suggestion(cle, "demande_droit_image", destinataire_maries(self.event_sheet.data), {"usage": "Instagram et site d'AURORE"}))
 
 		st.download_button(
-			"📥 Télécharger l'autorisation à signer (PDF)",
+			"Télécharger l'autorisation à signer (PDF)", icon=":material/download:",
 			data=generer_autorisation_pdf(self.event_sheet.data),
 			file_name="autorisation-droit-image.pdf",
 			mime="application/pdf"
@@ -1447,7 +1630,7 @@ class UserInterface:
 			image.image(contenu, width="stretch")
 
 			with texte:
-				if st.button("✨ Rédiger la légende avec AURORE", key=f"legende_{photo['id']}"):
+				if st.button("Rédiger la légende avec AURORE", icon=":material/auto_awesome:", key=f"legende_{photo['id']}"):
 					with st.spinner("AURORE écrit la légende…"):
 						legende = self.conversation_agent_object.write_legende(
 							f"photo « {photo['categorie']} » : {photo['description']}", self.event_sheet.infos_pour_prestataire()
@@ -1466,11 +1649,11 @@ class UserInterface:
 
 				telecharger, ouvrir, publiee = st.columns(3)
 				telecharger.download_button(
-					"📥 Photo", data=contenu, file_name=photo["fichier"], key=f"dl_photo_{photo['id']}", width="stretch"
+					"Photo", icon=":material/download:", data=contenu, file_name=photo["fichier"], key=f"dl_photo_{photo['id']}", width="stretch"
 				)
-				ouvrir.link_button("📱 Instagram", "https://www.instagram.com/", width="stretch")
+				ouvrir.link_button("Instagram", "https://www.instagram.com/", icon=":material/share:", width="stretch")
 
-				if publiee.button("✅ Publiée", key=f"publiee_{photo['id']}", width="stretch"):
+				if publiee.button("Publiée", icon=":material/check_circle:", key=f"publiee_{photo['id']}", width="stretch"):
 					self.galerie.modifier(photo["id"], publiee=True)
 					st.rerun()
 
@@ -1487,41 +1670,41 @@ class UserInterface:
 			self.show_publication(photo)
 
 		if deja_publiees:
-			st.caption(f"📌 {len(deja_publiees)} photo(s) déjà publiée(s).")
+			st.caption(f":material/push_pin: {pluriel(len(deja_publiees), 'photo déjà publiée', 'photos déjà publiées')}.")
 
 
 	def show_avis(self, profil):
 		if profil == "Mariés":
 			with st.form("form_avis", clear_on_submit=True):
 				note = st.slider("Votre note", 1, 5, 5)
-				commentaire = st.text_area("Votre avis sur l'organisation de votre mariage")
+				commentaire = st.text_area("Votre avis sur l'organisation de votre événement")
 
 				if st.form_submit_button("Envoyer notre avis") and commentaire:
-					self.galerie.ajouter_avis(self.event_sheet.data["noms"] or "Les mariés", note, commentaire)
+					self.galerie.ajouter_avis(noms_clients(self.event_sheet.data), note, commentaire)
 					st.rerun()
-		elif st.button("✉️ Demander un avis aux mariés"):
+		elif st.button("Demander un avis aux clients", icon=":material/mail:"):
 			cle = f"avis_manuel_{uuid.uuid4().hex[:8]}"
-			self.rediger(suggestion(cle, "demande_avis", destinataire_maries(self.event_sheet.data), {"date_mariage": self.event_sheet.data["date"]}))
+			self.rediger(suggestion(cle, "demande_avis", destinataire_maries(self.event_sheet.data), {"date_evenement": self.event_sheet.data["date"]}))
 
 		if not self.galerie.avis:
 			st.caption("Aucun avis pour l'instant.")
 
 		for avis in reversed(self.galerie.avis):
 			with st.container(border=True):
-				st.markdown(f"{'⭐' * avis['note']} · **{avis['auteur']}** · {date_lisible(avis['date'])}")
+				st.markdown(f":orange[{':material/star:' * avis['note']}] · **{format_person_name(avis['auteur'])}** · {date_lisible(avis['date'])}")
 				st.markdown(f"« {avis['commentaire']} »")
 
 				if profil == "Mariés":
 					continue
 
 				if self.galerie.droit_image != "Accordé":
-					st.caption("🔒 Pour en faire un post Instagram, il faut l'accord des mariés (droit à l'image).")
+					st.caption(":material/lock: Pour en faire un post Instagram, il faut l'accord des clients (droit à l'image).")
 					continue
 
-				if st.button("✨ Transformer en post témoignage", key=f"post_avis_{avis['id']}"):
+				if st.button("Transformer en post témoignage", icon=":material/auto_awesome:", key=f"post_avis_{avis['id']}"):
 					with st.spinner("AURORE prépare le post…"):
 						post = self.conversation_agent_object.write_legende(
-							f"témoignage des mariés, note {avis['note']}/5 : « {avis['commentaire']} »",
+							f"témoignage des clients, note {avis['note']}/5 : « {avis['commentaire']} »",
 							self.event_sheet.infos_pour_prestataire(),
 							"Cite un court extrait de leur avis entre guillemets."
 						)
@@ -1533,22 +1716,13 @@ class UserInterface:
 					st.text_area("Post Instagram", value=avis["post"], height=150, key=f"texte_post_{avis['id']}_{hash(avis['post'])}")
 
 
-	def show_galerie(self, profil):
-		onglets = ["🖼️ Photos", "✍️ Droit à l'image", "⭐ Avis"] + (["📱 Instagram"] if profil != "Mariés" else [])
-		afficheurs = [self.show_photos, lambda: self.show_droit_image(profil), lambda: self.show_avis(profil), self.show_instagram]
-
-		for tab, afficher in zip(st.tabs(onglets), afficheurs):
-			with tab:
-				afficher()
-
-
 	def generer_deroule(self):
 		reserves = [
 			{"nom": prestataire["nom"], "categorie": prestataire["categorie"]}
 			for prestataire in self.carnet.prestataires if prestataire["statut"] == "Réservé"
 		]
-		date_mariage = self.event_sheet.data["date"] or ""
-		rdvs_jour_j = [rdv for rdv in self.agenda.rdvs if date_mariage and rdv["date_heure"].startswith(date_mariage)]
+		date_evenement = self.event_sheet.data["date"] or ""
+		rdvs_jour_j = [rdv for rdv in self.agenda.rdvs if date_evenement and rdv["date_heure"].startswith(date_evenement)]
 
 		with st.spinner("AURORE construit le déroulé de la journée…"):
 			deroule = self.conversation_agent_object.suggest_deroule(self.event_sheet.infos_pour_prestataire(), reserves, rdvs_jour_j)
@@ -1559,9 +1733,9 @@ class UserInterface:
 
 
 	def show_deroule(self):
-		libelle = "✨ Régénérer le déroulé avec AURORE" if self.jour_j.deroule else "✨ Construire le déroulé avec AURORE"
+		libelle = "Régénérer le déroulé avec AURORE" if self.jour_j.deroule else "Construire le déroulé avec AURORE"
 
-		if st.button(libelle):
+		if st.button(libelle, icon=":material/auto_awesome:"):
 			self.generer_deroule()
 
 		if not self.jour_j.deroule:
@@ -1569,7 +1743,7 @@ class UserInterface:
 
 		st.markdown(frise_html(self.jour_j.deroule), unsafe_allow_html=True)
 
-		with st.expander("✏️ Modifier le déroulé"):
+		with st.expander("Modifier le déroulé", icon=":material/edit:"):
 			self.editer_tableau(
 				"deroule", self.jour_j.deroule, COLONNES_DEROULE, CONFIG_COLONNES_DEROULE,
 				nettoyer_deroule, self.jour_j.set_deroule
@@ -1577,7 +1751,7 @@ class UserInterface:
 
 		if self.jour_j.deroule:
 			st.download_button(
-				"📥 Télécharger le déroulé (PDF) pour les prestataires",
+				"Télécharger le déroulé (PDF) pour les prestataires", icon=":material/download:",
 				data=generer_deroule_pdf(self.jour_j.deroule, self.event_sheet.data),
 				file_name="deroule-jour-j.pdf",
 				mime="application/pdf"
@@ -1585,7 +1759,7 @@ class UserInterface:
 
 
 	def show_amenagement(self, total_personnes):
-		with st.expander("🏗️ Aménager la salle", expanded=not self.jour_j.salle["tables"]):
+		with st.expander("Aménager la salle", icon=":material/construction:", expanded=not self.jour_j.salle["tables"]):
 			with st.form("form_salle"):
 				gauche, milieu, droite = st.columns(3)
 				forme = gauche.selectbox("Forme des tables", FORMES_TABLE)
@@ -1639,7 +1813,7 @@ class UserInterface:
 			"table": st.column_config.SelectboxColumn("Table", options=noms_tables, required=True)
 		}
 
-		with st.expander("✏️ Modifier le placement"):
+		with st.expander("Modifier le placement", icon=":material/edit:"):
 			self.editer_tableau(
 				"placement", self.lignes_placement(a_placer), ["id", "nom", "groupe", "personnes", "table"], config,
 				lambda lignes: [{**ligne, "table": ligne["table"] or AUCUNE_TABLE} for ligne in lignes],
@@ -1660,7 +1834,7 @@ class UserInterface:
 				st.caption(", ".join(invite["nom"] for invite in invites) or "Personne pour l'instant")
 
 				if regimes:
-					st.caption("🍽️ " + ", ".join(sorted(set(regimes))))
+					st.caption(":material/restaurant: " + ", ".join(sorted(set(regimes))))
 
 
 	def show_plan_salle(self):
@@ -1675,15 +1849,15 @@ class UserInterface:
 		repartition = self.jour_j.par_table(self.liste_invites.invites)
 		non_places = self.jour_j.non_places(self.liste_invites.invites)
 		self.show_compteurs({
-			"🪑 Tables": len(self.jour_j.salle["tables"]),
-			"💺 Places": sum(table["places"] for table in self.jour_j.salle["tables"]),
-			"👥 Personnes": total,
+			":material/table_restaurant: Tables": len(self.jour_j.salle["tables"]),
+			":material/chair: Places": sum(table["places"] for table in self.jour_j.salle["tables"]),
+			":material/groups: Personnes": total,
 			"⏳ Non placés": len(non_places)
 		})
 
 		if not a_placer:
-			st.caption("Ajoute des invités dans 👥 Invités pour faire le plan de table.")
-		elif st.button("✨ Proposer le plan de table avec AURORE"):
+			st.caption("Ajoutez des invités dans l'onglet Invités pour faire le plan de table.")
+		elif st.button("Proposer le plan de table avec AURORE", icon=":material/auto_awesome:"):
 			self.proposer_placement(a_placer)
 
 		if non_places and len(non_places) < len(a_placer):
@@ -1696,7 +1870,7 @@ class UserInterface:
 			self.show_placement(a_placer)
 			self.show_tables(repartition)
 			st.download_button(
-				"📥 Télécharger le plan de table (PDF)",
+				"Télécharger le plan de table (PDF)", icon=":material/download:",
 				data=generer_plan_table_pdf(repartition, self.event_sheet.data),
 				file_name="plan-de-table.pdf",
 				mime="application/pdf"
@@ -1709,36 +1883,35 @@ class UserInterface:
 
 	def show_salle_3d(self):
 		if not self.jour_j.salle["tables"]:
-			st.info("Aménage d'abord la salle dans 🪑 Plan de salle : la 3D est construite à partir de ton plan.")
+			st.info("Aménagez d'abord la salle dans Plan de salle : la 3D est construite à partir du plan.")
 			return
 
 		palette = [couleur["hex"] for couleur in self.inspiration.moodboard.get("couleurs", [])]
 		st.caption(
 			"La salle est construite à partir de ton plan de salle, aux couleurs du moodboard."
-			if palette else "Crée le moodboard dans ✨ Inspiration pour habiller la salle à vos couleurs."
+			if palette else "Créez le moodboard dans Inspiration & galerie pour habiller la salle à vos couleurs."
 		)
 		disposition = self.disposition_salle(self.jour_j.par_table(self.liste_invites.invites))
 		st.iframe(salle_3d_html(disposition, palette), height=620)
 
 
-	def show_jour_j(self):
-		deroule_tab, plan_tab, salle_tab = st.tabs(["⏱️ Déroulé", "🪑 Plan de salle", "🧊 Salle en 3D"])
+	def show_notification(self, profil, suggestions):
+		a_preparer = len(suggestions)
+		a_envoyer = len(self.messagerie.par_statut("à envoyer"))
+		morceaux = [
+			pluriel(a_preparer, "message à préparer", "messages à préparer") if a_preparer else "",
+			pluriel(a_envoyer, "message à envoyer", "messages à envoyer") if a_envoyer else ""
+		]
 
-		with deroule_tab:
-			self.show_deroule()
+		if not (a_preparer or a_envoyer):
+			return
 
-		with plan_tab:
-			self.show_plan_salle()
-
-		with salle_tab:
-			self.show_salle_3d()
-
-
-	def show_notification(self, suggestions):
-		total = len(suggestions) + len(self.messagerie.par_statut("à envoyer"))
-
-		if total:
-			st.info(f"🔔 {total} message(s) à préparer ou à envoyer — voir l'onglet ✉️ Messages")
+		with st.container(horizontal=True, vertical_alignment="center", key="notification"):
+			st.markdown(f":material/notifications: **{' et '.join(filter(None, morceaux))}**")
+			st.button(
+				"Voir dans Messages", icon=":material/arrow_forward:", key="voir-messages",
+				on_click=ouvrir_messages, args=(profil,)
+			)
 
 
 	def show_barre_haut(self):
@@ -1747,9 +1920,10 @@ class UserInterface:
 
 			with st.container(horizontal=True, key="barre-actions"):
 				profil = st.segmented_control(
-					"Je suis…", list(PROFILS), default="Wedding planner", key="profil",
+					"Je suis…", list(PROFILS), default="Wedding planner", key="profil", format_func=LIBELLES_PROFIL.get,
 					bind="query-params", required=True, label_visibility="collapsed"
 				)
+				self.profil = profil
 
 				if profil == "Prestataire" and self.carnet.prestataires:
 					nom = st.selectbox(
@@ -1803,11 +1977,61 @@ class UserInterface:
 			st.session_state.version_invites += 1
 
 
+	@staticmethod
+	def sections(profil, onglet):
+		return [section for section in SECTIONS.get(onglet, [onglet]) if section not in SECTIONS_EXCLUES.get(profil, set())]
+
+
+	def show_onglets(self, profil, afficheurs):
+		libelles = ONGLETS | ONGLETS_MARIES if profil == "Mariés" else ONGLETS
+		onglets = ESPACES[profil]
+		tabs = st.tabs([libelles[onglet] for onglet in onglets], key=f"onglets_{profil}", on_change="rerun")
+
+		for onglet, tab in zip(onglets, tabs):
+			if not tab.open:
+				continue
+
+			with tab:
+				sections = self.sections(profil, onglet)
+
+				if len(sections) == 1:
+					afficheurs[sections[0]]()
+					continue
+
+				sous_tabs = st.tabs(
+					[LIBELLES_SECTIONS[section] for section in sections],
+					key=f"sections_{profil}_{onglet}", on_change="rerun"
+				)
+
+				for section, sous_tab in zip(sections, sous_tabs):
+					if sous_tab.open:
+						with sous_tab:
+							afficheurs[section]()
+
+
+	@staticmethod
+	def ouvrir_dialogue_si_demande():
+		if st.session_state.get("ouvrir_nouveau_dossier"):
+			nouveau_dossier()
+
+
+	def show_premier_dossier(self):
+		st.markdown(marque_html({}), unsafe_allow_html=True)
+		st.markdown(accueil_html("Wedding planner"), unsafe_allow_html=True)
+		show_tuiles("tuiles", ouvrir_nouveau_dossier)
+
+
 	def run(self):
+		if not self.dossier_id:
+			self.show_premier_dossier()
+			self.ouvrir_dialogue_si_demande()
+			return
+
 		profil = self.show_barre_haut()
 
 		if profil == "Prestataire" and not self.prestataire:
-			st.info("Aucun prestataire dans le carnet : ajoutez-en depuis l'espace Wedding planner (onglet 🤝 Prestataires).")
+			st.info("Aucun prestataire dans le carnet : ajoutez-en depuis l'espace Organisateur (onglet Prestataires).")
+			self.show_event_sheet(profil)
 			return
 
 		self.traiter_message(profil)
@@ -1816,31 +2040,33 @@ class UserInterface:
 		)
 
 		if profil != "Prestataire":
-			self.show_notification(suggestions)
+			self.show_notification(profil, suggestions)
 
-		afficheurs = {
-			"discussion": lambda: self.show_discussion_history(profil),
-			"fiche": self.show_fiche_couple,
-			"mariage": self.show_le_mariage,
-			"inspiration": self.show_inspiration,
+		self.show_onglets(profil, {
+			"accueil": lambda: self.show_tableau_de_bord(profil),
+			"discussion": lambda: self.show_discussion(profil),
+			"a_envoyer": lambda: self.show_messages(suggestions),
+			"fiche": self.show_fiche_client,
+			"evenement": self.show_evenement,
 			"invites": self.show_invites,
 			"prestataires": self.show_prestataires,
 			"budget": self.show_budget,
 			"devis": lambda: self.show_devis(profil),
-			"agenda": self.show_agenda,
-			"messages": lambda: self.show_messages(suggestions),
 			"achats": self.show_achats,
-			"galerie": lambda: self.show_galerie(profil),
-			"jourj": self.show_jour_j
-		}
-		libelles = ONGLETS | ONGLETS_MARIES if profil == "Mariés" else ONGLETS
-		onglets = ESPACES[profil]
-
-		for onglet, tab in zip(onglets, st.tabs([libelles[onglet] for onglet in onglets])):
-			with tab:
-				afficheurs[onglet]()
+			"agenda": self.show_agenda,
+			"deroule": self.show_deroule,
+			"plan_salle": self.show_plan_salle,
+			"salle_3d": self.show_salle_3d,
+			"moodboard": self.show_moodboard,
+			"adresses": self.show_adresses,
+			"photos": self.show_photos,
+			"droit_image": lambda: self.show_droit_image(profil),
+			"avis": lambda: self.show_avis(profil),
+			"instagram": self.show_instagram
+		})
 
 		self.show_event_sheet(profil)
+		self.ouvrir_dialogue_si_demande()
 
 
 
@@ -1863,7 +2089,7 @@ if __name__ == "__main__":
 	try:
 		user_interface_object.run()
 	except APIError as erreur:
-		st.error(message_erreur(erreur), icon="🌧️")
+		st.error(message_erreur(erreur), icon=":material/cloud_off:")
 
 
 

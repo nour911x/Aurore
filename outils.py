@@ -4,8 +4,9 @@ from datetime import datetime
 import outlook
 from devis import totaux, lignes_valides
 from invites import GROUPES, STATUTS_INVITE, REGIMES, nouvel_invite
-from messages import TYPES_MESSAGE, destinataire_maries, destinataire_prestataire, suggestion
+from messages import TYPES_MESSAGE, EMETTEUR_AURORE, NOMS_CLIENTS, destinataire_maries, destinataire_prestataire, suggestion
 from prestataires import CATEGORIES, STATUTS, appliquer_statut, meme_nom
+from textes import noms_clients
 
 
 FORMAT_DATE = "%Y-%m-%d %H:%M"
@@ -102,7 +103,7 @@ OUTILS = [
     outil(
         "preparer_message",
         "Range un message rédigé dans l'onglet Messages, prêt à être envoyé par l'utilisateur. "
-        "Le destinataire est le nom d'un prestataire du carnet, ou « mariés »." + CONFIRMATION,
+        "Le destinataire est le nom d'un prestataire du carnet, ou « clients »." + CONFIRMATION,
         {"destinataire": TEXTE, "type": choix_parmi(list(TYPES_MESSAGE)), "contenu": TEXTE},
         ["destinataire", "contenu"]
     ),
@@ -217,8 +218,8 @@ class Outils:
         debut = lire_date_heure(date_heure).isoformat()
         conflit = self.agenda.add_rdv(titre, debut, duree_minutes, lieu, avec)
 
-        if conflit and self.prestataire:
-            return {"erreur": "ce créneau est déjà pris dans l'agenda du mariage, propose un autre horaire"}
+        if conflit and self.espace != "Wedding planner":
+            return {"erreur": "ce créneau est déjà pris dans l'agenda de l'organisateur, propose un autre horaire"}
 
         if conflit:
             return {"erreur": "conflit d'horaire", "rdv_existant": conflit}
@@ -290,7 +291,7 @@ class Outils:
         return {"statut": "réponse enregistrée", "invite": invite}
 
     def preparer_message(self, destinataire, contenu, type="libre"):
-        if destinataire.strip().lower() in ("mariés", "maries", "les mariés"):
+        if destinataire.strip().lower() in NOMS_CLIENTS:
             contact = destinataire_maries(self.event_sheet.data)
         else:
             contact = destinataire_prestataire(chercher_par_nom(self.carnet.prestataires, destinataire))
@@ -302,7 +303,7 @@ class Outils:
 
     def creer_devis(self, emetteur, lignes, tva=20, acompte_pourcent=30, validite_jours=30, notes=""):
         prestataire = None if emetteur.strip().upper() == "AURORE" else chercher_par_nom(self.carnet.prestataires, emetteur)
-        nom_emetteur = prestataire["nom"] if prestataire else "AURORE - Wedding planner"
+        nom_emetteur = prestataire["nom"] if prestataire else EMETTEUR_AURORE
         lignes = lignes_valides(lignes)
 
         if not lignes:
@@ -311,7 +312,7 @@ class Outils:
         self.carnet_devis.add_devis(
             nom_emetteur,
             prestataire["id"] if prestataire else None,
-            self.event_sheet.data["noms"] or "Les mariés",
+            noms_clients(self.event_sheet.data),
             lignes, tva, acompte_pourcent, validite_jours, notes
         )
         devis = self.carnet_devis.devis[-1]

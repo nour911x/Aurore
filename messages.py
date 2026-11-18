@@ -2,6 +2,7 @@ import uuid
 from datetime import date, datetime
 
 from storage import load_json, save_json
+from textes import noms_clients
 
 
 TYPES_MESSAGE = {
@@ -14,7 +15,7 @@ TYPES_MESSAGE = {
     "recap_traiteur": "Récapitulatif invités pour le traiteur",
     "envoi_moodboard": "Envoi du moodboard",
     "demande_droit_image": "Demande d'autorisation de droit à l'image",
-    "demande_avis": "Demande d'avis après le mariage",
+    "demande_avis": "Demande d'avis après l'événement",
     "libre": "Message libre"
 }
 
@@ -23,6 +24,10 @@ DELAI_CONFIRMATION = 3
 DELAI_RAPPEL = 1
 DELAI_PAIEMENT = 3
 DELAI_AVIS = 3
+
+EMETTEUR_AURORE = "AURORE - Organisation d'événements"
+
+NOMS_CLIENTS = {"clients", "client", "les clients", "mariés", "maries", "les mariés"}
 
 
 def destinataire_prestataire(prestataire):
@@ -40,7 +45,7 @@ def fiche_publique(prestataire):
 
 def destinataire_maries(event_data):
     return {
-        "destinataire": event_data["noms"] or "Les mariés",
+        "destinataire": noms_clients(event_data),
         "prestataire_id": None,
         "telephone": event_data["telephone"],
         "email": event_data["email"]
@@ -105,7 +110,7 @@ def suggestions_avis(event_data):
     if (date.today() - jour_j).days < DELAI_AVIS:
         return []
 
-    return [suggestion(f"avis_{jour_j}", "demande_avis", destinataire_maries(event_data), {"date_mariage": event_data["date"]})]
+    return [suggestion(f"avis_{jour_j}", "demande_avis", destinataire_maries(event_data), {"date_evenement": event_data["date"]})]
 
 
 def detecter_messages(event_data, carnet, agenda, budget):
