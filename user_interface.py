@@ -3,7 +3,8 @@ from llm_agent import ConversationAgent, PROFILS
 from outils import Outils
 from habillage import (
 	AVERTISSEMENT_HTML, style_html, theme_html, particules_html,
-	marque_html, accueil_html, dossier_html, frise_html, plan_salle_html
+	marque_html, accueil_html, dossier_html, frise_html, plan_salle_html,
+	disposition_salle, salle_3d_html
 )
 from event_state import EventSheet
 from budget import Budget
@@ -1688,7 +1689,7 @@ class UserInterface:
 		if non_places and len(non_places) < len(a_placer):
 			st.warning("Pas encore placés : " + ", ".join(invite["nom"] for invite in non_places))
 
-		st.markdown(plan_salle_html(self.jour_j.salle["tables"], repartition, self.jour_j.salle["elements"]), unsafe_allow_html=True)
+		st.markdown(plan_salle_html(self.disposition_salle(repartition)), unsafe_allow_html=True)
 		st.caption("Survole une table pour voir qui y est assis.")
 
 		if a_placer:
@@ -1702,14 +1703,35 @@ class UserInterface:
 			)
 
 
+	def disposition_salle(self, repartition):
+		return disposition_salle(self.jour_j.salle["tables"], repartition, self.jour_j.salle["elements"])
+
+
+	def show_salle_3d(self):
+		if not self.jour_j.salle["tables"]:
+			st.info("Aménage d'abord la salle dans 🪑 Plan de salle : la 3D est construite à partir de ton plan.")
+			return
+
+		palette = [couleur["hex"] for couleur in self.inspiration.moodboard.get("couleurs", [])]
+		st.caption(
+			"La salle est construite à partir de ton plan de salle, aux couleurs du moodboard."
+			if palette else "Crée le moodboard dans ✨ Inspiration pour habiller la salle à vos couleurs."
+		)
+		disposition = self.disposition_salle(self.jour_j.par_table(self.liste_invites.invites))
+		st.iframe(salle_3d_html(disposition, palette), height=620)
+
+
 	def show_jour_j(self):
-		deroule_tab, plan_tab = st.tabs(["⏱️ Déroulé", "🪑 Plan de salle"])
+		deroule_tab, plan_tab, salle_tab = st.tabs(["⏱️ Déroulé", "🪑 Plan de salle", "🧊 Salle en 3D"])
 
 		with deroule_tab:
 			self.show_deroule()
 
 		with plan_tab:
 			self.show_plan_salle()
+
+		with salle_tab:
+			self.show_salle_3d()
 
 
 	def show_notification(self, suggestions):

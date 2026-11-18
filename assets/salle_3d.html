@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Cormorant+Garamond:wght@500&display=swap" rel="stylesheet">
+<style>
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Jost', sans-serif; background: #FFFBF8; }
+    #scene { position: absolute; inset: 0; border-radius: 20px; overflow: hidden; }
+    #commandes { position: absolute; top: 14px; left: 14px; display: flex; gap: 8px; flex-wrap: wrap; z-index: 2; }
+    #commandes button {
+        border: none; border-radius: 999px; padding: 8px 16px; cursor: pointer;
+        background: rgba(255, 255, 255, 0.85); color: #3A2731; font: 500 14px 'Jost', sans-serif;
+        box-shadow: 0 10px 24px -14px rgba(58, 39, 49, 0.6); transition: transform 0.15s ease;
+    }
+    #commandes button:hover { transform: translateY(-2px); }
+    #commandes button.actif { background: #B9506F; color: #FFFFFF; }
+    #bulle {
+        position: absolute; pointer-events: none; display: none; max-width: 260px; z-index: 3;
+        background: rgba(255, 255, 255, 0.95); color: #3A2731; border-radius: 14px; padding: 10px 14px;
+        box-shadow: 0 16px 34px -18px rgba(58, 39, 49, 0.7); font-size: 13px;
+    }
+    #bulle strong { font-family: 'Cormorant Garamond', serif; font-size: 18px; display: block; }
+    #aide { position: absolute; bottom: 12px; right: 16px; font-size: 12px; color: #75606A; z-index: 2; }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="commandes">
+    <button id="vue-ensemble" class="actif">Vue d'ensemble</button>
+    <button id="vue-invite">Vue invité</button>
+    <button id="ambiance">Passer en soirée</button>
+</div>
+<div id="bulle"></div>
+<div id="aide">Glisser pour tourner · molette pour zoomer · survoler une table</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const donnees = __DONNEES__;
+const echelle = 1 / 40;
+const palette = donnees.palette;
+const accent = palette[0];
+const verdure = palette[1] || "#9CAF88";
+const nappe = "#FFFFFF";
+const conteneur = document.getElementById("scene");
+const bulle = document.getElementById("bulle");
+
+const largeurSalle = donnees.largeur * echelle;
+const profondeurSalle = donnees.hauteur * echelle;
+const echapper = (texte) => String(texte).replace(/[&<>"']/g, (caractere) => `&#${caractere.charCodeAt(0)};`);
+const versX = (x) => x * echelle - largeurSalle / 2;
+const versZ = (y) => y * echelle - profondeurSalle / 2;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, conteneur.clientWidth / conteneur.clientHeight, 0.1, 200);
+const rendu = new THREE.WebGLRenderer({ antialias: true });
+rendu.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+rendu.setSize(conteneur.clientWidth, conteneur.clientHeight);
+rendu.shadowMap.enabled = true;
+rendu.shadowMap.type = THREE.PCFSoftShadowMap;
+conteneur.appendChild(rendu.domElement);
+
+const controles = new THREE.OrbitControls(camera, rendu.domElement);
+controles.enableDamping = true;
+controles.maxPolarAngle = Math.PI / 2.15;
+controles.minDistance = 2;
+controles.maxDistance = 45;
+
+const matiere = (couleur, options = {}) => new THREE.MeshStandardMaterial({ color: couleur, roughness: 0.75, ...options });
+
+function ajouter(geometrie, materiau, x, y, z, ombre = true) {
+    const objet = new THREE.Mesh(geometrie, materiau);
+    objet.position.set(x, y, z);
+    objet.castShadow = ombre;
+    objet.receiveShadow = true;
+    scene.add(objet);
+    return objet;
+}
+
+function etiquette(texte, x, y, z) {
+    const toile = document.createElement("canvas");
+    toile.width = 512;
+    toile.height = 128;
+    const contexte = toile.getContext("2d");
+    contexte.fillStyle = "rgba(255, 255, 255, 0.88)";
+    contexte.beginPath();
+    contexte.roundRect(16, 24, 480, 80, 40);
+    contexte.fill();
+    contexte.fillStyle = "#3A2731";
+    contexte.font = "500 44px Jost, sans-serif";
+    contexte.textAlign = "center";
+    contexte.textBaseline = "middle";
+    contexte.fillText(texte, 256, 66);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(toile), depthWrite: false }));
+    sprite.position.set(x, y, z);
+    sprite.scale.set(2.4, 0.6, 1);
+    scene.add(sprite);
+}
+
+ajouter(new THREE.PlaneGeometry(largeurSalle + 4, profondeurSalle + 4), matiere("#E3CDB0"), 0, 0, 0, false).rotation.x = -Math.PI / 2;
+
+const murs = matiere("#FBF3EE");
+ajouter(new THREE.BoxGeometry(largeurSalle + 4, 3.2, 0.2), murs, 0, 1.6, -profondeurSalle / 2 - 2, false);
+ajouter(new THREE.BoxGeometry(0.2, 3.2, profondeurSalle + 4), murs, -largeurSalle / 2 - 2, 1.6, 0, false);
+ajouter(new THREE.BoxGeometry(0.2, 3.2, profondeurSalle + 4), murs, largeurSalle / 2 + 2, 1.6, 0, false);
+
+const chaiseLibre = matiere("#F4F1EE");
+const chaiseOccupee = matiere("#D9B26F", { metalness: 0.35, roughness: 0.45 });
+
+function chaise(x, z, angle, occupee) {
+    const groupe = new THREE.Group();
+    const materiau = occupee ? chaiseOccupee : chaiseLibre;
+    const assise = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.42), materiau);
+    assise.position.y = 0.46;
+    const dossier = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.05), materiau);
+    dossier.position.set(0, 0.72, 0.2);
+    [assise, dossier].forEach((piece) => { piece.castShadow = true; groupe.add(piece); });
+    groupe.position.set(x, 0, z);
+    groupe.rotation.y = angle;
+    scene.add(groupe);
+}
+
+function centreDeTable(x, z) {
+    ajouter(new THREE.CylinderGeometry(0.07, 0.09, 0.28, 16), matiere("#FFFFFF", { transparent: true, opacity: 0.6 }), x, 0.92, z);
+    palette.slice(0, 3).forEach((couleur, index) => {
+        const angle = (index / 3) * Math.PI * 2;
+        ajouter(new THREE.SphereGeometry(0.11, 16, 12), matiere(couleur), x + Math.cos(angle) * 0.08, 1.1, z + Math.sin(angle) * 0.08);
+    });
+    ajouter(new THREE.SphereGeometry(0.09, 12, 10), matiere(verdure), x, 1.18, z);
+}
+
+const tablesCliquables = [];
+
+donnees.tables.forEach((table) => {
+    const x = versX(table.x);
+    const z = versZ(table.y);
+    let plateau;
+
+    if (table.forme === "Ronde") {
+        const rayon = (table.largeur / 2) * echelle;
+        plateau = ajouter(new THREE.CylinderGeometry(rayon, rayon, 0.06, 40), matiere(nappe), x, 0.76, z);
+        ajouter(new THREE.CylinderGeometry(rayon + 0.02, rayon + 0.12, 0.7, 40, 1, true), matiere(nappe, { side: THREE.DoubleSide }), x, 0.4, z);
+        ajouter(new THREE.CylinderGeometry(rayon * 0.55, rayon * 0.55, 0.005, 32), matiere(accent), x, 0.795, z);
+
+        for (let place = 0; place < table.places; place += 1) {
+            const angle = (place / table.places) * Math.PI * 2;
+            chaise(x + Math.cos(angle) * (rayon + 0.42), z + Math.sin(angle) * (rayon + 0.42), -angle - Math.PI / 2, place < table.occupees);
+        }
+    } else {
+        const longueur = table.largeur * echelle;
+        const profondeur = table.profondeur * echelle;
+        plateau = ajouter(new THREE.BoxGeometry(longueur, 0.06, profondeur), matiere(nappe), x, 0.76, z);
+        ajouter(new THREE.BoxGeometry(longueur + 0.08, 0.7, profondeur + 0.08), matiere(nappe), x, 0.38, z);
+        ajouter(new THREE.BoxGeometry(longueur, 0.005, profondeur * 0.35), matiere(accent), x, 0.795, z);
+        const parCote = Math.ceil(table.places / 2);
+
+        for (let place = 0; place < table.places; place += 1) {
+            const cote = place < parCote ? -1 : 1;
+            const rang = place < parCote ? place : place - parCote;
+            const pas = longueur / parCote;
+            chaise(x - longueur / 2 + pas * (rang + 0.5), z + cote * (profondeur / 2 + 0.38), cote < 0 ? 0 : Math.PI, place < table.occupees);
+        }
+    }
+
+    centreDeTable(x, z);
+    etiquette(table.nom, x, 1.75, z);
+    plateau.userData = table;
+    tablesCliquables.push(plateau);
+});
+
+donnees.zones.forEach((element) => {
+    const x = versX(element.x + element.largeur / 2);
+    const z = versZ(element.y + element.hauteur / 2);
+    const largeur = element.largeur * echelle;
+    const profondeur = element.hauteur * echelle;
+
+    if (element.libelle === "Piste de danse") {
+        ajouter(new THREE.BoxGeometry(largeur, 0.04, profondeur), matiere("#2E2328", { metalness: 0.6, roughness: 0.2 }), x, 0.02, z, false);
+    } else if (element.libelle === "Photobooth") {
+        ajouter(new THREE.BoxGeometry(largeur, 2.2, 0.08), matiere(verdure), x, 1.1, z + profondeur / 2);
+        ajouter(new THREE.BoxGeometry(0.4, 1.6, 0.4), matiere("#FFFFFF"), x, 0.8, z - profondeur / 2);
+    } else {
+        const hauteur = element.libelle === "DJ" ? 1.1 : 0.95;
+        ajouter(new THREE.BoxGeometry(largeur, hauteur, profondeur), matiere(element.libelle === "DJ" ? "#3A2731" : "#FFFFFF"), x, hauteur / 2, z);
+
+        if (element.libelle === "Buffet") {
+            for (let plat = 0; plat < 6; plat += 1) {
+                ajouter(new THREE.CylinderGeometry(0.16, 0.12, 0.08, 20), matiere(palette[plat % palette.length]), x, 1.0, z - profondeur / 2 + (plat + 0.5) * (profondeur / 6));
+            }
+        }
+    }
+
+    etiquette(element.libelle, x, element.libelle === "Piste de danse" ? 0.6 : 2.0, z);
+});
+
+const lumiereCiel = new THREE.HemisphereLight("#FFF6F0", "#E3CDB0", 0.9);
+const soleil = new THREE.DirectionalLight("#FFF1E0", 0.9);
+soleil.position.set(-12, 18, 10);
+soleil.castShadow = true;
+soleil.shadow.mapSize.set(2048, 2048);
+Object.assign(soleil.shadow.camera, { left: -25, right: 25, top: 25, bottom: -25 });
+scene.add(lumiereCiel, soleil);
+
+const guirlandes = new THREE.Group();
+const ampoule = new THREE.MeshStandardMaterial({ color: "#FFD9A0", emissive: "#FFB955", emissiveIntensity: 2 });
+
+for (let fil = 0; fil < 4; fil += 1) {
+    const z = -profondeurSalle / 2 + (fil + 0.5) * (profondeurSalle / 4);
+
+    for (let index = 0; index <= 18; index += 1) {
+        const t = index / 18;
+        const boule = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), ampoule);
+        boule.position.set(-largeurSalle / 2 + t * largeurSalle, 3.0 - Math.sin(t * Math.PI) * 0.5, z);
+        guirlandes.add(boule);
+    }
+
+    const halo = new THREE.PointLight("#FFB955", 0.9, 14, 2);
+    halo.position.set(0, 2.5, z);
+    guirlandes.add(halo);
+}
+
+scene.add(guirlandes);
+
+let soiree = false;
+
+function appliquerAmbiance() {
+    scene.background = new THREE.Color(soiree ? "#1E1720" : "#FFFBF8");
+    scene.fog = new THREE.Fog(scene.background, 30, 70);
+    lumiereCiel.intensity = soiree ? 0.18 : 0.9;
+    soleil.intensity = soiree ? 0.08 : 0.9;
+    guirlandes.visible = soiree;
+    document.getElementById("ambiance").textContent = soiree ? "Passer en journée" : "Passer en soirée";
+}
+
+const centre = new THREE.Vector3(0, 0.6, 0);
+
+function vueEnsemble() {
+    camera.position.set(0, Math.max(largeurSalle, profondeurSalle) * 0.75, profondeurSalle * 0.95);
+    controles.target.copy(centre);
+}
+
+function vueInvite() {
+    const table = donnees.tables[donnees.tables.length - 1] || { x: donnees.largeur / 2, y: donnees.hauteur };
+    camera.position.set(versX(table.x), 1.25, versZ(table.y) + 1.4);
+    controles.target.set(0, 1.0, versZ(donnees.tables[0] ? donnees.tables[0].y : 0));
+}
+
+function activer(bouton) {
+    document.querySelectorAll("#vue-ensemble, #vue-invite").forEach((element) => element.classList.toggle("actif", element === bouton));
+}
+
+document.getElementById("vue-ensemble").onclick = (evenement) => { vueEnsemble(); activer(evenement.target); };
+document.getElementById("vue-invite").onclick = (evenement) => { vueInvite(); activer(evenement.target); };
+document.getElementById("ambiance").onclick = () => { soiree = !soiree; appliquerAmbiance(); };
+
+const rayon = new THREE.Raycaster();
+const souris = new THREE.Vector2();
+
+rendu.domElement.addEventListener("pointermove", (evenement) => {
+    const cadre = rendu.domElement.getBoundingClientRect();
+    souris.set(((evenement.clientX - cadre.left) / cadre.width) * 2 - 1, -((evenement.clientY - cadre.top) / cadre.height) * 2 + 1);
+    rayon.setFromCamera(souris, camera);
+    const touche = rayon.intersectObjects(tablesCliquables)[0];
+
+    if (!touche) {
+        bulle.style.display = "none";
+        return;
+    }
+
+    const table = touche.object.userData;
+    const invites = table.invites.length ? table.invites.slice(0, 12).join(", ") + (table.invites.length > 12 ? "…" : "") : "Personne pour l'instant";
+    bulle.innerHTML = `<strong>${echapper(table.nom)}</strong>${table.occupees}/${table.places} places<br>${echapper(invites)}`;
+    bulle.style.display = "block";
+    bulle.style.left = `${evenement.clientX - cadre.left + 16}px`;
+    bulle.style.top = `${evenement.clientY - cadre.top + 16}px`;
+});
+
+window.addEventListener("resize", () => {
+    camera.aspect = conteneur.clientWidth / conteneur.clientHeight;
+    camera.updateProjectionMatrix();
+    rendu.setSize(conteneur.clientWidth, conteneur.clientHeight);
+});
+
+appliquerAmbiance();
+vueEnsemble();
+
+(function animer() {
+    requestAnimationFrame(animer);
+    controles.update();
+    rendu.render(scene, camera);
+})();
+</script>
+</body>
+</html>
