@@ -6,7 +6,7 @@ from config.evenements import champs_du_type
 from metier.devis import date_lisible
 from metier.jour_j import personnes
 from metier.rgpd import CATEGORIE_DONNEES_SANTE, sante_partageable
-from textes import date_longue
+from textes import date_longue, montant
 from ui.habillage import accueil_html, frise_html
 
 
@@ -144,4 +144,4 @@ class VuesPartagees:
 
 		for facture in factures:
 			statut = ":green[payée]" if facture["payee"] else f":orange[à régler avant le {date_lisible(facture['echeance'])}]"
-			st.markdown(f"- {facture['libelle']} : {facture['montant']} € · {statut}")
+			st.markdown(f"- {facture['libelle']} : {montant(facture['montant'])} · {statut}")

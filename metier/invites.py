@@ -37,7 +37,7 @@ def choix(valeur, options):
 def nouvel_invite(nom, groupe="Autre", telephone="", email="", accompagnants=0, regime="Aucun", allergies="", statut="À inviter", invite_id=None):
     return {
         "id": invite_id or uuid.uuid4().hex[:8],
-        "nom": nom,
+        "nom": format_person_name(nom),
         "groupe": choix(groupe, GROUPES),
         "telephone": telephone,
         "email": email,

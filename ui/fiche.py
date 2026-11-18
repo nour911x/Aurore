@@ -1,28 +1,51 @@
 import streamlit as st
 from datetime import date
 
-from config.evenements import CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, type_du_dossier
+from config.evenements import CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, champs_masques, cle_type, type_du_dossier
 from donnees.dossiers import libelle_dossier, supprimer as supprimer_dossier
 from metier.devis import date_lisible
 from metier.invites import entier
-from metier.jour_j import personnes
 from metier.rgpd import PERIMETRES_IMAGE, TEXTE_CONSENTEMENT_SANTE, consentement, exporter
-from textes import CHAMPS_LISTES, SOURCES_ECHANGE
-from ui.commun import OUI_NON, lire_date, personnes_du_dossier, texte_vers_liste
+from textes import CHAMPS_LISTES, SOURCES_ECHANGE, format_person_name
+from ui.commun import FORMAT_DATE, OUI_NON, lire_date, personnes_du_dossier, texte_vers_liste
 
 
 class VueFiche:
 	def show_type_evenement(self):
 		data = self.event_sheet.data
-		actuel = next(cle for cle, type_evenement in TYPES_EVENEMENT.items() if type_evenement is type_du_dossier(data))
+		actuel = cle_type(data["type_evenement"])
+		version = st.session_state.get("version_type", 0)
 		choix = st.segmented_control(
 			"Type d'événement", list(TYPES_EVENEMENT), default=actuel,
-			format_func=lambda cle: TYPES_EVENEMENT[cle]["libelle"], key=f"type_{self.dossier_id}_{actuel}"
+			format_func=lambda cle: TYPES_EVENEMENT[cle]["libelle"], key=f"type_{self.dossier_id}_{actuel}_{version}"
 		)
 
-		if choix and choix != actuel:
-			self.event_sheet.remplacer({"type_evenement": TYPES_EVENEMENT[choix]["libelle"]})
-			st.rerun()
+		if not choix or choix == actuel:
+			return
+
+		masques = champs_masques(data, choix)
+
+		with st.container(border=True):
+			st.warning(
+				f"Passer ce dossier de « {TYPES_EVENEMENT[actuel]['libelle']} » à « {TYPES_EVENEMENT[choix]['libelle']} » ?",
+				icon=":material/swap_horiz:"
+			)
+
+			if masques:
+				st.caption(
+					f"Ces champs seront masqués, pas supprimés : ils réapparaîtront si vous revenez au type "
+					f"{TYPES_EVENEMENT[actuel]['libelle']}. {', '.join(masques)}."
+				)
+
+			confirmer, annuler = st.columns(2)
+
+			if confirmer.button("Confirmer le changement", icon=":material/check:", type="primary"):
+				self.event_sheet.changer_type(choix)
+				st.rerun()
+
+			if annuler.button("Annuler", icon=":material/close:"):
+				st.session_state.version_type = version + 1
+				st.rerun()
 
 
 	@staticmethod
@@ -36,7 +59,7 @@ class VueFiche:
 			return conteneur.number_input(libelle, min_value=0, step=1, value=entier(valeur) or None, help=aide)
 
 		if genre == "date":
-			jour = conteneur.date_input(libelle, value=lire_date(valeur), help=aide)
+			jour = conteneur.date_input(libelle, value=lire_date(valeur), help=aide, format=FORMAT_DATE)
 			return str(jour) if jour else None
 
 		if genre == "oui_non":
@@ -58,7 +81,7 @@ class VueFiche:
 			lieu = droite.text_input("Lieu", value=data["lieu"] or "")
 			telephone = gauche.text_input("Téléphone du client", value=data["telephone"] or "")
 			email = droite.text_input("Email du client", value=data["email"] or "")
-			date_evenement = gauche.date_input("Date de l'événement", value=lire_date(data["date"]))
+			date_evenement = gauche.date_input("Date de l'événement", value=lire_date(data["date"]), format=FORMAT_DATE)
 			theme = droite.text_input("Thème", value=data["theme"] or "")
 			budget = gauche.number_input("Budget (€)", min_value=0, step=500, value=int(data["budget"]) if data["budget"] else None)
 			invites = droite.number_input("Nombre d'invités", min_value=0, step=5, value=int(data["nombre_invites"]) if data["nombre_invites"] else None)
@@ -169,11 +192,11 @@ class VueFiche:
 			personne = gauche.selectbox("Personne", personnes + ["Autre (préciser)"]) if personnes else "Autre (préciser)"
 			autre = gauche.text_input("Nom") if not personnes else ""
 			perimetre = milieu.selectbox("Périmètre accepté", PERIMETRES_IMAGE, index=len(PERIMETRES_IMAGE) - 1)
-			jour = droite.date_input("Date", value=date.today())
+			jour = droite.date_input("Date", value=date.today(), format=FORMAT_DATE)
 			precision = st.text_input("Si « Autre », nom de la personne") if personnes else ""
 
 			if st.form_submit_button("Enregistrer le consentement", icon=":material/verified_user:"):
-				nom = autre or precision if personne == "Autre (préciser)" else personne
+				nom = format_person_name(autre or precision if personne == "Autre (préciser)" else personne)
 
 				if nom:
 					autres = [element for element in consentements if element["personne"] != nom]

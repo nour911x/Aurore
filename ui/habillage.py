@@ -3,9 +3,9 @@ from html import escape
 import json
 from pathlib import Path
 
-from metier.devis import date_lisible, euros
+from metier.devis import date_lisible
 from donnees.event_state import renseigne
-from textes import ACCUEILS, AVERTISSEMENT, BASELINE, date_longue, format_person_name
+from textes import ACCUEILS, AVERTISSEMENT, BASELINE, date_longue, format_person_name, montant
 from metier.jour_j import TABLE_HONNEUR
 
 
@@ -280,7 +280,7 @@ def dossier_html(event_data, champs_essentiels, champs_details):
             return date_lisible(contenu)
 
         if cle == "budget" and contenu:
-            return euros(contenu).replace(",00 EUR", " €")
+            return montant(contenu)
 
         return contenu
 

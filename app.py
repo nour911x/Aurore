@@ -2,7 +2,11 @@ import streamlit as st
 from groq import APIError
 
 from config.evenements import CHAMPS_ESSENTIELS, libelle_evenement
-from donnees.dossiers import FICHIER_FICHE, chemin, chemin_agenda, libelle_dossier, lister as lister_dossiers, migrer_ancien_dossier
+from donnees.demo import demo_au_premier_lancement
+from donnees.dossiers import (
+	FICHIER_FICHE, FICHIER_SELECTION, chemin, chemin_agenda, chemin_annuaire, libelle_court,
+	lister as lister_dossiers, migrer_ancien_dossier, migrer_carnets, migrer_noms
+)
 from donnees.event_state import EventSheet
 from llm.llm_agent import ConversationAgent, PROFILS
 from llm.outils import Outils
@@ -14,7 +18,7 @@ from metier.inspiration import Inspiration
 from metier.invites import ListeInvites
 from metier.jour_j import JourJ
 from metier.messages import MODIFIABLES, Messagerie, detecter_messages
-from metier.prestataires import Carnet
+from metier.prestataires import Annuaire, Carnet
 from metier.rgpd import peut_recevoir_sante
 from textes import ERREURS_IA, ERREUR_IA_PAR_DEFAUT, CHAMPS_DOSSIER_PRESTATAIRE, LIBELLES_PROFIL, LIBELLES_SECTIONS, ONGLETS, PLACEHOLDERS, pluriel
 from ui.commun import ESPACES, INFOS_PAR_CATEGORIE, PROFILS_ACTIFS, SECTIONS, SECTIONS_ACTIVES, details_dossier, nouveau_dossier, ouvrir_messages, ouvrir_nouveau_dossier, show_tuiles
@@ -31,6 +35,11 @@ from ui.inspiration import VueInspiration
 from ui.vues_partagees import VuesPartagees
 
 
+PREFIXES_DONNEES = (
+	"event_sheet_", "budget_", "carnet_", "messagerie_", "liste_invites_", "inspiration_", "jour_j_", "galerie_", "achats_"
+)
+
+
 class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, VuePrestataires, VueBudget, VueInvites, VueInspiration, VuesPartagees):
 	def __init__(self):
 		st.set_page_config(page_title="AURORE", page_icon=":material/wb_twilight:", layout="wide")
@@ -39,6 +48,7 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
 		self.profil = None
 		self.dossier_id = self.choisir_dossier()
 		self.agenda = self.get_persistant("agenda", lambda: Agenda(chemin_agenda()))
+		self.annuaire = self.get_persistant("annuaire", lambda: Annuaire(chemin_annuaire()))
 		st.session_state.setdefault("version_galerie", 0)
 		st.session_state.setdefault("version_invites", 0)
 		st.session_state.setdefault("briefings", {})
@@ -51,6 +61,9 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
 
 	def choisir_dossier(self):
 		migrer_ancien_dossier()
+		migrer_carnets()
+		migrer_noms()
+		demo_au_premier_lancement()
 		self.dossiers = {dossier["id"]: dossier for dossier in lister_dossiers()}
 
 		if st.session_state.get("dossier_actif") not in self.dossiers:
@@ -67,7 +80,9 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
 		self.agenda.pour_dossier(self.dossier_id)
 		self.event_sheet = self.get_du_dossier("event_sheet", EventSheet, FICHIER_FICHE)
 		self.budget = self.get_du_dossier("budget", Budget, "budget_data.json")
-		self.carnet = self.get_du_dossier("carnet", Carnet, "prestataires_data.json")
+		self.carnet = self.get_persistant(
+			f"carnet_{self.dossier_id}", lambda: Carnet(self.annuaire, chemin(self.dossier_id, FICHIER_SELECTION))
+		)
 		self.messagerie = self.get_du_dossier("messagerie", Messagerie, "messages_data.json")
 		self.carnet_devis = self.get_du_dossier("carnet_devis", CarnetDevis, "devis_data.json")
 		self.liste_invites = self.get_du_dossier("liste_invites", ListeInvites, "invites_data.json")
@@ -111,8 +126,8 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
 	def show_choix_dossier(self):
 		identifiants = list(self.dossiers)
 		choix = st.selectbox(
-			"Dossier", identifiants, index=identifiants.index(self.dossier_id),
-			format_func=lambda dossier_id: libelle_dossier(self.dossiers[dossier_id])
+			"Dossier", identifiants, index=identifiants.index(self.dossier_id), label_visibility="collapsed",
+			format_func=lambda dossier_id: libelle_court(self.dossiers[dossier_id])
 		)
 
 		if choix != self.dossier_id:
@@ -139,10 +154,18 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
 				if nombre_echanges:
 					st.caption(f":material/history: {pluriel(nombre_echanges, 'échange')} dans l'historique")
 
-			if st.button("Nouvelle conversation", icon=":material/add:", width="stretch"):
-				st.session_state.pop(self.cle_conversation(profil), None)
-				st.session_state.briefings = {}
-				st.rerun()
+
+	def recharger_donnees(self):
+		for cle in [cle for cle in st.session_state if str(cle).startswith(PREFIXES_DONNEES)]:
+			del st.session_state[cle]
+
+		self.agenda.load()
+		self.annuaire.load()
+
+
+	def nouvelle_conversation(self, profil):
+		st.session_state.pop(self.cle_conversation(profil), None)
+		st.session_state.briefings = {}
 
 
 	def show_notification(self, profil, suggestions):
@@ -290,7 +313,7 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
 			detecter_messages(self.event_sheet.data, self.carnet, self.agenda, self.budget)
 		)
 
-		if profil == "Wedding planner":
+		if profil == "Wedding planner" and st.session_state.get(f"onglets_{profil}", ONGLETS["accueil"]) != ONGLETS["accueil"]:
 			self.show_notification(profil, suggestions)
 
 		self.show_onglets(profil, {

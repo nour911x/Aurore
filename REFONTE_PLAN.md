@@ -24,7 +24,24 @@ Aucune clé en dur. `GROQ_KEY` est lue via `os.environ` (`llm_agent.py:59`), `.e
 
 ---
 
+## Arbitrages rendus (18/11/2026)
+- **Vrai multi-dossiers.** Un dossier par client dans `dossiers/<id>/` (fiche, budget, devis, invités, messages, galerie, jour J, inspiration, carnet de prestataires). Un sélecteur « Dossier » et un bouton « Nouveau dossier » dans la barre latérale. **L'agenda est commun** à l'organisateur : chaque rendez-vous porte un `dossier_id`, ce qui permet de détecter les conflits entre clients. Le carnet de prestataires a d'abord été rangé par dossier (phase 1), puis rendu commun à tous les dossiers dans les finitions (voir la dernière section). Les données de la racine sont migrées automatiquement dans un premier dossier au lancement. Ce socle est construit au début de la phase 1, car le flux « Nouveau dossier » en dépend.
+- **Base git** : la PR de `feature/jour-j` est fusionnée dans `main` d'abord, les branches `feature/refonte-*` partent de `main`.
+- **Phase 7** : réorganisation complète en dossiers `config/`, `ui/`, `metier/`, `donnees/`, `llm/`.
+
+---
+
 ## Fichiers concernés par phase
+
+Cette liste date d'avant la phase 7 et cite donc les fichiers à leur ancien emplacement. Correspondance avec la structure actuelle :
+
+| Avant | Aujourd'hui |
+|---|---|
+| `user_interface.py` | `app.py` et un module par onglet dans `ui/` (`ui/commun.py` pour les constantes et fonctions partagées) |
+| `habillage.py` | `ui/habillage.py` |
+| `storage.py`, `dossiers.py`, `event_state.py`, `demo.py` | `donnees/` |
+| `agenda.py`, `budget.py`, `devis.py`, `messages.py`, `invites.py`, `galerie.py`, `jour_j.py`, `accueil.py`, `rgpd.py`, `prestataires.py`, `inspiration.py` | `metier/` |
+| `llm_agent.py`, `outils.py`, `outlook.py`, `context.txt` | `llm/` |
 
 ### Phase 1 — Positionnement multi-événements
 - `dossiers.py` (nouveau) : liste des dossiers, création, dossier actif, migration des JSON de la racine
@@ -57,7 +74,7 @@ Aucune clé en dur. `GROQ_KEY` est lue via `os.environ` (`llm_agent.py:59`), `.e
 ### Phase 5 — Validation humaine des messages
 - `messages.py` : statuts `brouillon → à valider → validé → envoyé (+ annulé)`, migration des anciens statuts, historique par dossier
 - `user_interface.py` : boutons « Valider », « Marquer comme envoyé » actif seulement après validation
-- `outils.py` : `preparer_message` crée un `brouillon`, jamais plus
+- `outils.py` : `preparer_message` enregistre le message « à valider », il n'envoie jamais rien
 
 ### Phase 6 — RGPD
 - `event_state.py` : `consentement_sante`, `droit_image` (par personne : date + périmètre)
@@ -125,7 +142,7 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Commits** : je ne lance pas les commandes git, je te donne les commandes à taper à la fin de chaque phase.
 
 ### Phase 1
-- **Carnet de prestataires par dossier** (et non commun comme prévu au départ) : le statut d'un prestataire (« Devis demandé », « Réservé »…) dépend de l'événement. Seul l'agenda est commun à tous les dossiers.
+- **Carnet de prestataires par dossier** (et non commun comme prévu au départ) : le statut d'un prestataire (« Devis demandé », « Réservé »…) dépend de l'événement. Seul l'agenda est commun à tous les dossiers. *Décision revue dans les finitions : carnet commun, et statut, tarif et poste propres à chaque dossier.*
 - **Migration** : au premier lancement, les fichiers JSON de la racine sont *déplacés* dans `dossiers/<id>/`, et les rendez-vous existants sont rattachés à ce dossier. Pour revenir en arrière, il suffit de remettre ces fichiers à la racine.
 - **Champs spécifiques stockés à plat** dans la fiche (`ceremonie`, `gender_reveal`, `age`…) plutôt que dans un sous-objet : `EventSheet.update` et l'extraction par l'IA fonctionnent sans changement de structure.
 - **Lieu et allergies** sont communs à tous les types (présents dans les 4 listes du brief). La musique n'est affichée que pour un mariage, comme demandé.
@@ -148,24 +165,19 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Pluriels** : plus aucun « (s) » dans l'interface, grâce à `textes.pluriel`.
 - **Rendu à 1280 px (phase 2)** : les libellés d'onglets ne passent plus à la ligne (`white-space: nowrap`). Si les onglets dépassent, Streamlit les fait défiler horizontalement. La vérification visuelle reste à faire dans le navigateur, l'extension Chrome n'étant pas connectée.
 
-## Arbitrages rendus (18/11/2026)
-- **Vrai multi-dossiers.** Un dossier par client dans `dossiers/<id>/` (fiche, budget, devis, invités, messages, galerie, jour J, inspiration). Un sélecteur « Dossier » et un bouton « Nouveau dossier » dans la barre latérale. **L'agenda et le carnet de prestataires restent communs** à l'organisateur : chaque rendez-vous porte un `dossier_id`, ce qui permet de détecter les conflits entre clients. Les données actuelles à la racine sont migrées automatiquement dans un premier dossier au lancement. Ce socle est construit au début de la phase 1, car le flux « Nouveau dossier » en dépend.
-- **Base git** : la PR de `feature/jour-j` est fusionnée dans `main` d'abord, les branches `feature/refonte-*` partent de `main`.
-- **Phase 7** : réorganisation complète en dossiers `config/`, `ui/`, `metier/`, `donnees/`, `llm/`.
-
 ### Phase 3
 - **L'accueil regroupe tous les dossiers** (`accueil.synthese`) : un organisateur voit sa journée entière, pas seulement le dossier ouvert. Chaque ligne a un bouton « Ouvrir le dossier » qui sélectionne le dossier et ouvre le bon onglet.
-- **Fenêtre de surveillance à J-45** (constante `JOURS_SURVEILLANCE` dans `accueil.py`) et non J-30 : l'exemple du brief (« lieu non défini à J-32 = alerte ») sortait de la fenêtre à 30 jours.
+- **Fenêtre de surveillance à J-45** (constante `JOURS_SURVEILLANCE` dans `metier/accueil.py`) et non J-30 : l'exemple du brief (« lieu non défini à J-32 = alerte ») sortait de la fenêtre à 30 jours.
 - **Paiements** : une facture du poste « Organisation » est « à encaisser auprès du client », toutes les autres sont « à régler au prestataire ». Sont affichées les factures en retard et celles dont l'échéance tombe dans les 7 jours.
 - **À faire** : pour chaque dossier, les messages prêts à valider, les relances, les messages à préparer et les confirmations de rendez-vous attendues (rendez-vous avec un interlocuteur, dans les 7 jours, non confirmés). Le bouton « Confirmé » valide un rendez-vous sans quitter l'accueil.
 - **Rendez-vous** : nouveaux champs `type` (Essayage, Visite, Dégustation, Réunion, Appel, Autre ; deviné depuis le titre si rien n'est choisi) et `confirme`. Les anciens rendez-vous fonctionnent sans migration.
 - **Conflits** : l'ajout reste refusé en cas de chevauchement, mais l'accueil détecte aussi ceux qui existent déjà dans le fichier (anciennes données, imports).
-- **Données de démonstration à la demande** (`demo.py`) : trois dossiers fictifs marqués `"demo": true`, datés à partir du jour courant. Ils s'ajoutent et se retirent depuis l'accueil, et ne sont jamais créés automatiquement, pour ne pas mélanger des données fictives à tes vrais dossiers.
+- **Données de démonstration à la demande** (`donnees/demo.py`) : trois dossiers fictifs marqués `"demo": true`, datés à partir du jour courant. Ils s'ajoutent et se retirent depuis l'accueil, et ne sont jamais créés automatiquement, pour ne pas mélanger des données fictives à tes vrais dossiers.
 - **Vue Clients** : l'accueil garde la salutation et les raccourcis. La vue partagée en lecture seule arrive en phase 4.
 - **Chat** : la zone de saisie reste en bas de page, et les raccourcis sont sous l'accueil. Le dernier échange s'affiche sous l'accueil, la discussion complète est dans Messages.
 
 ### Phase 4
-- **Flags dans `config/features.py`.** Chaque section liée à un flag est retirée des onglets (`SECTIONS_ACTIVES` dans `user_interface.py`), mais son code reste en place : repasser le flag à `True` suffit à la réafficher.
+- **Flags dans `config/features.py`.** Chaque section liée à un flag est retirée des onglets (`SECTIONS_ACTIVES` dans `ui/commun.py`), mais son code reste en place : repasser le flag à `True` suffit à la réafficher.
   - `INSTAGRAM_FEEDBACK` : sous-onglet Instagram et bouton « Transformer en post témoignage ». La saisie des avis reste, et elle se fait maintenant côté organisateur (« Enregistrer un avis reçu »).
   - `PINTEREST_MOODBOARD_AUTO` : liens Pinterest du moodboard, dans l'écran, le PDF et le message d'envoi.
   - `DIGITAL_EVENT_REPRESENTATION` : sous-onglet « Salle en 3D ». Le plan de salle reste.
@@ -178,7 +190,7 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Démo enrichie** : une fleuriste au statut « Devis reçu » avec un devis envoyé, pour tester la brique 4 (devis accepté → acompte et solde au budget → prestataire réservé → paiement sur l'accueil). Vérifié de bout en bout.
 
 ### Phase 5
-- **Signification des statuts**, définis dans `messages.py` avec leurs transitions :
+- **Signification des statuts**, définis dans `metier/messages.py` avec leurs transitions :
   - `brouillon` : texte écrit ou remis en chantier par l'organisateur, librement modifiable ;
   - `à valider` : texte prêt à relire ; c'est là qu'arrive tout ce qu'AURORE rédige (suggestion, message libre, chat) ;
   - `validé` : approuvé, le texte est verrouillé et les boutons WhatsApp / email apparaissent ;
@@ -193,12 +205,12 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Notifications conservées** : la bannière et l'accueil distinguent « à préparer », « à valider » et « validés à envoyer ».
 
 ### Phase 6
-- **Données de santé** (`rgpd.py`) : le champ `allergies_interdits` de la fiche, et les régimes et allergies des invités. Les régimes halal et casher révèlent une conviction religieuse, une autre catégorie particulière du RGPD : ils suivent donc la même règle.
+- **Données de santé** (`metier/rgpd.py`) : le champ `allergies_interdits` de la fiche, et les régimes et allergies des invités. Les régimes halal et casher révèlent une conviction religieuse, une autre catégorie particulière du RGPD : ils suivent donc la même règle.
   - **Consentement explicite** sur le dossier (Fiche client › Consentements), avec sa date. Seul l'organisateur peut le modifier, jamais l'IA : `consentement_sante` et `droit_image` sont des champs protégés dans `EventSheet.update`.
   - **Partage limité** : seul un prestataire de catégorie « Traiteur » reçoit ces données, et seulement avec le consentement. C'est vrai dans sa vue, dans la barre latérale, dans les messages qu'on lui écrit, dans son chat et dans le récapitulatif invités. Sans accord, le traiteur ne voit que le nombre de couverts, et on lui explique pourquoi.
   - **IA** : par défaut, la fiche envoyée au LLM ne contient plus les allergies (`infos_sans_historique` / `infos_pour_prestataire`, paramètre `avec_sante=False`). Exceptions : le briefing d'une dégustation ou d'un rendez-vous avec le traiteur, avec consentement. Les allergies des invités partent sans les noms (`recap_anonyme`). Le plan de table n'envoie plus les régimes, inutiles pour placer les invités.
   - **Extraction depuis le chat** : les allergies déjà connues ne sont plus envoyées au LLM. Celles qu'il trouve dans la conversation s'*ajoutent* à la liste, il ne peut plus en effacer.
-  - **Journaux** : le seul `print` du projet (le bloc `__main__` de `llm_agent.py`, qui affichait les réponses de l'IA en console) est supprimé. Il n'y a aucun autre log.
+  - **Journaux** : le seul `print` du projet (le bloc `__main__` de `llm/llm_agent.py`, qui affichait les réponses de l'IA en console) est supprimé. Il n'y a aucun autre log.
 - **Droit à l'image** : un consentement par personne (nom, périmètre « Aucun / Portfolio / Réseaux sociaux et portfolio », date), stocké dans la fiche et géré dans Fiche client et dans Inspiration & galerie › Droit à l'image. Chaque photo a un tag `decor` / `avec_personnes`, qui découle du champ `personnes` déjà renseigné par l'analyse IA.
   - Une photo de décor est toujours publiable.
   - Une photo avec les clients est publiable seulement si **chaque** client a consenti à cet usage (portfolio ou réseaux sociaux).
@@ -216,3 +228,33 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Textes** : les libellés structurants sont dans `textes.py` : onglets, sections, vues, raccourcis, titres d'accueil, baseline, avertissement, messages d'erreur de l'IA, libellés de champs. Les libellés ponctuels (boutons, aides) restent dans les modules `ui/`. Pour une version anglaise, il restera à les y déplacer un par un.
 - **Avertissement conservé** : « AURORE peut se tromper : vérifiez les montants et les dates importantes. »
 - **README** réécrit : produit, vues, flags, lancement, variables d'environnement, tests, structure.
+
+---
+
+## Finitions (branche `feature/refonte-finitions`)
+
+### Prestataires : retour sur la décision de la phase 1
+- **Carnet commun à tous les dossiers** (`annuaire_prestataires.json` à la racine, classe `Annuaire` dans `metier/prestataires.py`) : la fiche d'un prestataire (nom, catégorie, contact, téléphone, email, site, notes) n'existe qu'une fois.
+- **Sélection par dossier** (`dossiers/<id>/selection_prestataires.json`, classe `Carnet`) : chaque dossier choisit ses prestataires et garde ses propres statut, date de statut, tarif et poste de budget. `Carnet` renvoie des fiches fusionnées avec les mêmes clés qu'avant : le reste du code (messages, devis, agent, vues partagées) n'a pas changé.
+- **Retirer un prestataire d'un dossier** ne le supprime pas du carnet commun. On peut ensuite le rechoisir depuis « Choisir dans le carnet commun ».
+- **Double réservation** : un prestataire « Réservé » sur deux dossiers dont l'événement tombe le même jour apparaît dans Accueil › Conflits, et en alerte sur sa carte dans les autres dossiers concernés.
+- **Migration** (`migrer_carnets`, au lancement) : chaque ancien `prestataires_data.json` est versé dans l'annuaire puis supprimé. Deux fiches sont fusionnées si elles ont le même nom (casse et apostrophes ignorées) et aucun téléphone ni email contradictoire ; les champs vides sont complétés par l'autre fiche. Les identifiants fusionnés sont mis à jour dans les messages et les devis du dossier. Le statut et le tarif de chaque dossier sont conservés.
+- **Une seule instance de l'annuaire par session**, comme pour l'agenda, pour que deux dossiers ne s'écrasent pas.
+
+### Autres décisions
+- **Démo** (`donnees/demo.py`) : le mariage est le dossier existant « Léa et Liam », complété ; l'anniversaire de Tom et la baby shower d'Inès & Malik sont créés. Tout ce que la démo ajoute à Léa & Liam (rendez-vous, facture, prestataires choisis, devis, message, postes) est marqué `"demo": true`, ce qui permet de le retirer sans toucher au reste. Le dossier lui-même n'est supprimé que s'il a été créé par la démo. Contenu :
+  - un rendez-vous aujourd'hui ;
+  - une facture en retard ;
+  - un conflit entre deux dossiers (essayage de Léa à 15 h, visite de salle d'Inès à 15 h 30) ;
+  - un DJ réservé le même jour pour le mariage et pour l'anniversaire ;
+  - un lieu manquant pour Léa & Liam, à J-32.
+- **Démo créée une seule fois**, au tout premier lancement (`aurore_etat.json`, clé `demo_initialisee`). Si on la retire, elle ne revient pas toute seule ; le bouton « Ajouter les données de démonstration » la remet.
+- **« À définir » dans À faire** : un dossier dont l'événement est à J-45 ou moins et dont un champ essentiel est vide (date, lieu, invités, budget) apparaît dans « À faire », avec un bouton « Compléter la fiche ».
+- **Changement de type** : un sélecteur demande confirmation et liste les champs qui seront masqués. Ces valeurs restent dans la fiche et réapparaissent si l'on revient au type d'origine (`EventSheet.changer_type`, `champs_masques`).
+- **Noms normalisés à l'enregistrement** (`format_person_name`) : fiche, invités, consentements de droit à l'image. Migration unique des dossiers existants (`migrer_noms`, clé `noms_normalises`) : fiche, consentements, invités, avis, messages et devis adressés aux clients. Les noms de prestataires ne sont pas modifiés.
+- **Sélecteur de dossier** : libellé court « Léa & Liam · 20/12 », sans titre au-dessus (le bloc « Dossier » juste en dessous suffit).
+- **Dates** : tous les champs de saisie sont au format JJ/MM/AAAA (`FORMAT_DATE` dans `ui/commun.py`), ainsi que les dates affichées.
+- **Montants** : `textes.montant` affiche le séparateur de milliers (« 15 000 € », « 471,60 € »). Le champ Budget de la fiche avance par pas de 500 €. Les champs de saisie Streamlit ne savent pas afficher de séparateur de milliers.
+- **Accueil** : la bannière de notification n'apparaît plus sur l'accueil, puisque « À faire » en reprend le contenu. Elle reste sur les autres onglets.
+- **Nouvelle conversation** : le bouton est passé de la barre latérale à la discussion (Messages › Discussion, ou Discussion dans les vues partagées). Il n'apparaît que s'il y a une conversation.
+- **Pétales** : passés sous le contenu (`z-index: -1` dans la zone principale) avec une opacité réduite de moitié environ. Ils ne recouvrent plus le texte.

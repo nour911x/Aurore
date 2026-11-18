@@ -4,12 +4,11 @@ from groq import APIError
 
 from donnees.dossiers import libelle_dossier
 from metier.agenda import AUTRE_TYPE, TYPES_RDV, bornes, type_rdv
-from metier.devis import date_lisible
 from metier.jour_j import AUCUNE_TABLE, COLONNES_DEROULE, ELEMENTS_SALLE, FORMES_TABLE, creer_tables, generer_deroule_pdf, generer_plan_table_pdf, invites_a_placer, nettoyer_deroule, personnes
 from metier.messages import fiche_publique
 from metier.rgpd import CATEGORIE_DONNEES_SANTE, recap_anonyme, recap_sans_sante, sante_partageable
 from textes import CHOIX_TYPE_RDV, date_longue, pluriel
-from ui.commun import AUCUN, CONFIG_COLONNES_DEROULE, DELAI_BRIEFING_AUTOMATIQUE
+from ui.commun import AUCUN, CONFIG_COLONNES_DEROULE, DELAI_BRIEFING_AUTOMATIQUE, FORMAT_DATE
 from ui.habillage import disposition_salle, frise_html, plan_salle_html, salle_3d_html
 
 
@@ -134,7 +133,7 @@ class VuePlanning:
 			with st.form("form_rdv", clear_on_submit=True):
 				titre = st.text_input("Titre (ex : essayage robe, visite de salle, dégustation)")
 				type_choisi = st.selectbox("Type de rendez-vous", [CHOIX_TYPE_RDV, *TYPES_RDV, AUTRE_TYPE])
-				jour = st.date_input("Date")
+				jour = st.date_input("Date", format=FORMAT_DATE)
 				heure = st.time_input("Heure")
 				duree = st.number_input("Durée (minutes)", min_value=15, step=15, value=60)
 				lieu = st.text_input("Lieu")
