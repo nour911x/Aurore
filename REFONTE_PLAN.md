@@ -146,9 +146,20 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Accueil provisoire** : salutation, raccourcis et dernier échange avec AURORE. La discussion complète est dans Messages. La phase 3 ajoute le tableau de bord.
 - **Onglets « paresseux »** (`on_change="rerun"` + `.open`) : seul l'onglet affiché est calculé. La bannière ouvre directement « Messages › À préparer et à envoyer ».
 - **Pluriels** : plus aucun « (s) » dans l'interface, grâce à `textes.pluriel`.
-- **Rendu à 1280 px** : les libellés d'onglets ne passent plus à la ligne (`white-space: nowrap`). Si les onglets dépassent, Streamlit les fait défiler horizontalement. La vérification visuelle reste à faire dans le navigateur, l'extension Chrome n'étant pas connectée.
+- **Rendu à 1280 px (phase 2)** : les libellés d'onglets ne passent plus à la ligne (`white-space: nowrap`). Si les onglets dépassent, Streamlit les fait défiler horizontalement. La vérification visuelle reste à faire dans le navigateur, l'extension Chrome n'étant pas connectée.
 
 ## Arbitrages rendus (18/11/2026)
 - **Vrai multi-dossiers.** Un dossier par client dans `dossiers/<id>/` (fiche, budget, devis, invités, messages, galerie, jour J, inspiration). Un sélecteur « Dossier » et un bouton « Nouveau dossier » dans la barre latérale. **L'agenda et le carnet de prestataires restent communs** à l'organisateur : chaque rendez-vous porte un `dossier_id`, ce qui permet de détecter les conflits entre clients. Les données actuelles à la racine sont migrées automatiquement dans un premier dossier au lancement. Ce socle est construit au début de la phase 1, car le flux « Nouveau dossier » en dépend.
 - **Base git** : la PR de `feature/jour-j` est fusionnée dans `main` d'abord, les branches `feature/refonte-*` partent de `main`.
 - **Phase 7** : réorganisation complète en dossiers `config/`, `ui/`, `metier/`, `donnees/`, `llm/`.
+
+### Phase 3
+- **L'accueil regroupe tous les dossiers** (`accueil.synthese`) : un organisateur voit sa journée entière, pas seulement le dossier ouvert. Chaque ligne a un bouton « Ouvrir le dossier » qui sélectionne le dossier et ouvre le bon onglet.
+- **Fenêtre de surveillance à J-45** (constante `JOURS_SURVEILLANCE` dans `accueil.py`) et non J-30 : l'exemple du brief (« lieu non défini à J-32 = alerte ») sortait de la fenêtre à 30 jours.
+- **Paiements** : une facture du poste « Organisation » est « à encaisser auprès du client », toutes les autres sont « à régler au prestataire ». Sont affichées les factures en retard et celles dont l'échéance tombe dans les 7 jours.
+- **À faire** : pour chaque dossier, les messages prêts à valider, les relances, les messages à préparer et les confirmations de rendez-vous attendues (rendez-vous avec un interlocuteur, dans les 7 jours, non confirmés). Le bouton « Confirmé » valide un rendez-vous sans quitter l'accueil.
+- **Rendez-vous** : nouveaux champs `type` (Essayage, Visite, Dégustation, Réunion, Appel, Autre ; deviné depuis le titre si rien n'est choisi) et `confirme`. Les anciens rendez-vous fonctionnent sans migration.
+- **Conflits** : l'ajout reste refusé en cas de chevauchement, mais l'accueil détecte aussi ceux qui existent déjà dans le fichier (anciennes données, imports).
+- **Données de démonstration à la demande** (`demo.py`) : trois dossiers fictifs marqués `"demo": true`, datés à partir du jour courant. Ils s'ajoutent et se retirent depuis l'accueil, et ne sont jamais créés automatiquement, pour ne pas mélanger des données fictives à tes vrais dossiers.
+- **Vue Clients** : l'accueil garde la salutation et les raccourcis. La vue partagée en lecture seule arrive en phase 4.
+- **Chat** : la zone de saisie reste en bas de page, et les raccourcis sont sous l'accueil. Le dernier échange s'affiche sous l'accueil, la discussion complète est dans Messages.

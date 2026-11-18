@@ -3,15 +3,17 @@ from llm_agent import ConversationAgent, PROFILS
 from outils import Outils
 from habillage import (
 	AVERTISSEMENT_HTML, style_html, theme_html, particules_html,
-	marque_html, accueil_html, dossier_html, frise_html, plan_salle_html,
+	marque_html, accueil_html, aujourdhui_html, dossier_html, frise_html, plan_salle_html,
 	disposition_salle, salle_3d_html
 )
 from event_state import EventSheet
-from textes import format_person_name, noms_clients, pluriel
-from config.evenements import TYPES_EVENEMENT, CHAMPS_SPECIFIQUES, type_du_dossier, champs_du_type, libelle_evenement
+from textes import date_longue, format_person_name, noms_clients, pluriel
+from config.evenements import TYPES_EVENEMENT, CHAMPS_ESSENTIELS, CHAMPS_SPECIFIQUES, type_du_dossier, champs_du_type, libelle_evenement
 from dossiers import FICHIER_FICHE, chemin, chemin_agenda, creer as creer_dossier, lister as lister_dossiers, libelle_dossier, migrer_ancien_dossier
-from budget import Budget
-from agenda import Agenda
+from budget import Budget, POSTE_ORGANISATION
+from agenda import Agenda, TYPES_RDV, AUTRE_TYPE, type_rdv
+from accueil import JOURS_SURVEILLANCE, synthese
+from demo import creer_demo, dossiers_demo, retirer_demo
 from prestataires import Carnet, CATEGORIES, STATUTS, lien_whatsapp, lien_email, appliquer_statut, meme_nom
 from messages import (
 	Messagerie, TYPES_MESSAGE, EMETTEUR_AURORE, detecter_messages,
@@ -120,8 +122,6 @@ ESPACES = {
 	"Prestataire": ["discussion", "evenement", "agenda", "devis_achats"]
 }
 
-CHAMPS_DOSSIER = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités", "budget": "Budget"}
-
 CHAMPS_DOSSIER_PRESTATAIRE = {"date": "Date", "lieu": "Lieu", "nombre_invites": "Invités"}
 
 RACCOURCIS = [
@@ -201,9 +201,38 @@ def details_dossier(data, prive=True):
 	return details
 
 
+CHOIX_TYPE_RDV = "Selon le titre"
+
+
+def ouvrir_onglet(profil, onglet, section=None):
+	st.session_state[f"onglets_{profil}"] = ONGLETS[onglet]
+
+	if section:
+		st.session_state[f"sections_{profil}_{onglet}"] = LIBELLES_SECTIONS[section]
+
+
 def ouvrir_messages(profil):
-	st.session_state[f"onglets_{profil}"] = ONGLETS["messages"]
-	st.session_state[f"sections_{profil}_messages"] = LIBELLES_SECTIONS["a_envoyer"]
+	ouvrir_onglet(profil, "messages", "a_envoyer")
+
+
+def ouvrir_dossier(dossier_id, onglet="fiche", section=None):
+	st.session_state.dossier_actif = dossier_id
+	ouvrir_onglet("Wedding planner", onglet, section)
+
+
+def heure_rdv(rdv, avec_jour=False):
+	debut = datetime.fromisoformat(rdv["date_heure"])
+	return f"{debut:%d/%m %H:%M}" if avec_jour else f"{debut:%H:%M}"
+
+
+def echeance_lisible(jours):
+	if jours < 0:
+		return f":red[En retard de {pluriel(-jours, 'jour')}]"
+
+	if jours == 0:
+		return ":orange[Aujourd'hui]"
+
+	return f":orange[Dans {pluriel(jours, 'jour')}]"
 
 
 def nom_affiche(message):
@@ -350,7 +379,7 @@ class UserInterface:
 			if profil == "Prestataire":
 				st.markdown(dossier_html(affichage, CHAMPS_DOSSIER_PRESTATAIRE, details_dossier(data, prive=False)), unsafe_allow_html=True)
 			else:
-				st.markdown(dossier_html(affichage, CHAMPS_DOSSIER, details_dossier(data)), unsafe_allow_html=True)
+				st.markdown(dossier_html(affichage, CHAMPS_ESSENTIELS, details_dossier(data)), unsafe_allow_html=True)
 				nombre_echanges = len(self.event_sheet.data["historique"])
 
 				if nombre_echanges:
@@ -518,10 +547,146 @@ class UserInterface:
 		st.markdown(AVERTISSEMENT_HTML, unsafe_allow_html=True)
 
 
+	@staticmethod
+	def bouton_ouvrir(cle, dossier_id, onglet, section=None, libelle="Ouvrir le dossier"):
+		st.button(
+			libelle, key=cle, icon=":material/open_in_new:", type="tertiary",
+			on_click=ouvrir_dossier, args=(dossier_id, onglet, section)
+		)
+
+
+	@staticmethod
+	def section_accueil(titre, icone):
+		conteneur = st.container(border=True)
+		conteneur.markdown(f"**:material/{icone}: {titre}**")
+		return conteneur
+
+
+	def show_rdvs_du_jour(self, rdvs):
+		with self.section_accueil("Aujourd'hui", "today"):
+			if not rdvs:
+				st.caption("Aucun rendez-vous aujourd'hui.")
+
+			for index, rdv in enumerate(rdvs):
+				st.markdown(f"**{heure_rdv(rdv)}** · {rdv['titre']} · :gray[{rdv['type']}]")
+				st.caption(f"{rdv['dossier']} · avec {rdv['avec'] or '—'} · {rdv['lieu'] or 'lieu à préciser'}")
+				self.bouton_ouvrir(f"jour_{index}", rdv["dossier_id"], "planning", "agenda")
+
+
+	def show_conflits(self, paires):
+		with self.section_accueil("Conflits", "warning"):
+			if not paires:
+				st.caption("Aucun chevauchement dans le calendrier.")
+
+			for premier, second in paires:
+				st.markdown(
+					f":orange[:material/warning:] **{heure_rdv(premier, True)} {premier['titre']}** ({premier['dossier']}) "
+					f"chevauche **{heure_rdv(second, True)} {second['titre']}** ({second['dossier']})"
+				)
+
+
+	def confirmer_rdv(self, rdv):
+		self.agenda.confirmer(rdv["titre"], rdv["date_heure"], rdv["dossier_id"])
+
+
+	def show_a_faire(self, elements):
+		with self.section_accueil("À faire", "task_alt"):
+			if not elements:
+				st.caption("Rien en attente.")
+
+			for element in elements:
+				morceaux = [
+					pluriel(element["a_envoyer"], "message à valider", "messages à valider") if element["a_envoyer"] else "",
+					pluriel(element["relances"], "relance") if element["relances"] else "",
+					pluriel(element["a_preparer"], "message à préparer", "messages à préparer") if element["a_preparer"] else "",
+					pluriel(len(element["confirmations"]), "confirmation attendue", "confirmations attendues") if element["confirmations"] else ""
+				]
+				st.markdown(f"**{element['dossier']}** : {', '.join(filter(None, morceaux))}")
+
+				for rdv in element["confirmations"]:
+					texte, bouton = st.columns([4, 1], vertical_alignment="center")
+					texte.caption(f"{heure_rdv(rdv, True)} · {rdv['titre']} avec {rdv['avec']} : confirmation non reçue")
+					bouton.button(
+						"Confirmé", key=f"confirmer_{rdv['dossier_id']}_{rdv['date_heure']}_{rdv['titre']}",
+						icon=":material/check:", type="tertiary", on_click=self.confirmer_rdv, args=(rdv,)
+					)
+
+				if element["a_envoyer"] or element["relances"] or element["a_preparer"]:
+					self.bouton_ouvrir(f"faire_{element['dossier_id']}", element["dossier_id"], "messages", "a_envoyer", "Ouvrir les messages")
+
+
+	def show_paiements(self, factures):
+		with self.section_accueil("Paiements", "payments"):
+			if not factures:
+				st.caption("Aucune facture en retard ni à échéance dans les 7 jours.")
+
+			for index, facture in enumerate(sorted(factures, key=lambda facture: facture["jours_restants"])):
+				sens = "À encaisser auprès du client" if facture["sens"] == "client" else "À régler au prestataire"
+				st.markdown(f"{echeance_lisible(facture['jours_restants'])} · **{facture['libelle']}** · {facture['montant']} €")
+				st.caption(f"{sens} · {facture['dossier']}")
+				self.bouton_ouvrir(f"paiement_{index}", facture["dossier_id"], "budget", "budget")
+
+
+	def show_a_surveiller(self, dossiers):
+		with self.section_accueil(f"Dossiers à surveiller (J-{JOURS_SURVEILLANCE} et moins)", "visibility"):
+			if not dossiers:
+				st.caption(f"Aucun événement dans les {JOURS_SURVEILLANCE} prochains jours.")
+
+			for dossier in dossiers:
+				etat = f":orange[À définir : {', '.join(dossier['manquants'])}]" if dossier["manquants"] else ":green[Dossier complet]"
+				st.markdown(f"**{dossier['dossier']}** · J-{dossier['jours']} · {etat}")
+				self.bouton_ouvrir(f"surveiller_{dossier['dossier_id']}", dossier["dossier_id"], "fiche")
+
+
+	def show_demo(self):
+		with st.expander("Données de démonstration", icon=":material/science:"):
+			if dossiers_demo():
+				st.caption("Les trois dossiers de démonstration sont chargés. Les retirer supprime uniquement ces dossiers et leurs rendez-vous.")
+
+				if st.button("Retirer les dossiers de démonstration", icon=":material/delete:"):
+					retirer_demo()
+					self.agenda.load()
+					st.rerun()
+			else:
+				st.caption("Ajoute trois dossiers fictifs (mariage, baby shower, anniversaire), datés à partir d'aujourd'hui, pour voir l'accueil rempli.")
+
+				if st.button("Ajouter les dossiers de démonstration", icon=":material/add:"):
+					creer_demo()
+					self.agenda.load()
+					st.rerun()
+
+
+	def show_aujourd_hui(self):
+		maintenant = datetime.now()
+		donnees = synthese(maintenant=maintenant)
+		st.markdown(aujourdhui_html(maintenant), unsafe_allow_html=True)
+		self.show_compteurs({
+			":material/today: Rendez-vous aujourd'hui": len(donnees["rdvs_du_jour"]),
+			":material/task_alt: Dossiers à traiter": len(donnees["a_faire"]),
+			":material/payments: Paiements à suivre": len(donnees["paiements"]),
+			":material/warning: Conflits": len(donnees["conflits"])
+		})
+		gauche, droite = st.columns(2)
+
+		with gauche:
+			self.show_rdvs_du_jour(donnees["rdvs_du_jour"])
+			self.show_conflits(donnees["conflits"])
+
+		with droite:
+			self.show_a_faire(donnees["a_faire"])
+			self.show_paiements(donnees["paiements"])
+
+		self.show_a_surveiller(donnees["a_surveiller"])
+		self.show_demo()
+
+
 	def show_tableau_de_bord(self, profil):
 		historique = self.conversation_agent_object.get_conversation_history()
 
-		if not historique:
+		if profil == "Wedding planner":
+			self.show_aujourd_hui()
+			st.caption("Demander à AURORE")
+		elif not historique:
 			self.show_accueil(profil)
 
 		self.show_boutons_messages("raccourcis", RACCOURCIS)
@@ -679,14 +844,24 @@ class UserInterface:
 			st.info("Aucun rendez-vous à venir.")
 
 		for rdv in rdvs:
-			date_lisible = datetime.fromisoformat(rdv["date_heure"]).strftime("%A %d/%m/%Y à %H:%M")
+			debut = datetime.fromisoformat(rdv["date_heure"])
 			cle = f"{rdv['titre']}_{rdv['date_heure']}"
+			confirmation = ":green[:material/check_circle: confirmé]" if rdv.get("confirme") else ":orange[:material/hourglass_top: à confirmer]"
 
 			with st.container(border=True):
-				st.markdown(f"**{rdv['titre']}** — {date_lisible} ({rdv['duree_minutes']} min)")
+				st.markdown(
+					f"**{rdv['titre']}** · :gray[{type_rdv(rdv)}] — {date_longue(debut)} à {debut:%H:%M} "
+					f"({rdv['duree_minutes']} min)" + (f" · {confirmation}" if rdv["avec"] else "")
+				)
 				st.markdown(f":material/location_on: {rdv['lieu'] or 'Lieu à préciser'} · :material/person: {rdv['avec'] or '—'}")
 
-				bouton_briefing, bouton_supprimer = st.columns([3, 1])
+				bouton_briefing, bouton_confirmer, bouton_supprimer = st.columns([3, 2, 1])
+
+				if rdv["avec"] and not rdv.get("confirme") and not self.prestataire:
+					bouton_confirmer.button(
+						"Marquer confirmé", key=f"confirme_{cle}", icon=":material/check:",
+						on_click=self.agenda.confirmer, args=(rdv["titre"], rdv["date_heure"], self.dossier_id)
+					)
 
 				if bouton_briefing.button("Préparer le briefing", icon=":material/assignment:", key=f"brief_{cle}"):
 					with st.spinner("AURORE rassemble tout ce qu'il faut savoir…"):
@@ -720,6 +895,7 @@ class UserInterface:
 		with st.expander("Ajouter un rendez-vous", icon=":material/add:"):
 			with st.form("form_rdv", clear_on_submit=True):
 				titre = st.text_input("Titre (ex : essayage robe, visite de salle, dégustation)")
+				type_choisi = st.selectbox("Type de rendez-vous", [CHOIX_TYPE_RDV, *TYPES_RDV, AUTRE_TYPE])
 				jour = st.date_input("Date")
 				heure = st.time_input("Heure")
 				duree = st.number_input("Durée (minutes)", min_value=15, step=15, value=60)
@@ -735,7 +911,7 @@ class UserInterface:
 
 				if st.form_submit_button("Ajouter le rendez-vous") and titre:
 					date_heure = datetime.combine(jour, heure).isoformat()
-					conflit = self.agenda.add_rdv(titre, date_heure, duree, lieu, avec)
+					conflit = self.agenda.add_rdv(titre, date_heure, duree, lieu, avec, None if type_choisi == CHOIX_TYPE_RDV else type_choisi)
 
 					if conflit and self.profil != "Wedding planner":
 						st.error("Ce créneau est déjà pris dans l'agenda de l'organisateur. Choisissez un autre horaire.", icon=":material/warning:")
@@ -1056,7 +1232,7 @@ class UserInterface:
 
 	def accepter_devis(self, devis, montants):
 		prestataire = self.carnet.trouver(devis["prestataire_id"])
-		poste = (prestataire["poste_budget"] or prestataire["categorie"]) if prestataire else "Organisation"
+		poste = (prestataire["poste_budget"] or prestataire["categorie"]) if prestataire else POSTE_ORGANISATION
 
 		if poste not in [poste_existant["nom"] for poste_existant in self.budget.postes]:
 			self.budget.add_poste(poste, montants["ttc"])

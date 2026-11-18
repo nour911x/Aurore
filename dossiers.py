@@ -69,6 +69,12 @@ def rattacher_rdvs(dossier_id, racine=RACINE):
         save_json(chemin_agenda(racine), rdvs)
 
 
+def supprimer(dossier_id, racine=RACINE):
+    shutil.rmtree(dossier_racine(racine) / dossier_id, ignore_errors=True)
+    rdvs = load_json(chemin_agenda(racine), [])
+    save_json(chemin_agenda(racine), [rdv for rdv in rdvs if rdv.get("dossier_id") != dossier_id])
+
+
 def migrer_ancien_dossier(racine=RACINE):
     racine = Path(racine)
 

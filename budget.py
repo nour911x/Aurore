@@ -3,6 +3,9 @@ from datetime import date
 from storage import load_json, save_json
 
 
+POSTE_ORGANISATION = "Organisation"
+
+
 class Budget:
     def __init__(self, file_path="./budget_data.json"):
         self.file_path = file_path

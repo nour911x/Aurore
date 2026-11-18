@@ -411,3 +411,16 @@ button[role="tab"][aria-selected="true"] p { color: #FFFFFF; }
 [role="tablist"] button p {
     white-space: nowrap;
 }
+
+.aurore-jour {
+    text-align: left;
+    padding: 0.5rem 0 0.75rem;
+}
+
+.aurore-jour h1 {
+    font-size: 2.2rem;
+}
+
+.aurore-jour p {
+    margin: 0.25rem 0 0;
+}

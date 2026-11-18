@@ -5,7 +5,7 @@ from pathlib import Path
 
 from devis import date_lisible, euros
 from event_state import renseigne
-from textes import format_person_name
+from textes import date_longue, format_person_name
 from jour_j import TABLE_HONNEUR
 
 
@@ -139,6 +139,13 @@ def accueil_html(profil):
     titre, intro = ACCUEILS[profil]
 
     return f'<div class="aurore-accueil"><h1>{salutation()}. {titre}</h1><p>{intro}</p></div>'
+
+
+def aujourdhui_html(maintenant):
+    return (
+        f'<div class="aurore-accueil aurore-jour"><h1>{salutation()}.</h1>'
+        f"<p>Voici votre journée du {date_longue(maintenant)}.</p></div>"
+    )
 
 
 def frise_html(deroule, mis_en_avant=None):
