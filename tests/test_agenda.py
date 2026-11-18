@@ -1,4 +1,4 @@
-from agenda import Agenda
+from metier.agenda import Agenda
 
 
 def agenda_vide(tmp_path, dossier_id="a"):

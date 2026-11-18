@@ -3,15 +3,17 @@ from html import escape
 import json
 from pathlib import Path
 
-from devis import date_lisible, euros
-from event_state import renseigne
-from textes import date_longue, format_person_name
-from jour_j import TABLE_HONNEUR
+from metier.devis import date_lisible, euros
+from donnees.event_state import renseigne
+from textes import ACCUEILS, AVERTISSEMENT, BASELINE, date_longue, format_person_name
+from metier.jour_j import TABLE_HONNEUR
 
 
-FICHIER_STYLE = Path(__file__).with_name("assets") / "style.css"
+DOSSIER_ASSETS = Path(__file__).parent.parent / "assets"
 
-FICHIER_SALLE_3D = Path(__file__).with_name("assets") / "salle_3d.html"
+FICHIER_STYLE = DOSSIER_ASSETS / "style.css"
+
+FICHIER_SALLE_3D = DOSSIER_ASSETS / "salle_3d.html"
 
 PALETTE_PAR_DEFAUT = ["#B9506F", "#9CAF88", "#F8EDEF", "#E9C46A", "#FFFFFF"]
 
@@ -41,27 +43,7 @@ THEME_PRO = """<style>
 button[role="tab"][aria-selected="true"] { background: var(--accent); }
 </style>"""
 
-BASELINE = "Vos événements, organisés de bout en bout."
-
-ACCUEILS = {
-    "Wedding planner": (
-        "Quel événement préparez-vous pour vos clients ?",
-        "Rendez-vous, prestataires, devis et invités : tout le suivi de vos clients au même endroit."
-    ),
-    "Mariés": (
-        "Qu'organise-t-on ensemble ?",
-        "Budget, prestataires, invités, inspiration : je t'accompagne de la première idée au jour J."
-    ),
-    "Prestataire": (
-        "Sur quel événement travaillez-vous ?",
-        "Couverts, allergies, rendez-vous et devis : les infos utiles pour votre prestation."
-    )
-}
-
-AVERTISSEMENT_HTML = (
-    '<div class="aurore-avertissement">AURORE peut se tromper : '
-    "vérifiez les montants et les dates importantes.</div>"
-)
+AVERTISSEMENT_HTML = f'<div class="aurore-avertissement">{AVERTISSEMENT}</div>'
 
 
 def style_html():

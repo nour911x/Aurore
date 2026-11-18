@@ -1,11 +1,10 @@
 import json
-from datetime import date
 
-from dossiers import FICHIER_FICHE, chemin, creer, lister, supprimer
-from event_state import EventSheet
-from galerie import publiable
-from invites import ListeInvites
-from rgpd import consentement, exporter, peut_recevoir_sante, recap_anonyme, recap_sans_sante
+from donnees.dossiers import FICHIER_FICHE, chemin, creer, lister, supprimer
+from donnees.event_state import EventSheet
+from metier.galerie import publiable
+from metier.invites import ListeInvites
+from metier.rgpd import consentement, exporter, peut_recevoir_sante, recap_anonyme, recap_sans_sante
 
 
 TRAITEUR = {"nom": "Saveurs d'Orient", "categorie": "Traiteur"}

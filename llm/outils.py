@@ -1,12 +1,12 @@
 import json
 from datetime import datetime
 
-import outlook
-from devis import totaux, lignes_valides
-from invites import GROUPES, STATUTS_INVITE, REGIMES, nouvel_invite
-from messages import TYPES_MESSAGE, EMETTEUR_AURORE, NOMS_CLIENTS, destinataire_maries, destinataire_prestataire, suggestion
-from prestataires import CATEGORIES, STATUTS, appliquer_statut, meme_nom
-from rgpd import peut_recevoir_sante, recap_anonyme, recap_sans_sante
+from llm import outlook
+from metier.devis import totaux, lignes_valides
+from metier.invites import GROUPES, STATUTS_INVITE, REGIMES, nouvel_invite
+from metier.messages import TYPES_MESSAGE, EMETTEUR_AURORE, NOMS_CLIENTS, destinataire_maries, destinataire_prestataire, suggestion
+from metier.prestataires import CATEGORIES, STATUTS, appliquer_statut, meme_nom
+from metier.rgpd import peut_recevoir_sante, recap_anonyme, recap_sans_sante
 from textes import noms_clients
 
 

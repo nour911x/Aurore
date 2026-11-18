@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from fpdf import FPDF
 
-from storage import load_json, save_json
+from donnees.storage import load_json, save_json
 
 
 STATUTS_DEVIS = ["Brouillon", "Envoyé", "Accepté", "Refusé"]
@@ -67,7 +67,7 @@ def date_validite(devis):
 
 
 class CarnetDevis:
-    def __init__(self, file_path="./devis_data.json"):
+    def __init__(self, file_path):
         self.file_path = file_path
         self.devis = []
         self.load()

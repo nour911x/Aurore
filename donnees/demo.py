@@ -1,13 +1,13 @@
 from datetime import date, datetime, time, timedelta
 
-from agenda import Agenda
-from budget import Budget, POSTE_ORGANISATION
-from devis import CarnetDevis
-from dossiers import RACINE, FICHIER_FICHE, chemin, chemin_agenda, creer, lister, supprimer
-from event_state import EventSheet
-from messages import Messagerie, destinataire_prestataire, suggestion
-from prestataires import Carnet
-from rgpd import consentement
+from metier.agenda import Agenda
+from metier.budget import Budget, POSTE_ORGANISATION
+from metier.devis import CarnetDevis
+from donnees.dossiers import RACINE, FICHIER_FICHE, chemin, chemin_agenda, creer, lister, supprimer
+from donnees.event_state import EventSheet
+from metier.messages import Messagerie, destinataire_prestataire, suggestion
+from metier.prestataires import Carnet
+from metier.rgpd import consentement
 
 
 def a_heure(jour, heure, minute=0):

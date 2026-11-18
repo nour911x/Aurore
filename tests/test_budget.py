@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from budget import Budget
+from metier.budget import Budget
 
 
 def budget_traiteur(tmp_path):
@@ -40,3 +40,29 @@ def test_marquer_payee(tmp_path):
     budget.marquer_payee("Traiteur", "Acompte")
 
     assert budget.factures_a_payer() == []
+
+
+def test_devis_accepte_cree_acompte_et_solde_sans_doublon(tmp_path):
+    budget = budget_traiteur(tmp_path)
+    montants = {"ttc": 1000, "acompte": 300}
+
+    budget.enregistrer_devis("DEV-2026-001", montants, "Fleuriste", date(2027, 1, 5))
+    budget.enregistrer_devis("DEV-2026-001", montants, "Fleuriste", date(2027, 1, 5))
+
+    fleuriste = next(poste for poste in budget.postes if poste["nom"] == "Fleuriste")
+    assert fleuriste["montant_prevu"] == 1000
+    assert [(facture["libelle"], facture["montant"]) for facture in fleuriste["factures"]] == [
+        ("Acompte DEV-2026-001", 300), ("Solde DEV-2026-001", 700)
+    ]
+
+
+def test_budget_et_factures_d_un_prestataire(tmp_path):
+    budget = budget_traiteur(tmp_path)
+    budget.add_poste("Organisation", 2000)
+    budget.add_facture("Traiteur", "Acompte", 1500, "2026-12-01", False)
+    budget.add_facture("Organisation", "Frais Saveurs d'Orient", 50, "2026-12-01", False)
+    traiteur = {"nom": "Saveurs d'Orient", "categorie": "Traiteur", "poste_budget": None}
+
+    assert budget.prevu_pour(traiteur) == 5000
+    assert [facture["libelle"] for facture in budget.factures_de(traiteur)] == ["Acompte", "Frais Saveurs d'Orient"]
+    assert budget.resume()[0] == {"nom": "Traiteur", "montant_prevu": 5000, "engage": 1500}

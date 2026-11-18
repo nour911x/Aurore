@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from storage import load_json, save_json
+from donnees.storage import load_json, save_json
 
 
 TYPES_RDV = {
@@ -50,7 +50,7 @@ def conflits(rdvs):
 
 
 class Agenda:
-    def __init__(self, file_path="./agenda_data.json", dossier_id=None):
+    def __init__(self, file_path, dossier_id=None):
         self.file_path = file_path
         self.dossier_id = dossier_id
         self.tous = []

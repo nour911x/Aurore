@@ -3,12 +3,12 @@ import uuid
 from pathlib import Path
 
 from config.evenements import libelle_evenement
-from devis import date_lisible
-from storage import load_json, save_json
+from metier.devis import date_lisible
+from donnees.storage import load_json, save_json
 from textes import format_person_name
 
 
-RACINE = Path(__file__).parent
+RACINE = Path(__file__).parent.parent
 
 FICHIER_FICHE = "event_data.json"
 

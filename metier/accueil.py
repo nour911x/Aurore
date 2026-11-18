@@ -1,12 +1,12 @@
 from datetime import date, datetime, timedelta
 
-from agenda import Agenda, bornes, conflits, type_rdv
-from budget import Budget, POSTE_ORGANISATION
+from metier.agenda import Agenda, bornes, conflits, type_rdv
+from metier.budget import Budget, POSTE_ORGANISATION
 from config.evenements import CHAMPS_ESSENTIELS
-from dossiers import RACINE, FICHIER_FICHE, chemin, chemin_agenda, lister, libelle_dossier
-from event_state import EventSheet, renseigne
-from messages import MODIFIABLES, Messagerie, detecter_messages
-from prestataires import Carnet
+from donnees.dossiers import RACINE, FICHIER_FICHE, chemin, chemin_agenda, lister, libelle_dossier
+from donnees.event_state import EventSheet, renseigne
+from metier.messages import MODIFIABLES, Messagerie, detecter_messages
+from metier.prestataires import Carnet
 
 
 JOURS_SURVEILLANCE = 45

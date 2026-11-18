@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from messages import Messagerie, suggestion
+from metier.messages import Messagerie, suggestion
 
 
 CLIENT = {"destinataire": "Léa et Liam", "prestataire_id": None, "telephone": "0612345678", "email": None}

@@ -1,4 +1,4 @@
-from invites import ListeInvites
+from metier.invites import ListeInvites
 
 
 def test_modifier_le_faire_part_annule_sa_validation(tmp_path):

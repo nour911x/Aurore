@@ -1,6 +1,6 @@
 import json
 
-from dossiers import chemin, creer, lister, libelle_dossier, migrer_ancien_dossier
+from donnees.dossiers import chemin, creer, lister, libelle_dossier, migrer_ancien_dossier
 
 
 def ecrire(fichier, data):

@@ -1,8 +1,8 @@
 from datetime import date
 
 from config.evenements import CHAMPS_SPECIFIQUES, champs_par_defaut
-from rgpd import CHAMPS_CONSENTEMENT, CHAMPS_SANTE, sans_sante
-from storage import load_json, save_json
+from metier.rgpd import CHAMPS_CONSENTEMENT, CHAMPS_SANTE, sans_sante
+from donnees.storage import load_json, save_json
 
 
 CHAMPS_POUR_PRESTATAIRE = [
@@ -19,7 +19,7 @@ def renseigne(valeur):
 
 
 class EventSheet:
-    def __init__(self, file_path="./event_data.json"):
+    def __init__(self, file_path):
         self.file_path = file_path
         self.data = {
             "type_evenement": None,

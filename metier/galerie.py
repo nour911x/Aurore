@@ -5,9 +5,9 @@ from pathlib import Path
 from fpdf import FPDF
 
 from config.evenements import libelle_evenement
-from rgpd import consentements_manquants
-from devis import texte_pdf, date_lisible
-from storage import load_json, save_json
+from metier.rgpd import consentements_manquants
+from metier.devis import texte_pdf, date_lisible
+from donnees.storage import load_json, save_json
 from textes import noms_clients
 
 
@@ -45,7 +45,7 @@ def publiable(photo, droit_image, usage="Réseaux sociaux"):
 
 
 class Galerie:
-    def __init__(self, file_path="./galerie_data.json", dossier="./galerie"):
+    def __init__(self, file_path, dossier):
         self.file_path = file_path
         self.dossier = Path(dossier)
         self.photos = []
