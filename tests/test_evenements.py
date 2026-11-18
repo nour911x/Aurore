@@ -1,4 +1,5 @@
-from config.evenements import TYPES_EVENEMENT, CHAMPS_SPECIFIQUES, champs_masques, cle_type, champs_du_type, libelle_evenement
+from config.evenements import (CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, champs_du_type, champs_masques, cle_type,
+                               libelle_evenement)
 from donnees.dossiers import FICHIER_FICHE, chemin, creer
 from donnees.event_state import EventSheet
 

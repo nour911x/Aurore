@@ -2,10 +2,9 @@ import re
 
 from fpdf import FPDF
 
-from metier.devis import texte_pdf, date_lisible
-from metier.prestataires import normaliser_nom
 from donnees.storage import load_json, save_json
-from textes import format_person_name
+from metier.devis import date_lisible, texte_pdf
+from metier.prestataires import normaliser_nom
 
 
 COLONNES_DEROULE = ["heure", "moment", "lieu", "intervenants", "details"]
@@ -140,7 +139,7 @@ def generer_plan_table_pdf(repartition, event_data):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 18)
-    pdf.cell(0, 10, texte_pdf(" - ".join(filter(None, ["Plan de table", format_person_name(event_data["noms"])]))), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, texte_pdf(" - ".join(filter(None, ["Plan de table", event_data["noms"]]))), new_x="LMARGIN", new_y="NEXT")
 
     for table, invites in repartition.items():
         pdf.ln(4)
@@ -165,7 +164,7 @@ def generer_deroule_pdf(deroule, event_data):
     pdf = FPDF(orientation="landscape")
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 18)
-    titre = " - ".join(filter(None, ["Déroulé du jour J", format_person_name(event_data["noms"]), date_lisible(event_data["date"])]))
+    titre = " - ".join(filter(None, ["Déroulé du jour J", event_data["noms"], date_lisible(event_data["date"])]))
     pdf.cell(0, 10, texte_pdf(titre), new_x="LMARGIN", new_y="NEXT")
 
     if event_data["lieu"]:

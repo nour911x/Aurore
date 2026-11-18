@@ -94,7 +94,7 @@ Les tests couvrent la logique métier : conflits de calendrier, budget et devis,
 ```
 app.py                point d'entrée Streamlit
 textes.py             libellés de l'interface, noms propres, pluriels
-config/               evenements.py (types et champs par type), features.py (flags)
+config/               evenements.py (types et champs par type), features.py (flags), profils.py (les trois vues)
 ui/                   un module par onglet, composants partagés, habillage HTML/CSS
 metier/               agenda, budget, devis, messages, invités, galerie, jour J, accueil, RGPD
 donnees/              stockage JSON, dossiers clients, fiche, données de démonstration
@@ -104,4 +104,4 @@ tests/                tests unitaires (pytest)
 dossiers/             données des clients, un sous-dossier par client (créé au lancement, ignoré par git)
 ```
 
-À la racine, `agenda_data.json` (agenda commun), `annuaire_prestataires.json` (carnet commun) et `aurore_etat.json` (migrations déjà faites, démo) sont créés au lancement et ignorés par git. Les migrations des anciennes données (dossier unique, carnets par dossier, noms) se font automatiquement.
+À la racine, `agenda_data.json` (agenda commun), `annuaire_prestataires.json` (carnet commun) et `aurore_etat.json` (état de la démonstration) sont créés au lancement et ignorés par git.

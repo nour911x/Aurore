@@ -1,8 +1,8 @@
 from datetime import date
 
 from config.evenements import CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, champs_par_defaut
-from metier.rgpd import CHAMPS_CONSENTEMENT, CHAMPS_SANTE, sans_sante
 from donnees.storage import load_json, save_json
+from metier.rgpd import CHAMPS_CONSENTEMENT, CHAMPS_SANTE, sans_sante
 from textes import format_person_name
 
 

@@ -1,18 +1,19 @@
-from groq import Groq, APIError, BadRequestError
-from PIL import Image, ImageOps
-
-from dotenv import load_dotenv
-
-from config.evenements import description_champs_llm, type_du_dossier
-from metier.rgpd import peut_recevoir_sante
-from textes import date_longue
-from datetime import datetime
-from pathlib import Path
 import base64
 import io
-import os
 import json
+import os
 import re
+from datetime import datetime
+from pathlib import Path
+
+from dotenv import load_dotenv
+from groq import APIError, BadRequestError, Groq
+from PIL import Image, ImageOps
+
+from config.evenements import description_champs_llm, type_du_dossier
+from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
+from metier.rgpd import peut_recevoir_sante
+from textes import date_longue
 
 
 FICHIER_CONTEXTE = Path(__file__).with_name("context.txt")
@@ -27,9 +28,9 @@ MAX_JETONS_ANALYSE = 120
 TEXTE_PHOTO_SEULE = "Voici une photo pour notre projet, qu'en penses-tu ?"
 
 PROFILS = {
-    "Wedding planner": "un organisateur ou une organisatrice d'événements professionnel(le) qui gère l'événement de ses clients. Vouvoie-le ou la, ton professionnel.",
-    "Mariés": "les clients dont on organise l'événement (mariage, baby shower, anniversaire…). Tutoie-les, ton chaleureux et complice.",
-    "Prestataire": "un prestataire (traiteur, DJ, domaine...) qui travaille sur cet événement. Vouvoie-le ou la, ton professionnel."
+    ORGANISATEUR: "un organisateur ou une organisatrice d'événements professionnel(le) qui gère l'événement de ses clients. Vouvoie-le ou la, ton professionnel.",
+    CLIENTS: "les clients dont on organise l'événement (mariage, baby shower, anniversaire…). Tutoie-les, ton chaleureux et complice.",
+    PRESTATAIRE: "un prestataire (traiteur, DJ, domaine...) qui travaille sur cet événement. Vouvoie-le ou la, ton professionnel."
 }
 
 
@@ -121,7 +122,7 @@ class ConversationAgent:
     def consignes_session(profil, avec_outils):
         consignes = f"Nous sommes le {date_du_jour()}. Tu parles à {PROFILS[profil]}"
 
-        if avec_outils and profil != "Wedding planner":
+        if avec_outils and profil != ORGANISATEUR:
             consignes += (
                 " Tu es dans une vue partagée en lecture seule : tu consultes et tu expliques, mais tu ne crées, "
                 "ne modifies et ne supprimes rien. Si on te demande un changement, propose de transmettre la demande "
@@ -158,7 +159,7 @@ class ConversationAgent:
         return {"role": "system", "content": consignes}
 
 
-    def ask_llm(self, text_interaction, profil="Wedding planner", outils=None, image=None):
+    def ask_llm(self, text_interaction, profil=ORGANISATEUR, outils=None, image=None):
 
         texte = text_interaction or TEXTE_PHOTO_SEULE
         image = preparer_image(image) if image else None

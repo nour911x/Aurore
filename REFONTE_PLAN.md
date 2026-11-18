@@ -258,3 +258,16 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Accueil** : la bannière de notification n'apparaît plus sur l'accueil, puisque « À faire » en reprend le contenu. Elle reste sur les autres onglets.
 - **Nouvelle conversation** : le bouton est passé de la barre latérale à la discussion (Messages › Discussion, ou Discussion dans les vues partagées). Il n'apparaît que s'il y a une conversation.
 - **Pétales** : passés sous le contenu (`z-index: -1` dans la zone principale) avec une opacité réduite de moitié environ. Ils ne recouvrent plus le texte.
+
+---
+
+## Simplifications avant la code review
+
+- **Indentation** : tout le projet est en espaces (PEP 8). Les 13 fichiers qui venaient de l'ancien `user_interface.py` étaient en tabulations. La conversion a été vérifiée fichier par fichier : l'arbre syntaxique est identique avant et après.
+- **Imports** : rangés partout avec isort, en trois groupes (bibliothèque standard, bibliothèques externes, modules du projet), chacun trié. pyflakes ne signale plus aucun import inutile ni aucun nom non défini. Seule exception : `win32com` dans `llm/outlook.py`, importé exprès pour détecter si Outlook est installé.
+- **Clés des vues** : les chaînes `"Wedding planner"`, `"Mariés"` et `"Prestataire"`, héritées de la version mariage, sont remplacées par les constantes `ORGANISATEUR`, `CLIENTS` et `PRESTATAIRE` (`config/profils.py`). Les libellés affichés et l'adresse (`?profil=Organisateur`) ne changent pas.
+- **Migrations supprimées** : elles convertissaient le dossier unique, les carnets par dossier, les noms et les anciens statuts de messages. Toutes les données existantes étaient déjà converties (vérifié avant la suppression). Leurs tests sont retirés aussi.
+- **Code de compatibilité de la galerie supprimé** : l'ancien statut global de droit à l'image et la conversion de la catégorie « Couple ». Le tag d'une photo n'est plus recopié dans la photo : c'est une simple fonction de `personnes` (`metier.galerie.tag`).
+- **Noms normalisés à un seul endroit** : à l'enregistrement (fiche, invités, consentements). La normalisation qui était répétée à chaque affichage (barre latérale, messages, PDF, devis, avis) est retirée.
+- **Vocabulaire** : `destinataire_maries` devient `destinataire_clients`.
+- **Conservé volontairement** : `show_achats` (écran « Achats & factures » du prestataire, retiré de sa vue en phase 4) et `Budget.depense_du_poste`, qui ne sont plus appelés par l'interface, parce que le brief demande de ne supprimer aucune fonctionnalité sans accord. Les classes `Vue…` de `ui/` restent des classes de méthodes assemblées par héritage dans `UserInterface` : les transformer en vrais objets serait un chantier trop risqué juste avant la review.

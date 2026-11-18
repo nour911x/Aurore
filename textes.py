@@ -1,5 +1,7 @@
 import re
 
+from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
+
 
 PARTICULES = {"de", "du", "des", "d", "la", "le", "van", "von", "der", "den", "di", "da", "del", "dos"}
 
@@ -12,15 +14,15 @@ BASELINE = "Vos événements, organisés de bout en bout."
 AVERTISSEMENT = "AURORE peut se tromper : vérifiez les montants et les dates importantes."
 
 ACCUEILS = {
-    "Wedding planner": (
+    ORGANISATEUR: (
         "Quel événement préparez-vous pour vos clients ?",
         "Rendez-vous, prestataires, devis et invités : tout le suivi de vos clients au même endroit."
     ),
-    "Mariés": (
+    CLIENTS: (
         "Bienvenue dans votre espace.",
         "Rendez-vous, budget et invitations : suivez la préparation de votre événement."
     ),
-    "Prestataire": (
+    PRESTATAIRE: (
         "Sur quel événement travaillez-vous ?",
         "Rendez-vous, devis et informations utiles à votre prestation."
     )
@@ -82,11 +84,11 @@ def format_person_name(nom):
 
 
 def noms_courts(noms):
-    return (format_person_name(noms) or "").replace(" et ", " & ")
+    return (noms or "").replace(" et ", " & ")
 
 
 def noms_clients(data, defaut="Les clients"):
-    return format_person_name(data.get("noms")) or defaut
+    return data.get("noms") or defaut
 
 
 def date_longue(jour):
@@ -115,67 +117,67 @@ def pluriel(nombre, singulier, forme_plurielle=None):
     return f"{nombre} {singulier if nombre <= 1 else forme_plurielle or singulier + 's'}"
 
 
-LIBELLES_PROFIL = {"Wedding planner": "Organisateur", "Mariés": "Clients", "Prestataire": "Prestataire"}
+LIBELLES_PROFIL = {ORGANISATEUR: "Organisateur", CLIENTS: "Clients", PRESTATAIRE: "Prestataire"}
 
 ONGLETS = {
-	"accueil": ":material/home: Accueil",
-	"messages": ":material/mail: Messages",
-	"fiche": ":material/folder_shared: Fiche client",
-	"planning": ":material/event: Planning",
-	"prestataires": ":material/handshake: Prestataires",
-	"budget": ":material/payments: Budget & devis",
-	"invites": ":material/groups: Invités",
-	"inspiration": ":material/palette: Inspiration & galerie",
-	"discussion": ":material/chat: Discussion",
-	"evenement": ":material/celebration: L'événement",
-	"recap": ":material/folder_shared: Notre événement",
-	"budget_client": ":material/payments: Budget",
-	"invitations": ":material/mail: Invitations",
-	"agenda_prestataire": ":material/event: Mes rendez-vous",
-	"devis_prestataire": ":material/request_quote: Devis & factures"
+    "accueil": ":material/home: Accueil",
+    "messages": ":material/mail: Messages",
+    "fiche": ":material/folder_shared: Fiche client",
+    "planning": ":material/event: Planning",
+    "prestataires": ":material/handshake: Prestataires",
+    "budget": ":material/payments: Budget & devis",
+    "invites": ":material/groups: Invités",
+    "inspiration": ":material/palette: Inspiration & galerie",
+    "discussion": ":material/chat: Discussion",
+    "evenement": ":material/celebration: L'événement",
+    "recap": ":material/folder_shared: Notre événement",
+    "budget_client": ":material/payments: Budget",
+    "invitations": ":material/mail: Invitations",
+    "agenda_prestataire": ":material/event: Mes rendez-vous",
+    "devis_prestataire": ":material/request_quote: Devis & factures"
 }
 
 LIBELLES_SECTIONS = {
-	"discussion": ":material/chat: Discussion avec AURORE",
-	"a_envoyer": ":material/outbox: À préparer et à envoyer",
-	"agenda": ":material/event: Rendez-vous",
-	"deroule": ":material/schedule: Déroulé du jour J",
-	"plan_salle": ":material/table_restaurant: Plan de salle",
-	"salle_3d": ":material/view_in_ar: Salle en 3D",
-	"budget": ":material/payments: Budget",
-	"devis": ":material/request_quote: Devis",
-	"achats": ":material/receipt_long: Achats & factures",
-	"moodboard": ":material/palette: Moodboard",
-	"adresses": ":material/storefront: Boutiques & beauté",
-	"photos": ":material/photo_library: Photos",
-	"droit_image": ":material/verified_user: Droit à l'image",
-	"avis": ":material/star: Avis",
-	"instagram": ":material/share: Instagram"
+    "discussion": ":material/chat: Discussion avec AURORE",
+    "a_envoyer": ":material/outbox: À préparer et à envoyer",
+    "agenda": ":material/event: Rendez-vous",
+    "deroule": ":material/schedule: Déroulé du jour J",
+    "plan_salle": ":material/table_restaurant: Plan de salle",
+    "salle_3d": ":material/view_in_ar: Salle en 3D",
+    "budget": ":material/payments: Budget",
+    "devis": ":material/request_quote: Devis",
+    "achats": ":material/receipt_long: Achats & factures",
+    "moodboard": ":material/palette: Moodboard",
+    "adresses": ":material/storefront: Boutiques & beauté",
+    "photos": ":material/photo_library: Photos",
+    "droit_image": ":material/verified_user: Droit à l'image",
+    "avis": ":material/star: Avis",
+    "instagram": ":material/share: Instagram"
 }
 
 RACCOURCIS = [
-	("agenda", ":material/calendar_month:", "Mon agenda de la semaine", "Quels sont mes rendez-vous des 7 prochains jours ?"),
-	("budget", ":material/payments:", "Point budget", "Fais-moi le point sur le budget et les factures à payer."),
-	("invites", ":material/groups:", "Réponses des invités", "Où en sont les réponses des invités et les régimes alimentaires ?"),
-	("message", ":material/mail:", "Préparer un message", "Aide-moi à préparer un message pour un prestataire.")
+    ("agenda", ":material/calendar_month:", "Mon agenda de la semaine", "Quels sont mes rendez-vous des 7 prochains jours ?"),
+    ("budget", ":material/payments:", "Point budget", "Fais-moi le point sur le budget et les factures à payer."),
+    ("invites", ":material/groups:", "Réponses des invités", "Où en sont les réponses des invités et les régimes alimentaires ?"),
+    ("message", ":material/mail:", "Préparer un message", "Aide-moi à préparer un message pour un prestataire.")
 ]
 
 RACCOURCIS_CLIENTS = [
-	("agenda", ":material/calendar_month:", "Nos prochains rendez-vous", "Quels sont nos prochains rendez-vous ?"),
-	("budget", ":material/payments:", "Où en est le budget ?", "Où en est notre budget et que reste-t-il à payer ?"),
-	("invites", ":material/groups:", "Réponses des invités", "Combien d'invités ont répondu ?")
+    ("agenda", ":material/calendar_month:", "Nos prochains rendez-vous", "Quels sont nos prochains rendez-vous ?"),
+    ("budget", ":material/payments:", "Où en est le budget ?", "Où en est notre budget et que reste-t-il à payer ?"),
+    ("invites", ":material/groups:", "Réponses des invités", "Combien d'invités ont répondu ?")
 ]
 
 RACCOURCIS_PRESTATAIRE = [
-	("agenda", ":material/calendar_month:", "Mes rendez-vous", "Quels sont mes prochains rendez-vous pour cet événement ?"),
-	("couverts", ":material/restaurant:", "Couverts et allergies", "Combien de couverts, quels régimes et quelles allergies ?"),
-	("devis", ":material/request_quote:", "Préparer un devis", "Aide-moi à préparer mon devis pour cet événement.")
+    ("agenda", ":material/calendar_month:", "Mes rendez-vous", "Quels sont mes prochains rendez-vous pour cet événement ?"),
+    ("couverts", ":material/restaurant:", "Couverts et allergies", "Combien de couverts, quels régimes et quelles allergies ?"),
+    ("devis", ":material/request_quote:", "Préparer un devis", "Aide-moi à préparer mon devis pour cet événement.")
 ]
 
 PLACEHOLDERS = {
-	"Wedding planner": "Que puis-je faire pour vous ? (ex : ajoute une dégustation jeudi à 14h)",
-	"Mariés": "Parle-moi de ton événement ! (ex : où en est notre budget ?)",
-	"Prestataire": "Que puis-je faire pour vous ? (ex : combien de couverts végétariens ?)"
+    ORGANISATEUR: "Que puis-je faire pour vous ? (ex : ajoute une dégustation jeudi à 14h)",
+    CLIENTS: "Parle-moi de ton événement ! (ex : où en est notre budget ?)",
+    PRESTATAIRE: "Que puis-je faire pour vous ? (ex : combien de couverts végétariens ?)"
 }
 
 NOTES_DEVIS ="Acompte à régler à la signature, solde au plus tard le jour de l'événement."
@@ -183,9 +185,9 @@ NOTES_DEVIS ="Acompte à régler à la signature, solde au plus tard le jour de 
 CHOIX_TYPE_RDV = "Selon le titre"
 
 CHAMPS_LISTES = {
-	"allergies_interdits": "Allergies / interdits (alimentaires, religieux, à éviter absolument…)",
-	"preferences": "Préférences (style, couleurs, fleurs, ambiance…)",
-	"prestataires": "Prestataires déjà choisis"
+    "allergies_interdits": "Allergies / interdits (alimentaires, religieux, à éviter absolument…)",
+    "preferences": "Préférences (style, couleurs, fleurs, ambiance…)",
+    "prestataires": "Prestataires déjà choisis"
 }
 
 SOURCES_ECHANGE = ["Rendez-vous", "Appel", "Message", "Email", "Autre"]

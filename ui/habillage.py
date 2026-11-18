@@ -1,12 +1,13 @@
+import json
 from datetime import date, datetime
 from html import escape
-import json
 from pathlib import Path
 
-from metier.devis import date_lisible
+from config.profils import CLIENTS
 from donnees.event_state import renseigne
-from textes import ACCUEILS, AVERTISSEMENT, BASELINE, date_longue, format_person_name, montant
+from metier.devis import date_lisible
 from metier.jour_j import TABLE_HONNEUR
+from textes import ACCUEILS, AVERTISSEMENT, BASELINE, date_longue, montant, noms_courts
 
 
 DOSSIER_ASSETS = Path(__file__).parent.parent / "assets"
@@ -51,7 +52,7 @@ def style_html():
 
 
 def theme_html(profil):
-    return THEME_PRO if profil != "Mariés" else "<style></style>"
+    return THEME_PRO if profil != CLIENTS else "<style></style>"
 
 
 def salutation():
@@ -105,7 +106,7 @@ def particules_html(type_evenement):
 
 def marque_html(event_data):
     compte = compte_a_rebours(jours_restants(event_data.get("date")))
-    noms = format_person_name(event_data.get("noms") or "").replace(" et ", " & ")
+    noms = noms_courts(event_data.get("noms"))
     pastille = " · ".join(filter(None, [compte, escape(noms)]))
     pastille_html = f'<span class="aurore-compte">{pastille}</span>' if pastille else ""
 
@@ -266,9 +267,6 @@ def dossier_html(event_data, champs_essentiels, champs_details):
 
     def valeur(cle):
         contenu = event_data[cle]
-
-        if cle == "noms":
-            return format_person_name(contenu)
 
         if isinstance(contenu, bool):
             return "Oui" if contenu else "Non"
