@@ -10,7 +10,11 @@ from event_state import EventSheet
 from config import features
 from textes import date_longue, format_person_name, noms_clients, pluriel
 from config.evenements import TYPES_EVENEMENT, CHAMPS_ESSENTIELS, CHAMPS_SPECIFIQUES, type_du_dossier, champs_du_type, libelle_evenement
-from dossiers import FICHIER_FICHE, chemin, chemin_agenda, creer as creer_dossier, lister as lister_dossiers, libelle_dossier, migrer_ancien_dossier
+from dossiers import FICHIER_FICHE, chemin, chemin_agenda, creer as creer_dossier, lister as lister_dossiers, libelle_dossier, migrer_ancien_dossier, supprimer as supprimer_dossier
+from rgpd import (
+	PERIMETRES_IMAGE, USAGES_PHOTO, TEXTE_CONSENTEMENT_SANTE, CATEGORIE_DONNEES_SANTE,
+	consentement, consentements_manquants, exporter, peut_recevoir_sante, recap_anonyme, recap_sans_sante, sante_partageable
+)
 from budget import Budget, POSTE_ORGANISATION
 from agenda import Agenda, TYPES_RDV, AUTRE_TYPE, bornes, type_rdv
 from accueil import JOURS_SURVEILLANCE, synthese
@@ -30,7 +34,7 @@ from jour_j import (
 	nettoyer_deroule, generer_deroule_pdf, generer_plan_table_pdf,
 	creer_tables, invites_a_placer, personnes
 )
-from galerie import Galerie, CATEGORIES_PHOTO, STATUTS_DROIT, publiable, generer_autorisation_pdf
+from galerie import Galerie, CATEGORIES_PHOTO, TAGS_PHOTO, publiable, generer_autorisation_pdf
 from invites import (
 	ListeInvites, GROUPES, STATUTS_INVITE, REGIMES,
 	nettoyer, entier, lire_contacts, message_personnel, generer_faire_part_pdf
@@ -256,6 +260,11 @@ def echeance_lisible(jours):
 	return f":orange[Dans {pluriel(jours, 'jour')}]"
 
 
+def personnes_du_dossier(data):
+	noms = format_person_name(data["noms"] or "")
+	return [nom.strip() for nom in noms.replace(" & ", ",").replace(" et ", ",").split(",") if nom.strip()]
+
+
 def nom_affiche(message):
 	return message["destinataire"] if message["prestataire_id"] else format_person_name(message["destinataire"])
 
@@ -376,7 +385,15 @@ class UserInterface:
 
 
 	def infos_utiles(self):
-		return INFOS_PAR_CATEGORIE.get(self.prestataire["categorie"], set()) if self.prestataire else set()
+		if not self.prestataire:
+			return set()
+
+		utiles = set(INFOS_PAR_CATEGORIE.get(self.prestataire["categorie"], set()))
+
+		if not peut_recevoir_sante(self.event_sheet.data, self.prestataire) and utiles & {"allergies", "invites", "tables"}:
+			utiles = (utiles - {"allergies", "invites", "tables"}) | {"couverts"}
+
+		return utiles
 
 
 	def details_pour_prestataire(self, data):
@@ -544,10 +561,103 @@ class UserInterface:
 				st.markdown(echange["resume"])
 
 
+	def show_consentement_sante(self):
+		data = self.event_sheet.data
+		accord = data["consentement_sante"] or {}
+		accorde = st.toggle(TEXTE_CONSENTEMENT_SANTE, value=bool(accord.get("accorde")), key=f"sante_{self.dossier_id}_{accord.get('accorde')}")
+
+		if accorde != bool(accord.get("accorde")):
+			self.event_sheet.set_consentement("consentement_sante", consentement(accorde))
+			st.rerun()
+
+		if accord:
+			st.caption(f"{'Accordé' if accord['accorde'] else 'Retiré'} le {date_lisible(accord['date'])}.")
+
+		if data["allergies_interdits"] and not accorde:
+			st.warning(
+				"Des allergies sont notées sans l'accord du client : elles restent visibles par vous seul·e, "
+				"ne sont envoyées ni aux prestataires ni à l'IA.", icon=":material/lock:"
+			)
+
+
+	def show_consentements_image(self):
+		consentements = self.event_sheet.data["droit_image"]
+
+		for index, element in enumerate(consentements):
+			texte, retirer = st.columns([5, 1], vertical_alignment="center")
+			texte.markdown(f"**{element['personne']}** · {element['perimetre']} · :gray[recueilli le {date_lisible(element['date'])}]")
+
+			if self.profil == "Wedding planner" and retirer.button("Retirer", key=f"retirer_image_{index}", type="tertiary"):
+				self.event_sheet.set_consentement("droit_image", consentements[:index] + consentements[index + 1:])
+				st.rerun()
+
+		if not consentements:
+			st.caption("Aucun consentement de droit à l'image enregistré : seules les photos de décor sont publiables.")
+
+		if self.profil != "Wedding planner":
+			return
+
+		with st.form(f"form_droit_image_{self.dossier_id}", clear_on_submit=True):
+			personnes = personnes_du_dossier(self.event_sheet.data)
+			gauche, milieu, droite = st.columns([2, 2, 1])
+			personne = gauche.selectbox("Personne", personnes + ["Autre (préciser)"]) if personnes else "Autre (préciser)"
+			autre = gauche.text_input("Nom") if not personnes else ""
+			perimetre = milieu.selectbox("Périmètre accepté", PERIMETRES_IMAGE, index=len(PERIMETRES_IMAGE) - 1)
+			jour = droite.date_input("Date", value=date.today())
+			precision = st.text_input("Si « Autre », nom de la personne") if personnes else ""
+
+			if st.form_submit_button("Enregistrer le consentement", icon=":material/verified_user:"):
+				nom = autre or precision if personne == "Autre (préciser)" else personne
+
+				if nom:
+					autres = [element for element in consentements if element["personne"] != nom]
+					self.event_sheet.set_consentement(
+						"droit_image", autres + [{"personne": nom, "perimetre": perimetre, "date": str(jour)}]
+					)
+					st.rerun()
+
+
+	def retirer_dossier(self):
+		supprimer_dossier(self.dossier_id)
+
+		for cle in [cle for cle in st.session_state if self.dossier_id in str(cle)]:
+			del st.session_state[cle]
+
+		st.session_state.dossier_actif = None
+		self.agenda.load()
+
+
+	def show_donnees_client(self):
+		with st.expander("Données personnelles du client (RGPD)", icon=":material/shield_person:"):
+			st.download_button(
+				"Exporter toutes les données de ce client (JSON)", icon=":material/download:",
+				data=exporter(self.dossier_id), file_name=f"aurore-dossier-{self.dossier_id}.json", mime="application/json"
+			)
+			st.divider()
+			st.markdown("**Supprimer ce dossier**")
+			st.caption(
+				"Supprime définitivement la fiche, l'historique, le budget, les devis, les invités, les messages, "
+				"les photos et les rendez-vous de ce client. Cette action est irréversible : exportez d'abord si besoin."
+			)
+			confirme = st.checkbox(f"Je confirme la suppression définitive du dossier « {libelle_dossier(self.event_sheet.data)} »")
+			st.button(
+				"Supprimer définitivement", icon=":material/delete_forever:", type="primary",
+				disabled=not confirme, on_click=self.retirer_dossier
+			)
+
+
 	def show_fiche_client(self):
 		self.show_type_evenement()
 		self.show_fiche_form()
+
+		st.subheader(":material/verified_user: Consentements")
+		st.markdown("**Données de santé**")
+		self.show_consentement_sante()
+		st.markdown("**Droit à l'image**")
+		self.show_consentements_image()
+
 		self.show_historique()
+		self.show_donnees_client()
 
 
 	@staticmethod
@@ -861,11 +971,16 @@ class UserInterface:
 			event_data = self.infos_pour_destinataire(self.prestataire["id"])
 			historique, budget, fiche = [], [], fiche_publique(self.prestataire)
 		else:
-			event_data = self.event_sheet.infos_sans_historique()
-			historique, budget, fiche = self.event_sheet.data["historique"], self.resume_budget(), self.carnet.trouver_par_nom(rdv["avec"])
+			fiche = self.carnet.trouver_par_nom(rdv["avec"])
+			besoin_sante = type_rdv(rdv) == "Dégustation" or bool(fiche and fiche["categorie"] == CATEGORIE_DONNEES_SANTE)
+			avec_sante = besoin_sante and sante_partageable(self.event_sheet.data)
+			event_data = self.event_sheet.infos_sans_historique(avec_sante=avec_sante)
+			historique, budget = self.event_sheet.data["historique"], self.resume_budget()
 
 		if self.liste_invites.invites:
-			event_data["invites"] = self.liste_invites.recap_traiteur()
+			recap = self.liste_invites.recap_traiteur()
+			avec_sante = "allergies_interdits" in event_data
+			event_data["invites"] = recap_anonyme(recap) if avec_sante else recap_sans_sante(recap)
 
 		return self.conversation_agent_object.prepare_briefing(rdv, event_data, historique, budget, fiche)
 
@@ -1246,7 +1361,9 @@ class UserInterface:
 		if not prestataire:
 			return self.event_sheet.infos_sans_historique()
 
-		infos_prestataire = self.event_sheet.infos_pour_prestataire()
+		infos_prestataire = self.event_sheet.infos_pour_prestataire(
+			avec_sante=peut_recevoir_sante(self.event_sheet.data, prestataire)
+		)
 
 		if st.session_state.get("donner_enveloppe"):
 			infos_prestataire["budget_prestation"] = self.budget_du_poste(prestataire)
@@ -1589,13 +1706,35 @@ class UserInterface:
 
 	def show_import_contacts(self):
 		with st.expander("Importer des contacts (.vcf ou .csv)", icon=":material/contacts:"):
-			st.caption("Depuis ton téléphone ou Google Contacts : Exporter → fichier .vcf ou .csv.")
+			st.caption(
+				"Depuis votre téléphone ou Google Contacts : Exporter → fichier .vcf ou .csv. "
+				"Rien n'est importé sans votre confirmation : seuls le nom, le téléphone et l'email sont repris."
+			)
 			fichier = st.file_uploader("Fichier de contacts", type=["vcf", "csv"])
+
+			if not fichier:
+				return
+
+			contacts = lire_contacts(fichier.name, fichier.getvalue())
+			nouveaux = self.liste_invites.a_importer(contacts)
+			st.markdown(
+				f"**{pluriel(len(nouveaux), 'contact à importer', 'contacts à importer')}**"
+				+ (f" · {pluriel(len(contacts) - len(nouveaux), 'doublon ignoré', 'doublons ignorés')}" if len(contacts) > len(nouveaux) else "")
+			)
+			st.dataframe(
+				pd.DataFrame(nouveaux, columns=["nom", "telephone", "email"]),
+				column_config={"nom": "Nom", "telephone": "Téléphone", "email": "Email"},
+				hide_index=True, width="stretch"
+			)
 			groupe = st.selectbox("Groupe à attribuer", GROUPES)
 
-			if fichier and st.button("Importer"):
-				self.liste_invites.importer(lire_contacts(fichier.name, fichier.getvalue()), groupe)
+			if nouveaux and st.button(f"Importer {pluriel(len(nouveaux), 'contact')}", icon=":material/person_add:", type="primary"):
+				importes = self.liste_invites.importer(contacts, groupe)
+				st.session_state.message_import = f"{pluriel(importes, 'contact importé', 'contacts importés')} dans le groupe {groupe}."
 				self.apres_modif_invites()
+
+		if "message_import" in st.session_state:
+			st.success(st.session_state.pop("message_import"), icon=":material/check_circle:")
 
 
 	def show_table_invites(self):
@@ -1686,7 +1825,15 @@ class UserInterface:
 
 	def show_recap_traiteur(self):
 		recap = self.show_recap_invites()
-		traiteurs = {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires if prestataire["categorie"] == "Traiteur"}
+		traiteurs = {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires if prestataire["categorie"] == CATEGORIE_DONNEES_SANTE}
+
+		if not sante_partageable(self.event_sheet.data):
+			st.warning(
+				"Le client n'a pas donné son accord pour partager les allergies et les régimes : "
+				"le message au traiteur ne contiendra que le nombre de couverts. Recueillez son accord dans la fiche client.",
+				icon=":material/lock:"
+			)
+			recap = recap_sans_sante(recap)
 
 		if not traiteurs:
 			st.caption("Ajoutez le traiteur dans l'onglet Prestataires pour lui envoyer ce récapitulatif.")
@@ -1708,12 +1855,15 @@ class UserInterface:
 			":material/groups: Invités prévus": infos["nombre_invites"] or "À définir"
 		})
 
+		if self.prestataire["categorie"] == CATEGORIE_DONNEES_SANTE and not sante_partageable(self.event_sheet.data):
+			st.info("Les allergies et régimes ne vous sont pas transmis : le client n'a pas encore donné son accord.", icon=":material/lock:")
+
 		for cle, titre, besoin in [
 			("allergies_interdits", ":material/warning: Allergies et interdits", "allergies"),
 			("preferences", ":material/palette: Préférences des clients", None),
 			("preferences_musicales", ":material/music_note: Goûts musicaux", "musique")
 		]:
-			if infos[cle] and (besoin is None or besoin in utiles):
+			if infos.get(cle) and (besoin is None or besoin in utiles):
 				st.markdown(f"**{titre}** : {', '.join(infos[cle])}")
 
 		if "invites" in utiles:
@@ -1934,16 +2084,19 @@ class UserInterface:
 	def show_photo(self, photo):
 		with st.container(border=True):
 			st.image(self.galerie.lire(photo), width="stretch")
-			ok, raison = publiable(photo, self.galerie.droit_image)
-			st.caption(f"{':green[:material/check_circle:] Publiable' if ok else ':material/lock: Non publiable'} : {raison}")
+
+			for usage in USAGES_PHOTO:
+				ok, raison = publiable(photo, self.event_sheet.data["droit_image"], usage)
+				etat = ":green[:material/check_circle: publiable]" if ok else ":material/lock: non publiable"
+				st.caption(f"**{usage}** : {etat} · {raison}")
 
 			categorie = st.selectbox(
 				"Catégorie", CATEGORIES_PHOTO, index=CATEGORIES_PHOTO.index(photo["categorie"]),
 				key=f"categorie_{photo['id']}_{photo['categorie']}", label_visibility="collapsed"
 			)
-			personnes = st.checkbox(
-				"Personnes reconnaissables", value=bool(photo["personnes"]),
-				key=f"personnes_{photo['id']}_{photo['personnes']}"
+			tag_choisi = st.segmented_control(
+				"Tag", list(TAGS_PHOTO), default=photo.get("tag"), format_func=TAGS_PHOTO.get,
+				key=f"tag_{photo['id']}_{photo.get('tag')}", label_visibility="collapsed"
 			)
 
 			changements = {}
@@ -1951,8 +2104,8 @@ class UserInterface:
 			if categorie != photo["categorie"]:
 				changements["categorie"] = categorie
 
-			if personnes != bool(photo["personnes"]):
-				changements["personnes"] = personnes
+			if tag_choisi and tag_choisi != photo.get("tag"):
+				changements["personnes"] = tag_choisi == "avec_personnes"
 
 			if changements:
 				self.galerie.modifier(photo["id"], **changements)
@@ -1980,36 +2133,14 @@ class UserInterface:
 
 
 	def show_droit_image(self, profil):
-		statut = self.galerie.droit_image
-		st.metric("Droit à l'image des clients", statut)
 		st.caption(
-			"Sans accord, seules les photos sans personne reconnaissable (salle, déco, buffet, détails) peuvent être publiées. "
+			"Sans consentement, seules les photos sans personne reconnaissable (salle, déco, buffet, détails) sont publiables. "
 			"Les photos où des invités sont reconnaissables ne sont jamais publiées."
 		)
+		self.show_consentements_image()
 
-		if profil == "Mariés":
-			accorder, refuser = st.columns(2)
-
-			if accorder.button("Nous accordons notre droit à l'image", icon=":material/check_circle:", width="stretch"):
-				self.galerie.set_droit_image("Accordé")
-				st.rerun()
-
-			if refuser.button("Nous refusons", icon=":material/cancel:", width="stretch"):
-				self.galerie.set_droit_image("Refusé")
-				st.rerun()
-		else:
-			nouveau = st.selectbox(
-				"Statut", STATUTS_DROIT, index=STATUTS_DROIT.index(statut), key=f"droit_image_{statut}"
-			)
-
-			if nouveau != statut:
-				self.galerie.set_droit_image(nouveau)
-				st.rerun()
-
+		if profil == "Wedding planner":
 			if st.button("Préparer la demande d'autorisation aux clients", icon=":material/mail:"):
-				if statut == "Non demandé":
-					self.galerie.set_droit_image("Demandé")
-
 				cle = f"droit_image_{uuid.uuid4().hex[:8]}"
 				self.rediger(suggestion(cle, "demande_droit_image", destinataire_maries(self.event_sheet.data), {"usage": "Instagram et site d'AURORE"}))
 
@@ -2057,7 +2188,7 @@ class UserInterface:
 
 
 	def show_instagram(self):
-		a_publier = [photo for photo in self.galerie.publiables() if not photo["publiee"]]
+		a_publier = [photo for photo in self.galerie.publiables(self.event_sheet.data["droit_image"]) if not photo["publiee"]]
 		deja_publiees = [photo for photo in self.galerie.photos if photo["publiee"]]
 		st.caption("Seules les photos autorisées apparaissent ici. Copie la légende, télécharge la photo et publie-la depuis Instagram.")
 
@@ -2096,8 +2227,8 @@ class UserInterface:
 				if not features.INSTAGRAM_FEEDBACK:
 					continue
 
-				if self.galerie.droit_image != "Accordé":
-					st.caption(":material/lock: Pour en faire un post Instagram, il faut l'accord des clients (droit à l'image).")
+				if consentements_manquants(self.event_sheet.data["droit_image"], "Réseaux sociaux"):
+					st.caption(":material/lock: Pour en faire un post, il faut le consentement de droit à l'image de chaque client pour les réseaux sociaux.")
 					continue
 
 				if st.button("Transformer en post témoignage", icon=":material/auto_awesome:", key=f"post_avis_{avis['id']}"):
@@ -2176,7 +2307,7 @@ class UserInterface:
 
 	def proposer_placement(self, a_placer):
 		invites = [
-			{"id": invite["id"], "nom": invite["nom"], "groupe": invite["groupe"], "personnes": personnes(invite), "regime": invite["regime"]}
+			{"id": invite["id"], "nom": invite["nom"], "groupe": invite["groupe"], "personnes": personnes(invite)}
 			for invite in a_placer
 		]
 		tables = [{"nom": table["nom"], "places": table["places"]} for table in self.jour_j.salle["tables"]]

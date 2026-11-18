@@ -6,6 +6,7 @@ from devis import totaux, lignes_valides
 from invites import GROUPES, STATUTS_INVITE, REGIMES, nouvel_invite
 from messages import TYPES_MESSAGE, EMETTEUR_AURORE, NOMS_CLIENTS, destinataire_maries, destinataire_prestataire, suggestion
 from prestataires import CATEGORIES, STATUTS, appliquer_statut, meme_nom
+from rgpd import peut_recevoir_sante, recap_anonyme, recap_sans_sante
 from textes import noms_clients
 
 
@@ -275,7 +276,11 @@ class Outils:
         return self.jour_j.deroule or {"info": "le déroulé du jour J n'a pas encore été construit"}
 
     def consulter_invites(self):
-        return {"par_statut": dict(self.liste_invites.compter_par_statut()), **self.liste_invites.recap_traiteur()}
+        recap = self.liste_invites.recap_traiteur()
+        sante = self.espace == "Wedding planner" or peut_recevoir_sante(self.event_sheet.data, self.prestataire)
+        recap = recap_anonyme(recap) if sante else recap_sans_sante(recap)
+
+        return {"par_statut": dict(self.liste_invites.compter_par_statut()), **recap}
 
     def ajouter_invite(self, nom, groupe="Autre", telephone="", email="", accompagnants=0):
         self.liste_invites.remplacer(self.liste_invites.invites + [nouvel_invite(nom, groupe, telephone, email, accompagnants)])

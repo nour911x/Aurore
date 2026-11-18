@@ -145,12 +145,23 @@ class ListeInvites:
         self.invites = invites
         self.save()
 
-    def importer(self, contacts, groupe):
+    def a_importer(self, contacts):
         deja_la = {(invite["nom"].lower(), invite["telephone"]) for invite in self.invites}
+        nouveaux = []
+
+        for contact in contacts:
+            identite = (contact["nom"].lower(), contact["telephone"])
+
+            if identite not in deja_la:
+                deja_la.add(identite)
+                nouveaux.append(contact)
+
+        return nouveaux
+
+    def importer(self, contacts, groupe):
         nouveaux = [
             nouvel_invite(contact["nom"], groupe, contact["telephone"], contact["email"])
-            for contact in contacts
-            if (contact["nom"].lower(), contact["telephone"]) not in deja_la
+            for contact in self.a_importer(contacts)
         ]
         self.remplacer(self.invites + nouveaux)
 
