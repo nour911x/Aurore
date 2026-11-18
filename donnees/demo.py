@@ -1,9 +1,7 @@
 from datetime import date, datetime, time, timedelta
 
-from donnees.dossiers import (
-    RACINE, FICHIER_FICHE, FICHIER_SELECTION, chemin, chemin_agenda, chemin_annuaire, creer, ecrire_etat, lire_etat,
-    lister, supprimer
-)
+from donnees.dossiers import (FICHIER_FICHE, FICHIER_SELECTION, RACINE, chemin, chemin_agenda, chemin_annuaire, creer,
+                              ecrire_etat, lire_etat, lister, supprimer)
 from donnees.event_state import EventSheet
 from donnees.storage import load_json, save_json
 from metier.agenda import Agenda
@@ -12,7 +10,6 @@ from metier.devis import CarnetDevis
 from metier.messages import Messagerie, destinataire_prestataire, suggestion
 from metier.prestataires import Annuaire, Carnet, meme_nom
 from metier.rgpd import consentement
-from textes import format_person_name
 
 
 NOMS_MARIAGE = "Léa et Liam"
@@ -61,7 +58,7 @@ def choisir(carnet, fiche, statut, tarif=0, poste=None, depuis=None):
 
 def dossier_mariage(racine, aujourd_hui):
     for dossier in lister(racine):
-        if meme_nom(format_person_name(dossier.get("noms") or ""), NOMS_MARIAGE):
+        if meme_nom(dossier.get("noms") or "", NOMS_MARIAGE):
             return dossier["id"]
 
     return nouveau_dossier({

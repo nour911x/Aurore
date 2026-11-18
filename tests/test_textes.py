@@ -1,11 +1,9 @@
-import json
-
 import pytest
 
-from donnees.dossiers import FICHIER_FICHE, chemin, creer, lire_etat, migrer_noms
+from donnees.dossiers import FICHIER_FICHE, chemin, creer
 from donnees.event_state import EventSheet
 from metier.invites import nouvel_invite
-from textes import format_person_name, noms_clients, pluriel
+from textes import format_person_name, noms_clients, noms_courts, pluriel
 
 
 @pytest.mark.parametrize("saisi, attendu", [
@@ -25,10 +23,10 @@ def test_format_person_name(saisi, attendu):
     assert format_person_name(saisi) == attendu
 
 
-def test_nom_absent():
+def test_nom_absent_et_forme_courte():
     assert format_person_name(None) is None
     assert noms_clients({"noms": None}) == "Les clients"
-    assert noms_clients({"noms": "tom"}) == "Tom"
+    assert noms_courts("Léa et Liam") == "Léa & Liam"
 
 
 def test_pluriel():
@@ -45,23 +43,3 @@ def test_noms_normalises_a_l_enregistrement(tmp_path):
 
     assert EventSheet(fiche.file_path).data["noms"] == "Jean-Pierre et Marie de la Tour"
     assert nouvel_invite("paul o'neil")["nom"] == "Paul O'Neil"
-
-
-def test_migration_des_noms_des_dossiers_existants(tmp_path):
-    dossier_id = creer({"noms": "léa et liam", "droit_image": [{"personne": "léa"}]}, tmp_path)
-    dossier = tmp_path / "dossiers" / dossier_id
-    (dossier / "invites_data.json").write_text(json.dumps({"invites": [{"nom": "paul dupont"}], "faire_part": ""}), encoding="utf-8")
-    (dossier / "messages_data.json").write_text(json.dumps([
-        {"destinataire": "léa et liam", "prestataire_id": None},
-        {"destinataire": "DJ SoundBox", "prestataire_id": "dj"}
-    ]), encoding="utf-8")
-
-    migrer_noms(tmp_path)
-
-    fiche = json.loads((dossier / "event_data.json").read_text(encoding="utf-8"))
-    messages = json.loads((dossier / "messages_data.json").read_text(encoding="utf-8"))
-    assert fiche["noms"] == "Léa et Liam"
-    assert fiche["droit_image"][0]["personne"] == "Léa"
-    assert json.loads((dossier / "invites_data.json").read_text(encoding="utf-8"))["invites"][0]["nom"] == "Paul Dupont"
-    assert [message["destinataire"] for message in messages] == ["Léa et Liam", "DJ SoundBox"]
-    assert lire_etat(tmp_path)["noms_normalises"]

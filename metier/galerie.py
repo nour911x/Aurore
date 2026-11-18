@@ -5,19 +5,15 @@ from pathlib import Path
 from fpdf import FPDF
 
 from config.evenements import libelle_evenement
-from metier.rgpd import consentements_manquants
-from metier.devis import texte_pdf, date_lisible
 from donnees.storage import load_json, save_json
+from metier.devis import date_lisible, texte_pdf
+from metier.rgpd import consentements_manquants
 from textes import noms_clients
 
 
 CATEGORIES_PHOTO = ["Salle & déco", "Buffet & repas", "Clients", "Invités", "Détails", "Autre"]
 
-ANCIENNES_CATEGORIES = {"Couple": "Clients"}
-
 TAGS_PHOTO = {"decor": "Décor, sans personne", "avec_personnes": "Avec personnes"}
-
-STATUTS_DROIT = ["Non demandé", "Demandé", "Accordé", "Refusé"]
 
 EXTENSIONS = {"image/png": ".png", "image/webp": ".webp"}
 
@@ -50,22 +46,15 @@ class Galerie:
         self.dossier = Path(dossier)
         self.photos = []
         self.avis = []
-        self.droit_image = STATUTS_DROIT[0]
         self.load()
 
     def load(self):
-        data = load_json(self.file_path, {"photos": [], "avis": [], "droit_image": STATUTS_DROIT[0]})
+        data = load_json(self.file_path, {"photos": [], "avis": []})
         self.photos = data["photos"]
-
-        for photo in self.photos:
-            photo["categorie"] = ANCIENNES_CATEGORIES.get(photo["categorie"], photo["categorie"])
-            photo["tag"] = tag(photo["personnes"])
-
         self.avis = data["avis"]
-        self.droit_image = data["droit_image"]
 
     def save(self):
-        save_json(self.file_path, {"photos": self.photos, "avis": self.avis, "droit_image": self.droit_image})
+        save_json(self.file_path, {"photos": self.photos, "avis": self.avis})
 
     def ajouter_photo(self, contenu, type_mime):
         self.dossier.mkdir(exist_ok=True)
@@ -102,7 +91,6 @@ class Galerie:
 
         if photo:
             photo.update(champs)
-            photo["tag"] = tag(photo["personnes"])
             self.save()
 
     def supprimer(self, photo_id):
@@ -118,10 +106,6 @@ class Galerie:
 
     def publiables(self, droit_image, usage="Réseaux sociaux"):
         return [photo for photo in self.photos if publiable(photo, droit_image, usage)[0]]
-
-    def set_droit_image(self, statut):
-        self.droit_image = statut
-        self.save()
 
     def ajouter_avis(self, auteur, note, commentaire):
         self.avis.append({

@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from metier.messages import Messagerie, suggestion
@@ -59,15 +57,3 @@ def test_un_message_annule_ou_envoye_est_definitif(tmp_path):
 
     with pytest.raises(ValueError):
         messagerie.changer_statut(message_id, "à valider")
-
-
-def test_migration_des_anciens_statuts(tmp_path):
-    fichier = tmp_path / "messages.json"
-    fichier.write_text(json.dumps([
-        {"id": "a", "cle": "a", "statut": "à envoyer"},
-        {"id": "b", "cle": "b", "statut": "ignoré"}
-    ]), encoding="utf-8")
-
-    messagerie = Messagerie(str(fichier))
-
-    assert [message["statut"] for message in messagerie.messages] == ["à valider", "annulé"]

@@ -39,8 +39,6 @@ MODIFIABLES = {"brouillon", "à valider"}
 
 EN_COURS = ["brouillon", "à valider", "validé"]
 
-ANCIENS_STATUTS = {"à envoyer": "à valider", "ignoré": "annulé"}
-
 EMETTEUR_AURORE = "AURORE - Organisation d'événements"
 
 NOMS_CLIENTS = {"clients", "client", "les clients", "mariés", "maries", "les mariés"}
@@ -59,7 +57,7 @@ def fiche_publique(prestataire):
     return {"nom": prestataire["nom"], "categorie": prestataire["categorie"], "statut": prestataire["statut"]}
 
 
-def destinataire_maries(event_data):
+def destinataire_clients(event_data):
     return {
         "destinataire": noms_clients(event_data),
         "prestataire_id": None,
@@ -96,7 +94,7 @@ def suggestions_rdvs(agenda, carnet, event_data):
     for rdv in agenda.rdvs_proches(jours=DELAI_CONFIRMATION):
         jours_restants = (datetime.fromisoformat(rdv["date_heure"]).date() - date.today()).days
         type_message = "rappel_rdv" if jours_restants <= DELAI_RAPPEL else "confirmation"
-        destinataires = [destinataire_maries(event_data)]
+        destinataires = [destinataire_clients(event_data)]
         prestataire = carnet.trouver_par_nom(rdv["avec"])
 
         if prestataire:
@@ -111,7 +109,7 @@ def suggestions_rdvs(agenda, carnet, event_data):
 
 def suggestions_factures(budget, event_data):
     return [
-        suggestion(f"paiement_{facture['poste']}_{facture['libelle']}", "rappel_paiement", destinataire_maries(event_data), facture)
+        suggestion(f"paiement_{facture['poste']}_{facture['libelle']}", "rappel_paiement", destinataire_clients(event_data), facture)
         for facture in budget.factures_a_payer()
         if facture["jours_restants"] <= DELAI_PAIEMENT
     ]
@@ -126,7 +124,7 @@ def suggestions_avis(event_data):
     if (date.today() - jour_j).days < DELAI_AVIS:
         return []
 
-    return [suggestion(f"avis_{jour_j}", "demande_avis", destinataire_maries(event_data), {"date_evenement": event_data["date"]})]
+    return [suggestion(f"avis_{jour_j}", "demande_avis", destinataire_clients(event_data), {"date_evenement": event_data["date"]})]
 
 
 def detecter_messages(event_data, carnet, agenda, budget):
@@ -146,9 +144,6 @@ class Messagerie:
 
     def load(self):
         self.messages = load_json(self.file_path, [])
-
-        for message in self.messages:
-            message["statut"] = ANCIENS_STATUTS.get(message["statut"], message["statut"])
 
     def save(self):
         save_json(self.file_path, self.messages)

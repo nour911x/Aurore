@@ -1,11 +1,10 @@
-from datetime import date, datetime, time, timedelta
-
-from metier.accueil import champs_a_definir, confirmations_attendues, synthese
-from metier.agenda import conflits, deviner_type
 import json
+from datetime import date, datetime, time, timedelta
 
 from donnees.demo import creer_demo, demo_active, demo_au_premier_lancement, retirer_demo
 from donnees.dossiers import creer, lister
+from metier.accueil import champs_a_definir, confirmations_attendues, synthese
+from metier.agenda import conflits, deviner_type
 
 
 def rdv(titre, debut, duree=60, avec="", confirme=False):

@@ -1,10 +1,11 @@
 from datetime import date, datetime, timedelta
 
-from metier.agenda import Agenda, bornes, conflits, type_rdv
-from metier.budget import Budget, POSTE_ORGANISATION
 from config.evenements import CHAMPS_ESSENTIELS
-from donnees.dossiers import RACINE, FICHIER_FICHE, FICHIER_SELECTION, chemin, chemin_agenda, chemin_annuaire, lister, libelle_dossier
+from donnees.dossiers import (FICHIER_FICHE, FICHIER_SELECTION, RACINE, chemin, chemin_agenda, chemin_annuaire,
+                              libelle_dossier, lister)
 from donnees.event_state import EventSheet, renseigne
+from metier.agenda import Agenda, bornes, conflits, type_rdv
+from metier.budget import POSTE_ORGANISATION, Budget
 from metier.messages import MODIFIABLES, Messagerie, detecter_messages
 from metier.prestataires import Annuaire, Carnet, reservations_en_double
 

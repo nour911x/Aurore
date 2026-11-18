@@ -1,5 +1,6 @@
 from app import UserInterface
 from config import features
+from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
 from llm.outils import OUTILS_PAR_ESPACE
 from ui.commun import ESPACES
 
@@ -15,9 +16,9 @@ def test_aucun_envoi_whatsapp_automatique():
 
 
 def test_vues_partagees_en_lecture_seule():
-    for espace in ("Mariés", "Prestataire"):
+    for espace in (CLIENTS, PRESTATAIRE):
         assert all(outil.startswith("consulter_") for outil in OUTILS_PAR_ESPACE[espace])
 
 
 def test_organisateur_garde_au_plus_huit_onglets():
-    assert len(ESPACES["Wedding planner"]) <= 8
+    assert len(ESPACES[ORGANISATEUR]) <= 8

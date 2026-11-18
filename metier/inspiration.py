@@ -3,8 +3,8 @@ from urllib.parse import quote
 
 from fpdf import FPDF
 
-from metier.devis import texte_pdf
 from donnees.storage import load_json, save_json
+from metier.devis import texte_pdf
 
 
 ELEMENTS_MOODBOARD = ["Décoration", "Fleurs", "Tenues", "Gâteau", "Table", "Papeterie"]

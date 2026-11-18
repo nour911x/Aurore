@@ -1,10 +1,12 @@
 import json
 from datetime import datetime
 
+from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
 from llm import outlook
-from metier.devis import totaux, lignes_valides
-from metier.invites import GROUPES, STATUTS_INVITE, REGIMES, nouvel_invite
-from metier.messages import TYPES_MESSAGE, EMETTEUR_AURORE, NOMS_CLIENTS, destinataire_maries, destinataire_prestataire, suggestion
+from metier.devis import lignes_valides, totaux
+from metier.invites import GROUPES, REGIMES, STATUTS_INVITE, nouvel_invite
+from metier.messages import (EMETTEUR_AURORE, NOMS_CLIENTS, TYPES_MESSAGE, destinataire_clients,
+                             destinataire_prestataire, suggestion)
 from metier.prestataires import CATEGORIES, STATUTS, appliquer_statut, meme_nom
 from metier.rgpd import peut_recevoir_sante, recap_anonyme, recap_sans_sante
 from textes import noms_clients
@@ -147,8 +149,8 @@ OUTILS_OUTLOOK = [
 
 
 OUTILS_PAR_ESPACE = {
-    "Mariés": {"consulter_agenda", "consulter_budget", "consulter_invites", "consulter_deroule"},
-    "Prestataire": {"consulter_agenda", "consulter_invites", "consulter_deroule"}
+    CLIENTS: {"consulter_agenda", "consulter_budget", "consulter_invites", "consulter_deroule"},
+    PRESTATAIRE: {"consulter_agenda", "consulter_invites", "consulter_deroule"}
 }
 
 
@@ -175,7 +177,7 @@ class Outils:
         self.messagerie = messagerie
         self.carnet_devis = carnet_devis
         self.avec_outlook = outlook.outlook_disponible()
-        self.espace = "Wedding planner"
+        self.espace = ORGANISATEUR
         self.prestataire = None
 
     def pour_espace(self, espace, prestataire=None):
@@ -183,7 +185,7 @@ class Outils:
         self.prestataire = prestataire
 
     def schemas(self):
-        schemas = OUTILS + (OUTILS_OUTLOOK if self.avec_outlook and self.espace != "Prestataire" else [])
+        schemas = OUTILS + (OUTILS_OUTLOOK if self.avec_outlook and self.espace != PRESTATAIRE else [])
         autorises = OUTILS_PAR_ESPACE.get(self.espace)
 
         return [schema for schema in schemas if autorises is None or schema["function"]["name"] in autorises]
@@ -220,7 +222,7 @@ class Outils:
         debut = lire_date_heure(date_heure).isoformat()
         conflit = self.agenda.add_rdv(titre, debut, duree_minutes, lieu, avec)
 
-        if conflit and self.espace != "Wedding planner":
+        if conflit and self.espace != ORGANISATEUR:
             return {"erreur": "ce créneau est déjà pris dans l'agenda de l'organisateur, propose un autre horaire"}
 
         if conflit:
@@ -277,7 +279,7 @@ class Outils:
 
     def consulter_invites(self):
         recap = self.liste_invites.recap_traiteur()
-        sante = self.espace == "Wedding planner" or peut_recevoir_sante(self.event_sheet.data, self.prestataire)
+        sante = self.espace == ORGANISATEUR or peut_recevoir_sante(self.event_sheet.data, self.prestataire)
         recap = recap_anonyme(recap) if sante else recap_sans_sante(recap)
 
         return {"par_statut": dict(self.liste_invites.compter_par_statut()), **recap}
@@ -298,7 +300,7 @@ class Outils:
 
     def preparer_message(self, destinataire, contenu, type="libre"):
         if destinataire.strip().lower() in NOMS_CLIENTS:
-            contact = destinataire_maries(self.event_sheet.data)
+            contact = destinataire_clients(self.event_sheet.data)
         else:
             contact = destinataire_prestataire(chercher_par_nom(self.carnet.prestataires, destinataire))
 
