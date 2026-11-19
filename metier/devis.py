@@ -1,16 +1,20 @@
 from datetime import date, timedelta
+from typing import Any
 
 from fpdf import FPDF
 
-from donnees.storage import load_json, save_json
+from donnees.stockage import charger_json, premier, sauvegarder_json
 
 
 STATUTS_DEVIS = ["Brouillon", "Envoyé", "Accepté", "Refusé"]
 
-REMPLACEMENTS_PDF = {"’": "'", "‘": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "...", "œ": "oe", "Œ": "OE", "€": "EUR", "\u202f": " ", "\u2009": " ", "\u2011": "-", "\u2010": "-"}
+REMPLACEMENTS_PDF = {
+    "’": "'", "‘": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "...", "œ": "oe", "Œ": "OE", "€": "EUR",
+    "\u202f": " ", "\u2009": " ", "\u2011": "-", "\u2010": "-"
+}
 
 
-def nombre(valeur):
+def nombre(valeur: Any) -> float:
     try:
         valeur = float(valeur)
     except (TypeError, ValueError):
@@ -19,7 +23,7 @@ def nombre(valeur):
     return valeur if valeur == valeur else 0.0
 
 
-def lignes_valides(lignes):
+def lignes_valides(lignes: list[dict]) -> list[dict]:
     return [
         {
             "designation": ligne["designation"].strip(),
@@ -31,7 +35,7 @@ def lignes_valides(lignes):
     ]
 
 
-def totaux(devis):
+def totaux(devis: dict) -> dict:
     total_ht = sum(ligne["quantite"] * ligne["prix_unitaire"] for ligne in devis["lignes"])
     tva = total_ht * devis["tva"] / 100
     total_ttc = total_ht + tva
@@ -44,47 +48,50 @@ def totaux(devis):
     }
 
 
-def euros(montant):
+def euros(montant: float) -> str:
     return f"{montant:,.2f} EUR".replace(",", " ").replace(".", ",")
 
 
-def texte_pdf(texte):
+def texte_pdf(texte: str) -> str:
     for ancien, nouveau in REMPLACEMENTS_PDF.items():
         texte = str(texte).replace(ancien, nouveau)
 
     return texte.encode("latin-1", "replace").decode("latin-1")
 
 
-def date_lisible(texte):
+def date_lisible(texte: Any) -> Any:
     try:
         return date.fromisoformat(texte).strftime("%d/%m/%Y")
     except (TypeError, ValueError):
         return texte
 
 
-def date_validite(devis):
+def date_validite(devis: dict) -> date:
     return date.fromisoformat(devis["date"]) + timedelta(days=devis["validite_jours"])
 
 
 class CarnetDevis:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.devis = []
-        self.load()
+    def __init__(self, chemin_fichier: str) -> None:
+        self.chemin_fichier = chemin_fichier
+        self.devis: list[dict] = []
+        self.charger()
 
-    def load(self):
-        self.devis = load_json(self.file_path, [])
+    def charger(self) -> None:
+        self.devis = charger_json(self.chemin_fichier, [])
 
-    def save(self):
-        save_json(self.file_path, self.devis)
+    def sauvegarder(self) -> None:
+        sauvegarder_json(self.chemin_fichier, self.devis)
 
-    def prochain_numero(self):
+    def prochain_numero(self) -> str:
         annee = date.today().year
         nombre = sum(1 for devis in self.devis if devis["numero"].startswith(f"DEV-{annee}-"))
 
         return f"DEV-{annee}-{nombre + 1:03d}"
 
-    def add_devis(self, emetteur, prestataire_id, destinataire, lignes, tva, acompte_pourcent, validite_jours, notes):
+    def ajouter_devis(
+        self, emetteur: str, prestataire_id: str | None, destinataire: str, lignes: list[dict],
+        tva: float, acompte_pourcent: float, validite_jours: int, notes: str
+    ) -> None:
         self.devis.append({
             "numero": self.prochain_numero(),
             "date": date.today().isoformat(),
@@ -98,42 +105,38 @@ class CarnetDevis:
             "notes": notes,
             "statut": STATUTS_DEVIS[0]
         })
-        self.save()
+        self.sauvegarder()
 
-    def trouver(self, numero):
-        for devis in self.devis:
-            if devis["numero"] == numero:
-                return devis
+    def trouver(self, numero: str) -> dict | None:
+        return premier(self.devis, numero=numero)
 
-        return None
-
-    def changer_statut(self, numero, statut):
+    def changer_statut(self, numero: str, statut: str) -> None:
         devis = self.trouver(numero)
 
         if devis:
             devis["statut"] = statut
-            self.save()
+            self.sauvegarder()
 
-    def supprimer(self, numero):
+    def supprimer(self, numero: str) -> None:
         self.devis = [devis for devis in self.devis if devis["numero"] != numero]
-        self.save()
+        self.sauvegarder()
 
 
 class DevisPDF(FPDF):
-    def ligne_tableau(self, valeurs, largeurs, gras=False, fond=False):
+    def ligne_tableau(self, valeurs: list[str], largeurs: list[int], gras: bool = False, fond: bool = False) -> None:
         self.set_font("Helvetica", "B" if gras else "", 10)
 
         if fond:
             self.set_fill_color(245, 235, 240)
 
-        for index, (valeur, largeur) in enumerate(zip(valeurs, largeurs)):
+        for index, (valeur, largeur) in enumerate(zip(valeurs, largeurs, strict=True)):
             alignement = "L" if index == 0 else "R"
             self.cell(largeur, 8, texte_pdf(valeur), border="B", align=alignement, fill=fond)
 
         self.ln()
 
 
-def generer_pdf(devis, event_data):
+def generer_pdf(devis: dict, donnees_evenement: dict) -> bytes:
     montants = totaux(devis)
     pdf = DevisPDF()
     pdf.add_page()
@@ -144,12 +147,13 @@ def generer_pdf(devis, event_data):
     pdf.set_font("Helvetica", "", 11)
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 6, texte_pdf(f"Devis n° {devis['numero']}"), new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, texte_pdf(f"Émis le {date.fromisoformat(devis['date']).strftime('%d/%m/%Y')} - valable jusqu'au {date_validite(devis).strftime('%d/%m/%Y')}"), new_x="LMARGIN", new_y="NEXT")
+    emission = date.fromisoformat(devis["date"]).strftime("%d/%m/%Y")
+    pdf.cell(0, 6, texte_pdf(f"Émis le {emission} - valable jusqu'au {date_validite(devis).strftime('%d/%m/%Y')}"), new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(6)
 
     evenement = " - ".join(
-        str(valeur) for valeur in [event_data["type_evenement"], date_lisible(event_data["date"]), event_data["lieu"]] if valeur
+        str(valeur) for valeur in [donnees_evenement["type_evenement"], date_lisible(donnees_evenement["date"]), donnees_evenement["lieu"]] if valeur
     )
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 6, texte_pdf(f"Client : {devis['destinataire']}"), new_x="LMARGIN", new_y="NEXT")

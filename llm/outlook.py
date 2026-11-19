@@ -1,3 +1,4 @@
+import importlib.util
 import os
 from datetime import datetime, timedelta
 
@@ -10,9 +11,11 @@ FORMAT_FILTRE = "%d/%m/%Y %H:%M"
 
 
 def outlook_disponible():
+    if importlib.util.find_spec("win32com") is None:
+        return False
+
     try:
         import winreg
-        import win32com.client
         winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, "Outlook.Application"))
     except (ImportError, OSError):
         return False
@@ -29,9 +32,9 @@ def dossier(numero):
     if not compte:
         return namespace.GetDefaultFolder(numero)
 
-    for store in namespace.Stores:
-        if store.DisplayName.lower() == compte:
-            return store.GetDefaultFolder(numero)
+    for boite in namespace.Stores:
+        if boite.DisplayName.lower() == compte:
+            return boite.GetDefaultFolder(numero)
 
     raise ValueError(f"Compte Outlook introuvable : {compte}")
 

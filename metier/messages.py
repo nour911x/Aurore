@@ -1,8 +1,15 @@
 import uuid
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
-from donnees.storage import load_json, save_json
+from donnees.stockage import charger_json, premier, sauvegarder_json
 from textes import noms_clients
+
+
+if TYPE_CHECKING:
+    from metier.agenda import Agenda
+    from metier.budget import Budget
+    from metier.prestataires import Carnet
 
 
 TYPES_MESSAGE = {
@@ -44,7 +51,7 @@ EMETTEUR_AURORE = "AURORE - Organisation d'événements"
 NOMS_CLIENTS = {"clients", "client", "les clients", "mariés", "maries", "les mariés"}
 
 
-def destinataire_prestataire(prestataire):
+def destinataire_prestataire(prestataire: dict) -> dict:
     return {
         "destinataire": prestataire["nom"],
         "prestataire_id": prestataire["id"],
@@ -53,24 +60,24 @@ def destinataire_prestataire(prestataire):
     }
 
 
-def fiche_publique(prestataire):
+def fiche_publique(prestataire: dict) -> dict:
     return {"nom": prestataire["nom"], "categorie": prestataire["categorie"], "statut": prestataire["statut"]}
 
 
-def destinataire_clients(event_data):
+def destinataire_clients(donnees_evenement: dict) -> dict:
     return {
-        "destinataire": noms_clients(event_data),
+        "destinataire": noms_clients(donnees_evenement),
         "prestataire_id": None,
-        "telephone": event_data["telephone"],
-        "email": event_data["email"]
+        "telephone": donnees_evenement["telephone"],
+        "email": donnees_evenement["email"]
     }
 
 
-def suggestion(cle, type_message, destinataire, contexte):
+def suggestion(cle: str, type_message: str, destinataire: dict, contexte: dict) -> dict:
     return {"cle": cle, "type": type_message, "contexte": contexte, **destinataire}
 
 
-def suggestions_prestataires(carnet):
+def suggestions_prestataires(carnet: "Carnet") -> list[dict]:
     aujourd_hui = date.today()
     suggestions = []
 
@@ -88,13 +95,13 @@ def suggestions_prestataires(carnet):
     return suggestions
 
 
-def suggestions_rdvs(agenda, carnet, event_data):
+def suggestions_rdvs(agenda: "Agenda", carnet: "Carnet", donnees_evenement: dict) -> list[dict]:
     suggestions = []
 
     for rdv in agenda.rdvs_proches(jours=DELAI_CONFIRMATION):
         jours_restants = (datetime.fromisoformat(rdv["date_heure"]).date() - date.today()).days
         type_message = "rappel_rdv" if jours_restants <= DELAI_RAPPEL else "confirmation"
-        destinataires = [destinataire_clients(event_data)]
+        destinataires = [destinataire_clients(donnees_evenement)]
         prestataire = carnet.trouver_par_nom(rdv["avec"])
 
         if prestataire:
@@ -107,55 +114,55 @@ def suggestions_rdvs(agenda, carnet, event_data):
     return suggestions
 
 
-def suggestions_factures(budget, event_data):
+def suggestions_factures(budget: "Budget", donnees_evenement: dict) -> list[dict]:
     return [
-        suggestion(f"paiement_{facture['poste']}_{facture['libelle']}", "rappel_paiement", destinataire_clients(event_data), facture)
+        suggestion(f"paiement_{facture['poste']}_{facture['libelle']}", "rappel_paiement", destinataire_clients(donnees_evenement), facture)
         for facture in budget.factures_a_payer()
         if facture["jours_restants"] <= DELAI_PAIEMENT
     ]
 
 
-def suggestions_avis(event_data):
+def suggestions_avis(donnees_evenement: dict) -> list[dict]:
     try:
-        jour_j = date.fromisoformat(event_data["date"])
+        jour_j = date.fromisoformat(donnees_evenement["date"])
     except (TypeError, ValueError):
         return []
 
     if (date.today() - jour_j).days < DELAI_AVIS:
         return []
 
-    return [suggestion(f"avis_{jour_j}", "demande_avis", destinataire_clients(event_data), {"date_evenement": event_data["date"]})]
+    return [suggestion(f"avis_{jour_j}", "demande_avis", destinataire_clients(donnees_evenement), {"date_evenement": donnees_evenement["date"]})]
 
 
-def detecter_messages(event_data, carnet, agenda, budget):
+def detecter_messages(donnees_evenement: dict, carnet: "Carnet", agenda: "Agenda", budget: "Budget") -> list[dict]:
     return (
         suggestions_prestataires(carnet)
-        + suggestions_rdvs(agenda, carnet, event_data)
-        + suggestions_factures(budget, event_data)
-        + suggestions_avis(event_data)
+        + suggestions_rdvs(agenda, carnet, donnees_evenement)
+        + suggestions_factures(budget, donnees_evenement)
+        + suggestions_avis(donnees_evenement)
     )
 
 
 class Messagerie:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.messages = []
-        self.load()
+    def __init__(self, chemin_fichier: str) -> None:
+        self.chemin_fichier = chemin_fichier
+        self.messages: list[dict] = []
+        self.charger()
 
-    def load(self):
-        self.messages = load_json(self.file_path, [])
+    def charger(self) -> None:
+        self.messages = charger_json(self.chemin_fichier, [])
 
-    def save(self):
-        save_json(self.file_path, self.messages)
+    def sauvegarder(self) -> None:
+        sauvegarder_json(self.chemin_fichier, self.messages)
 
-    def cles_traitees(self):
+    def cles_traitees(self) -> set[str]:
         return {message["cle"] for message in self.messages}
 
-    def a_preparer(self, suggestions):
+    def a_preparer(self, suggestions: list[dict]) -> list[dict]:
         deja_traitees = self.cles_traitees()
         return [suggestion for suggestion in suggestions if suggestion["cle"] not in deja_traitees]
 
-    def ajouter(self, suggestion, contenu, statut="à valider"):
+    def ajouter(self, suggestion: dict, contenu: str, statut: str = "à valider") -> None:
         self.messages.append({
             "id": uuid.uuid4().hex[:8],
             "cle": suggestion["cle"],
@@ -169,16 +176,17 @@ class Messagerie:
             "statut": statut,
             "date": date.today().isoformat()
         })
-        self.save()
+        self.sauvegarder()
 
-    def trouver(self, message_id):
-        for message in self.messages:
-            if message["id"] == message_id:
-                return message
+    def trouver(self, message_id: str) -> dict:
+        message = premier(self.messages, id=message_id)
 
-        return None
+        if message is None:
+            raise ValueError(f"Message introuvable : {message_id}")
 
-    def changer_statut(self, message_id, statut):
+        return message
+
+    def changer_statut(self, message_id: str, statut: str) -> dict:
         message = self.trouver(message_id)
 
         if statut not in TRANSITIONS[message["statut"]]:
@@ -187,20 +195,20 @@ class Messagerie:
         message["statut"] = statut
         message["date"] = date.today().isoformat()
         message.setdefault("historique", []).append({"statut": statut, "date": message["date"]})
-        self.save()
+        self.sauvegarder()
 
         return message
 
-    def modifier_contenu(self, message_id, contenu):
+    def modifier_contenu(self, message_id: str, contenu: str) -> None:
         message = self.trouver(message_id)
 
         if message["statut"] not in MODIFIABLES:
             raise ValueError("Un message validé doit être repassé en brouillon avant d'être modifié.")
 
         message["contenu"] = contenu
-        self.save()
+        self.sauvegarder()
 
-    def reecrire(self, message_id, contenu):
+    def reecrire(self, message_id: str, contenu: str) -> None:
         message = self.trouver(message_id)
 
         if message["statut"] not in EN_COURS:
@@ -208,7 +216,7 @@ class Messagerie:
 
         message["contenu"] = contenu
         message["statut"] = "à valider"
-        self.save()
+        self.sauvegarder()
 
-    def par_statut(self, *statuts):
+    def par_statut(self, *statuts: str) -> list[dict]:
         return [message for message in self.messages if message["statut"] in statuts]

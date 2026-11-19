@@ -1,4 +1,5 @@
 import re
+from datetime import date
 
 from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
 
@@ -41,14 +42,14 @@ JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 
 
-def majuscule(mot):
+def majuscule(mot: str) -> str:
     if any(lettre.isupper() for lettre in mot[1:]) and not mot.isupper():
         return mot
 
     return mot[:1].upper() + mot[1:].lower()
 
 
-def format_mot(mot, en_tete):
+def formater_mot(mot: str, en_tete: bool) -> str:
     if mot.lower() in LIAISONS and not en_tete:
         return mot.lower()
 
@@ -59,12 +60,12 @@ def format_mot(mot, en_tete):
         apostrophe = "'" if "'" in mot else "’"
         prefixe, reste = mot.split(apostrophe, 1)
         prefixe = prefixe.lower() if prefixe.lower() in PREFIXES_APOSTROPHE and not en_tete else majuscule(prefixe)
-        return f"{prefixe}{apostrophe}{format_mot(reste, True)}"
+        return f"{prefixe}{apostrophe}{formater_mot(reste, True)}"
 
     return "-".join(majuscule(partie) for partie in mot.split("-"))
 
 
-def format_person_name(nom):
+def formater_nom(nom: str | None) -> str | None:
     if not nom:
         return nom
 
@@ -77,25 +78,25 @@ def format_person_name(nom):
             resultat.append(morceau)
             continue
 
-        resultat.append(format_mot(morceau, en_tete))
+        resultat.append(formater_mot(morceau, en_tete))
         en_tete = morceau.lower() in LIAISONS
 
     return "".join(resultat)
 
 
-def noms_courts(noms):
+def noms_courts(noms: str | None) -> str:
     return (noms or "").replace(" et ", " & ")
 
 
-def noms_clients(data, defaut="Les clients"):
-    return data.get("noms") or defaut
+def noms_clients(donnees: dict, defaut: str = "Les clients") -> str:
+    return donnees.get("noms") or defaut
 
 
-def date_longue(jour):
+def date_longue(jour: date) -> str:
     return f"{JOURS[jour.weekday()]} {jour.day} {MOIS[jour.month - 1]}"
 
 
-def montant(valeur):
+def montant(valeur: float | None) -> str:
     if valeur is None:
         return ""
 
@@ -103,7 +104,7 @@ def montant(valeur):
     return f"{texte.removesuffix(',00')} €"
 
 
-def echeance_texte(jours):
+def echeance_texte(jours: int) -> str:
     if jours == 0:
         return "aujourd'hui"
 
@@ -113,7 +114,7 @@ def echeance_texte(jours):
     return f"dans {pluriel(jours, 'jour')}"
 
 
-def pluriel(nombre, singulier, forme_plurielle=None):
+def pluriel(nombre: float, singulier: str, forme_plurielle: str | None = None) -> str:
     return f"{nombre} {singulier if nombre <= 1 else forme_plurielle or singulier + 's'}"
 
 
@@ -174,7 +175,7 @@ RACCOURCIS_PRESTATAIRE = [
     ("devis", ":material/request_quote:", "Préparer un devis", "Aide-moi à préparer mon devis pour cet événement.")
 ]
 
-PLACEHOLDERS = {
+TEXTES_INDICATIFS = {
     ORGANISATEUR: "Que puis-je faire pour vous ? (ex : ajoute une dégustation jeudi à 14h)",
     CLIENTS: "Parle-moi de ton événement ! (ex : où en est notre budget ?)",
     PRESTATAIRE: "Que puis-je faire pour vous ? (ex : combien de couverts végétariens ?)"

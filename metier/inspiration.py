@@ -1,9 +1,10 @@
 import re
+from typing import Any
 from urllib.parse import quote
 
 from fpdf import FPDF
 
-from donnees.storage import load_json, save_json
+from donnees.stockage import charger_json, sauvegarder_json
 from metier.devis import texte_pdf
 
 
@@ -21,19 +22,19 @@ CATEGORIES_BEAUTE = {
 COULEUR_PAR_DEFAUT = "#CCCCCC"
 
 
-def lien_pinterest(recherche):
+def lien_pinterest(recherche: str) -> str:
     return f"https://www.pinterest.fr/search/pins/?q={quote(recherche)}"
 
 
-def lien_maps(recherche, lieu):
+def lien_maps(recherche: str, lieu: str | None) -> str:
     return f"https://www.google.com/maps/search/{quote(' '.join(filter(None, [recherche, lieu])))}"
 
 
-def couleur_valide(code):
+def couleur_valide(code: Any) -> str:
     return code if isinstance(code, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", code) else COULEUR_PAR_DEFAUT
 
 
-def nettoyer_moodboard(moodboard):
+def nettoyer_moodboard(moodboard: dict) -> dict:
     recherches = moodboard.get("recherches") or {}
 
     return {
@@ -54,34 +55,34 @@ def nettoyer_moodboard(moodboard):
 
 
 class Inspiration:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.moodboard = {}
-        self.recommandations = {}
-        self.load()
+    def __init__(self, chemin_fichier: str) -> None:
+        self.chemin_fichier = chemin_fichier
+        self.moodboard: dict = {}
+        self.recommandations: dict = {}
+        self.charger()
 
-    def load(self):
-        data = load_json(self.file_path, {"moodboard": {}, "recommandations": {}})
-        self.moodboard = data["moodboard"]
-        self.recommandations = data["recommandations"]
+    def charger(self) -> None:
+        donnees = charger_json(self.chemin_fichier, {"moodboard": {}, "recommandations": {}})
+        self.moodboard = donnees["moodboard"]
+        self.recommandations = donnees["recommandations"]
 
-    def save(self):
-        save_json(self.file_path, {"moodboard": self.moodboard, "recommandations": self.recommandations})
+    def sauvegarder(self) -> None:
+        sauvegarder_json(self.chemin_fichier, {"moodboard": self.moodboard, "recommandations": self.recommandations})
 
-    def set_moodboard(self, moodboard):
+    def definir_moodboard(self, moodboard: dict) -> None:
         self.moodboard = nettoyer_moodboard(moodboard)
-        self.save()
+        self.sauvegarder()
 
-    def set_recommandation(self, categorie, recommandation):
+    def definir_recommandation(self, categorie: str, recommandation: Any) -> None:
         self.recommandations[categorie] = recommandation
-        self.save()
+        self.sauvegarder()
 
 
-def hex_vers_rgb(code):
+def hex_vers_rgb(code: str) -> tuple[int, ...]:
     return tuple(int(code[index:index + 2], 16) for index in (1, 3, 5))
 
 
-def generer_moodboard_pdf(moodboard, noms, avec_liens=True):
+def generer_moodboard_pdf(moodboard: dict, noms: str, avec_liens: bool = True) -> bytes:
     pdf = FPDF()
     pdf.add_page()
 

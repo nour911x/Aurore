@@ -1,0 +1,29 @@
+name: Qualité
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verifications:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Style (ruff)
+        run: ruff check .
+
+      - name: Types (mypy)
+        run: mypy
+
+      - name: Tests (pytest)
+        run: pytest --cov --cov-report=term-missing

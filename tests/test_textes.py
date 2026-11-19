@@ -1,9 +1,9 @@
 import pytest
 
 from donnees.dossiers import FICHIER_FICHE, chemin, creer
-from donnees.event_state import EventSheet
+from donnees.fiche_evenement import FicheEvenement
 from metier.invites import nouvel_invite
-from textes import format_person_name, noms_clients, noms_courts, pluriel
+from textes import formater_nom, noms_clients, noms_courts, pluriel
 
 
 @pytest.mark.parametrize("saisi, attendu", [
@@ -20,11 +20,11 @@ from textes import format_person_name, noms_clients, noms_courts, pluriel
     ("  inès   et malik ", "Inès   et Malik"),
 ])
 def test_format_person_name(saisi, attendu):
-    assert format_person_name(saisi) == attendu
+    assert formater_nom(saisi) == attendu
 
 
 def test_nom_absent_et_forme_courte():
-    assert format_person_name(None) is None
+    assert formater_nom(None) is None
     assert noms_clients({"noms": None}) == "Les clients"
     assert noms_courts("Léa et Liam") == "Léa & Liam"
 
@@ -37,9 +37,9 @@ def test_pluriel():
 
 
 def test_noms_normalises_a_l_enregistrement(tmp_path):
-    fiche = EventSheet(chemin(creer({}, tmp_path), FICHIER_FICHE, tmp_path))
+    fiche = FicheEvenement(chemin(creer({}, tmp_path), FICHIER_FICHE, tmp_path))
     fiche.remplacer({"noms": "léa et liam"})
-    fiche.update({"noms": "JEAN-PIERRE et marie de la tour"})
+    fiche.mettre_a_jour({"noms": "JEAN-PIERRE et marie de la tour"})
 
-    assert EventSheet(fiche.file_path).data["noms"] == "Jean-Pierre et Marie de la Tour"
+    assert FicheEvenement(fiche.chemin_fichier).donnees["noms"] == "Jean-Pierre et Marie de la Tour"
     assert nouvel_invite("paul o'neil")["nom"] == "Paul O'Neil"

@@ -16,15 +16,15 @@ class VueInvites:
         st.rerun()
 
 
-    def show_compteurs_invites(self):
+    def afficher_compteurs_invites(self):
         compteurs = self.liste_invites.compter_par_statut()
-        self.show_compteurs(
+        self.afficher_compteurs(
             {f"{ICONES_INVITE[statut]} {statut}": compteurs[statut] for statut in STATUTS_INVITE}
             | {":material/groups: Personnes attendues": self.liste_invites.personnes(["Invité", "Confirmé"])}
         )
 
 
-    def show_import_contacts(self):
+    def afficher_import_contacts(self):
         with st.expander("Importer des contacts (.vcf ou .csv)", icon=":material/contacts:"):
             st.caption(
                 "Depuis votre téléphone ou Google Contacts : Exporter → fichier .vcf ou .csv. "
@@ -57,7 +57,7 @@ class VueInvites:
             st.success(st.session_state.pop("message_import"), icon=":material/check_circle:")
 
 
-    def show_table_invites(self):
+    def afficher_table_invites(self):
         st.caption("Modifie directement le tableau. Ajoute une ligne tout en bas, supprime en cochant à gauche.")
         self.editer_tableau(
             "invites", self.liste_invites.invites, COLONNES_INVITES, CONFIG_COLONNES_INVITES,
@@ -65,18 +65,18 @@ class VueInvites:
         )
 
 
-    def show_redaction_faire_part(self):
+    def afficher_redaction_faire_part(self):
         if st.button("Rédiger le faire-part avec AURORE", icon=":material/auto_awesome:"):
             with st.spinner("AURORE écrit votre faire-part…"):
-                self.liste_invites.set_faire_part(
-                    self.conversation_agent_object.write_faire_part(self.event_sheet.infos_sans_historique())
+                self.liste_invites.definir_faire_part(
+                    self.agent.rediger_faire_part(self.fiche_evenement.infos_sans_historique())
                 )
 
         valide = self.liste_invites.faire_part_valide
         faire_part = st.text_area("Texte du faire-part", value=self.liste_invites.faire_part, height=200, disabled=valide)
 
         if faire_part != self.liste_invites.faire_part:
-            self.liste_invites.set_faire_part(faire_part)
+            self.liste_invites.definir_faire_part(faire_part)
 
         if faire_part and valide:
             st.markdown(":green[:material/task_alt: Texte validé, prêt à être envoyé]")
@@ -87,13 +87,13 @@ class VueInvites:
         if faire_part:
             st.download_button(
                 "Télécharger le faire-part (PDF)", icon=":material/download:",
-                data=generer_faire_part_pdf(faire_part, self.event_sheet.data),
+                data=generer_faire_part_pdf(faire_part, self.fiche_evenement.donnees),
                 file_name="faire-part.pdf",
                 mime="application/pdf"
             )
 
 
-    def show_envoi_faire_parts(self):
+    def afficher_envoi_faire_parts(self):
         st.subheader(":material/send: Envoyer les faire-parts")
 
         if not self.liste_invites.faire_part_valide:
@@ -112,7 +112,7 @@ class VueInvites:
                 st.markdown(f"**{invite['nom']}** · {invite['groupe']}")
 
                 if invite["telephone"] or invite["email"]:
-                    self.show_boutons_contact(
+                    self.afficher_boutons_contact(
                         invite["telephone"], invite["email"],
                         message=message_personnel(invite, self.liste_invites.faire_part), sujet="Faire-part"
                     )
@@ -124,11 +124,11 @@ class VueInvites:
                     self.apres_modif_invites()
 
 
-    def show_recap_traiteur(self):
-        recap = self.show_recap_invites()
+    def afficher_recap_traiteur(self):
+        recap = self.afficher_recap_invites()
         traiteurs = {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires if prestataire["categorie"] == CATEGORIE_DONNEES_SANTE}
 
-        if not sante_partageable(self.event_sheet.data):
+        if not sante_partageable(self.fiche_evenement.donnees):
             st.warning(
                 "Le client n'a pas donné son accord pour partager les allergies et les régimes : "
                 "le message au traiteur ne contiendra que le nombre de couverts. Recueillez son accord dans la fiche client.",
@@ -147,9 +147,9 @@ class VueInvites:
             self.rediger(suggestion(cle, "recap_traiteur", destinataire_prestataire(traiteur), recap))
 
 
-    def show_recap_invites(self):
+    def afficher_recap_invites(self):
         recap = self.liste_invites.recap_traiteur()
-        self.show_compteurs({
+        self.afficher_compteurs({
             ":material/restaurant: Couverts confirmés": recap["couverts_confirmes"],
             "⏳ Couverts attendus": recap["couverts_attendus"]
         })
@@ -169,19 +169,21 @@ class VueInvites:
         return recap
 
 
-    def show_invites(self):
-        liste_tab, faire_part_tab, traiteur_tab = st.tabs([":material/assignment: Liste", ":material/mail: Faire-parts", ":material/restaurant: Pour le traiteur"])
+    def afficher_invites(self):
+        panneau_liste, panneau_faire_part, panneau_traiteur = st.tabs(
+            [":material/assignment: Liste", ":material/mail: Faire-parts", ":material/restaurant: Pour le traiteur"]
+        )
 
-        with liste_tab:
+        with panneau_liste:
             if self.liste_invites.invites:
-                self.show_compteurs_invites()
+                self.afficher_compteurs_invites()
 
-            self.show_import_contacts()
-            self.show_table_invites()
+            self.afficher_import_contacts()
+            self.afficher_table_invites()
 
-        with faire_part_tab:
-            self.show_redaction_faire_part()
-            self.show_envoi_faire_parts()
+        with panneau_faire_part:
+            self.afficher_redaction_faire_part()
+            self.afficher_envoi_faire_parts()
 
-        with traiteur_tab:
-            self.show_recap_traiteur()
+        with panneau_traiteur:
+            self.afficher_recap_traiteur()

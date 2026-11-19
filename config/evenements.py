@@ -67,7 +67,7 @@ MOTS_CLES = {
 GENRES_LLM = {"texte": "texte", "liste": "liste de textes courts", "date": "date AAAA-MM-JJ", "oui_non": "true ou false", "nombre": "nombre"}
 
 
-def cle_type(type_evenement):
+def cle_type(type_evenement: str | None) -> str:
     texte = (type_evenement or "").lower()
 
     for cle, mots in MOTS_CLES.items():
@@ -77,40 +77,40 @@ def cle_type(type_evenement):
     return "autre"
 
 
-def type_du_dossier(data):
-    return TYPES_EVENEMENT[cle_type(data.get("type_evenement"))]
+def type_du_dossier(donnees: dict) -> dict:
+    return TYPES_EVENEMENT[cle_type(donnees.get("type_evenement"))]
 
 
-def champs_du_type(data):
-    return {cle: CHAMPS_SPECIFIQUES[cle][0] for cle in type_du_dossier(data)["champs"]}
+def champs_du_type(donnees: dict) -> dict[str, str]:
+    return {cle: CHAMPS_SPECIFIQUES[cle][0] for cle in type_du_dossier(donnees)["champs"]}
 
 
-def champs_masques(data, nouvelle_cle):
+def champs_masques(donnees: dict, nouvelle_cle: str) -> list[str]:
     gardes = set(TYPES_EVENEMENT[nouvelle_cle]["champs"])
     return [
-        CHAMPS_SPECIFIQUES[cle][0] for cle in type_du_dossier(data)["champs"]
-        if cle not in gardes and data.get(cle) not in (None, "", [])
+        CHAMPS_SPECIFIQUES[cle][0] for cle in type_du_dossier(donnees)["champs"]
+        if cle not in gardes and donnees.get(cle) not in (None, "", [])
     ]
 
 
-def libelle_evenement(data):
-    type_evenement = type_du_dossier(data)
+def libelle_evenement(donnees: dict) -> str:
+    type_evenement = type_du_dossier(donnees)
 
     if type_evenement["libelle"] != "Autre":
         return type_evenement["libelle"]
 
-    return data.get("sous_type") or data.get("type_evenement") or "Autre"
+    return donnees.get("sous_type") or donnees.get("type_evenement") or "Autre"
 
 
-def valeur_par_defaut(genre):
+def valeur_par_defaut(genre: str) -> list | None:
     return [] if genre == "liste" else None
 
 
-def champs_par_defaut():
+def champs_par_defaut() -> dict:
     return {cle: valeur_par_defaut(genre) for cle, (_, genre, _) in CHAMPS_SPECIFIQUES.items()}
 
 
-def description_champs_llm():
+def description_champs_llm() -> str:
     lignes = []
 
     for type_evenement in TYPES_EVENEMENT.values():

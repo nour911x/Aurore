@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from donnees.storage import load_json, save_json
+from donnees.stockage import charger_json, premier, sauvegarder_json
 
 
 TYPES_RDV = {
@@ -14,7 +14,7 @@ TYPES_RDV = {
 AUTRE_TYPE = "Autre"
 
 
-def deviner_type(titre):
+def deviner_type(titre: str) -> str:
     texte = (titre or "").lower()
 
     for type_rdv, mots in TYPES_RDV.items():
@@ -24,16 +24,16 @@ def deviner_type(titre):
     return AUTRE_TYPE
 
 
-def type_rdv(rdv):
+def type_rdv(rdv: dict) -> str:
     return rdv.get("type") or deviner_type(rdv["titre"])
 
 
-def bornes(rdv):
+def bornes(rdv: dict) -> tuple:
     debut = datetime.fromisoformat(rdv["date_heure"])
     return debut, debut + timedelta(minutes=rdv["duree_minutes"])
 
 
-def conflits(rdvs):
+def conflits(rdvs: list[dict]) -> list[tuple]:
     tries = sorted(rdvs, key=lambda rdv: rdv["date_heure"])
     paires = []
 
@@ -50,26 +50,26 @@ def conflits(rdvs):
 
 
 class Agenda:
-    def __init__(self, file_path, dossier_id=None):
-        self.file_path = file_path
+    def __init__(self, chemin_fichier: str, dossier_id: str | None = None) -> None:
+        self.chemin_fichier = chemin_fichier
         self.dossier_id = dossier_id
-        self.tous = []
-        self.load()
+        self.tous: list[dict] = []
+        self.charger()
 
     @property
-    def rdvs(self):
+    def rdvs(self) -> list[dict]:
         return [rdv for rdv in self.tous if rdv.get("dossier_id") == self.dossier_id]
 
-    def pour_dossier(self, dossier_id):
+    def pour_dossier(self, dossier_id: str) -> None:
         self.dossier_id = dossier_id
 
-    def load(self):
-        self.tous = load_json(self.file_path, [])
+    def charger(self) -> None:
+        self.tous = charger_json(self.chemin_fichier, [])
 
-    def save(self):
-        save_json(self.file_path, self.tous)
+    def sauvegarder(self) -> None:
+        sauvegarder_json(self.chemin_fichier, self.tous)
 
-    def detecter_conflit(self, date_heure, duree_minutes):
+    def detecter_conflit(self, date_heure: str, duree_minutes: int) -> dict | None:
         debut = datetime.fromisoformat(date_heure)
         fin = debut + timedelta(minutes=duree_minutes)
 
@@ -81,7 +81,7 @@ class Agenda:
 
         return None
 
-    def add_rdv(self, titre, date_heure, duree_minutes, lieu, avec, type_choisi=None):
+    def ajouter_rdv(self, titre: str, date_heure: str, duree_minutes: int, lieu: str, avec: str, type_choisi: str | None = None) -> dict | None:
         conflit = self.detecter_conflit(date_heure, duree_minutes)
 
         if conflit:
@@ -97,32 +97,28 @@ class Agenda:
             "type": type_choisi or deviner_type(titre),
             "confirme": False
         })
-        self.save()
+        self.sauvegarder()
 
         return None
 
-    def supprimer_rdv(self, titre, date_heure):
+    def supprimer_rdv(self, titre: str, date_heure: str) -> None:
         self.tous = [
             rdv for rdv in self.tous
             if not (rdv["titre"] == titre and rdv["date_heure"] == date_heure and rdv.get("dossier_id") == self.dossier_id)
         ]
-        self.save()
+        self.sauvegarder()
 
-    def trouver(self, titre, date_heure, dossier_id):
-        for rdv in self.tous:
-            if rdv["titre"] == titre and rdv["date_heure"] == date_heure and rdv.get("dossier_id") == dossier_id:
-                return rdv
+    def trouver(self, titre: str, date_heure: str, dossier_id: str | None) -> dict | None:
+        return premier(self.tous, titre=titre, date_heure=date_heure, dossier_id=dossier_id)
 
-        return None
-
-    def confirmer(self, titre, date_heure, dossier_id):
+    def confirmer(self, titre: str, date_heure: str, dossier_id: str | None) -> None:
         rdv = self.trouver(titre, date_heure, dossier_id)
 
         if rdv:
             rdv["confirme"] = True
-            self.save()
+            self.sauvegarder()
 
-    def rdvs_a_venir(self):
+    def rdvs_a_venir(self) -> list[dict]:
         maintenant = datetime.now()
         futurs = [
             rdv for rdv in self.rdvs
@@ -131,7 +127,7 @@ class Agenda:
 
         return sorted(futurs, key=lambda rdv: rdv["date_heure"])
 
-    def rdvs_proches(self, jours=7):
+    def rdvs_proches(self, jours: int = 7) -> list[dict]:
         limite = datetime.now() + timedelta(days=jours)
 
         return [
@@ -139,7 +135,7 @@ class Agenda:
             if datetime.fromisoformat(rdv["date_heure"]) <= limite
         ]
 
-    def export_ics(self, rdvs=None):
+    def exporter_ics(self, rdvs: list[dict] | None = None) -> str:
         lignes = [
             "BEGIN:VCALENDAR",
             "VERSION:2.0",

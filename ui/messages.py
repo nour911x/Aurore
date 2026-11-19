@@ -13,10 +13,10 @@ class VueMessages:
         prestataire = self.carnet.trouver(prestataire_id)
 
         if not prestataire:
-            return self.event_sheet.infos_sans_historique()
+            return self.fiche_evenement.infos_sans_historique()
 
-        infos_prestataire = self.event_sheet.infos_pour_prestataire(
-            avec_sante=peut_recevoir_sante(self.event_sheet.data, prestataire)
+        infos_prestataire = self.fiche_evenement.infos_pour_prestataire(
+            avec_sante=peut_recevoir_sante(self.fiche_evenement.donnees, prestataire)
         )
 
         if st.session_state.get("donner_enveloppe"):
@@ -27,7 +27,7 @@ class VueMessages:
 
     def ecrire(self, message, consigne=""):
         with st.spinner("AURORE rédige le message…"):
-            return self.conversation_agent_object.write_message(
+            return self.agent.rediger_message(
                 TYPES_MESSAGE[message["type"]],
                 message["destinataire"],
                 message.get("contexte") or {},
@@ -53,7 +53,7 @@ class VueMessages:
 
     def marquer_envoye(self, message):
         self.messagerie.changer_statut(message["id"], "envoyé")
-        self.event_sheet.add_echange(
+        self.fiche_evenement.ajouter_echange(
             "Message",
             f"**{TYPES_MESSAGE[message['type']]}** envoyé à {message['destinataire']} :\n\n{message['contenu']}"
         )
@@ -66,7 +66,7 @@ class VueMessages:
         st.rerun()
 
 
-    def show_suggestions(self, suggestions):
+    def afficher_suggestions(self, suggestions):
         st.subheader(":material/notifications: À préparer")
 
         if not suggestions:
@@ -86,7 +86,7 @@ class VueMessages:
                     st.rerun()
 
 
-    def show_a_valider(self):
+    def afficher_a_valider(self):
         st.subheader(":material/rate_review: À relire et valider")
         st.caption("Rien ne part sans votre validation : relisez, corrigez si besoin, puis validez.")
         messages = self.messagerie.par_statut(*MODIFIABLES)
@@ -121,7 +121,7 @@ class VueMessages:
                     self.changer_statut_message(message, "annulé")
 
 
-    def show_valides(self):
+    def afficher_valides(self):
         st.subheader(":material/outbox: Validés, à envoyer")
         messages = self.messagerie.par_statut("validé")
 
@@ -138,7 +138,7 @@ class VueMessages:
                 if not (message["telephone"] or message["email"]):
                     st.caption("Pas de téléphone ni d'email pour ce destinataire : copiez le message ou complétez sa fiche.")
 
-                self.show_boutons_contact(message["telephone"], message["email"], message=message["contenu"], sujet=type_message)
+                self.afficher_boutons_contact(message["telephone"], message["email"], message=message["contenu"], sujet=type_message)
                 st.caption("Ces boutons ouvrent WhatsApp ou votre messagerie avec le texte prêt : c'est vous qui envoyez.")
                 envoye, modifier, annuler = st.columns([2, 2, 1])
 
@@ -152,8 +152,8 @@ class VueMessages:
                     self.changer_statut_message(message, "annulé")
 
 
-    def show_message_libre(self):
-        destinataires = [destinataire_clients(self.event_sheet.data)] + [
+    def afficher_message_libre(self):
+        destinataires = [destinataire_clients(self.fiche_evenement.donnees)] + [
             destinataire_prestataire(prestataire) for prestataire in self.carnet.prestataires
         ]
         par_nom = {destinataire["destinataire"]: destinataire for destinataire in destinataires}
@@ -176,7 +176,7 @@ class VueMessages:
                     st.rerun()
 
 
-    def show_historique_messages(self):
+    def afficher_historique_messages(self):
         for statut, titre, icone in [("envoyé", "Envoyés", "send"), ("annulé", "Annulés", "cancel")]:
             messages = [message for message in self.messagerie.par_statut(statut) if message["contenu"]]
 
@@ -187,14 +187,14 @@ class VueMessages:
                         st.caption(message["contenu"])
 
 
-    def show_messages(self, suggestions):
+    def afficher_messages(self, suggestions):
         st.toggle(
             "Indiquer aux prestataires l'enveloppe prévue pour leur poste",
             key="donner_enveloppe",
             help="Désactivé : aucun montant n'est donné, le prestataire propose son prix."
         )
-        self.show_suggestions(suggestions)
-        self.show_a_valider()
-        self.show_valides()
-        self.show_message_libre()
-        self.show_historique_messages()
+        self.afficher_suggestions(suggestions)
+        self.afficher_a_valider()
+        self.afficher_valides()
+        self.afficher_message_libre()
+        self.afficher_historique_messages()

@@ -1,7 +1,6 @@
-from config.evenements import (CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, champs_du_type, champs_masques, cle_type,
-                               libelle_evenement)
+from config.evenements import CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, champs_du_type, champs_masques, cle_type, libelle_evenement
 from donnees.dossiers import FICHIER_FICHE, chemin, creer
-from donnees.event_state import EventSheet
+from donnees.fiche_evenement import FicheEvenement
 
 
 def test_types_reconnus_depuis_un_texte_libre():
@@ -30,17 +29,17 @@ def test_libelle_d_un_evenement_autre():
 
 def test_changer_de_type_masque_les_champs_sans_les_supprimer(tmp_path):
     dossier_id = creer({"type_evenement": "Mariage", "ceremonie": "Laïque à 15h", "preferences_musicales": ["soul"]}, tmp_path)
-    fiche = EventSheet(chemin(dossier_id, FICHIER_FICHE, tmp_path))
+    fiche = FicheEvenement(chemin(dossier_id, FICHIER_FICHE, tmp_path))
 
-    assert champs_masques(fiche.data, "anniversaire") == ["Cérémonie", "Musique"]
+    assert champs_masques(fiche.donnees, "anniversaire") == ["Cérémonie", "Musique"]
 
     fiche.changer_type("anniversaire")
-    relue = EventSheet(fiche.file_path).data
+    relue = FicheEvenement(fiche.chemin_fichier).donnees
 
     assert "ceremonie" not in champs_du_type(relue)
     assert relue["ceremonie"] == "Laïque à 15h"
 
     fiche.changer_type("mariage")
 
-    assert champs_du_type(fiche.data)["ceremonie"] == "Cérémonie"
-    assert fiche.data["ceremonie"] == "Laïque à 15h"
+    assert champs_du_type(fiche.donnees)["ceremonie"] == "Cérémonie"
+    assert fiche.donnees["ceremonie"] == "Laïque à 15h"

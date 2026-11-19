@@ -6,7 +6,7 @@ from metier.prestataires import lien_email, lien_whatsapp
 
 class Composants:
     @staticmethod
-    def get_persistant(cle, classe):
+    def obtenir_persistant(cle, classe):
 
         if cle not in st.session_state:
             st.session_state[cle] = classe()
@@ -15,13 +15,13 @@ class Composants:
 
 
     @staticmethod
-    def show_compteurs(compteurs):
-        for colonne, (label, valeur) in zip(st.columns(len(compteurs)), compteurs.items()):
+    def afficher_compteurs(compteurs):
+        for colonne, (label, valeur) in zip(st.columns(len(compteurs)), compteurs.items(), strict=True):
             colonne.metric(label, valeur)
 
 
     @staticmethod
-    def show_boutons_contact(telephone, email, lien="", message="", sujet=""):
+    def afficher_boutons_contact(telephone, email, lien="", message="", sujet=""):
         liens = []
 
         if telephone:
@@ -37,7 +37,7 @@ class Composants:
             liens.append((":material/link: Site / Instagram", lien))
 
         if liens:
-            for colonne, (texte, url) in zip(st.columns(len(liens)), liens):
+            for colonne, (texte, url) in zip(st.columns(len(liens)), liens, strict=True):
                 colonne.link_button(texte, url, width="stretch")
 
 
@@ -60,7 +60,7 @@ class Composants:
             st.rerun()
 
 
-    def show_boutons_messages(self, cle, elements, **options):
+    def afficher_boutons_messages(self, cle, elements, **options):
         with st.container(horizontal=True, key=cle):
             for identifiant, icone, libelle, message in elements:
                 st.button(
@@ -75,9 +75,9 @@ class Composants:
 
 
     @staticmethod
-    def show_liens(liens, par_ligne=3):
+    def afficher_liens(liens, par_ligne=3):
         elements = list(liens.items())
 
         for debut in range(0, len(elements), par_ligne):
-            for colonne, (texte, url) in zip(st.columns(par_ligne), elements[debut:debut + par_ligne]):
+            for colonne, (texte, url) in zip(st.columns(par_ligne), elements[debut:debut + par_ligne], strict=False):
                 colonne.link_button(texte, url, width="stretch")
