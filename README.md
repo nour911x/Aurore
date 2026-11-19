@@ -59,7 +59,7 @@ Dans `config/features.py`. Un module désactivé n'apparaît pas dans l'interfac
 
 ## Lancer le projet
 
-Prérequis : Python 3.12 ou plus récent.
+Prérequis : Python 3.13 ou plus récent.
 
 ```powershell
 python -m venv env
@@ -81,11 +81,16 @@ L'application s'ouvre sur http://localhost:8501. Au tout premier lancement, des 
 
 Aucune clé n'est écrite dans le code.
 
-## Tests
+## Tests et qualité
 
 ```powershell
-pytest
+pip install -r requirements-dev.txt
+pytest --cov       # tests et couverture
+ruff check .       # style et erreurs courantes
+mypy               # vérification des types
 ```
+
+Les trois commandes sont lancées automatiquement par GitHub Actions à chaque push (`.github/workflows/qualite.yml`). Leur configuration est dans `pyproject.toml`.
 
 Les tests couvrent la logique métier : conflits de calendrier, budget et devis, normalisation des noms, statuts des messages, règles RGPD, accueil sur les données de démonstration. Ils n'écrivent que dans des dossiers temporaires.
 
@@ -101,6 +106,7 @@ donnees/              stockage JSON, dossiers clients, fiche, données de démon
 llm/                  agent Groq, outils de l'agent, Outlook, prompt système
 assets/               feuille de style, salle 3D
 tests/                tests unitaires (pytest)
+.github/workflows/     intégration continue (ruff, mypy, pytest)
 dossiers/             données des clients, un sous-dossier par client (créé au lancement, ignoré par git)
 ```
 

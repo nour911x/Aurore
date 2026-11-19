@@ -13,16 +13,16 @@ from ui.habillage import accueil_html, frise_html
 
 
 class VuesPartagees:
-    def show_evenement(self):
+    def afficher_evenement(self):
         infos = self.infos_pour_destinataire(self.prestataire["id"])
         utiles = self.infos_utiles()
-        self.show_compteurs({
+        self.afficher_compteurs({
             ":material/event: Date": date_lisible(infos["date"]) or "À définir",
             ":material/location_on: Lieu": infos["lieu"] or "À définir",
             ":material/groups: Invités prévus": infos["nombre_invites"] or "À définir"
         })
 
-        if self.prestataire["categorie"] == CATEGORIE_DONNEES_SANTE and not sante_partageable(self.event_sheet.data):
+        if self.prestataire["categorie"] == CATEGORIE_DONNEES_SANTE and not sante_partageable(self.fiche_evenement.donnees):
             st.info("Les allergies et régimes ne vous sont pas transmis : le client n'a pas encore donné son accord.", icon=":material/lock:")
 
         for cle, titre, besoin in [
@@ -35,10 +35,10 @@ class VuesPartagees:
 
         if "invites" in utiles:
             st.subheader(":material/restaurant: Les invités")
-            self.show_recap_invites()
+            self.afficher_recap_invites()
         elif "couverts" in utiles:
             recap = self.liste_invites.recap_traiteur()
-            self.show_compteurs({
+            self.afficher_compteurs({
                 ":material/restaurant: Couverts confirmés": recap["couverts_confirmes"],
                 ":material/hourglass_top: Couverts attendus": recap["couverts_attendus"]
             })
@@ -65,7 +65,7 @@ class VuesPartagees:
             st.markdown(frise_html(self.jour_j.deroule, self.prestataire["nom"]), unsafe_allow_html=True)
 
 
-    def show_prochains_rdvs(self):
+    def afficher_prochains_rdvs(self):
         rdvs = self.agenda.rdvs_a_venir()
 
         if not rdvs:
@@ -76,17 +76,17 @@ class VuesPartagees:
             st.markdown(f"**{date_longue(debut)} à {debut:%H:%M}** · {rdv['titre']} · :gray[{rdv['lieu'] or 'lieu à préciser'}]")
 
 
-    def show_recap_client(self):
-        data = self.event_sheet.data
+    def afficher_recap_client(self):
+        donnees = self.fiche_evenement.donnees
         st.markdown(accueil_html(CLIENTS), unsafe_allow_html=True)
-        self.show_compteurs({
-            ":material/event: Date": date_lisible(data["date"]) or "À définir",
-            ":material/location_on: Lieu": data["lieu"] or "À définir",
-            ":material/groups: Invités": data["nombre_invites"] or "À définir"
+        self.afficher_compteurs({
+            ":material/event: Date": date_lisible(donnees["date"]) or "À définir",
+            ":material/location_on: Lieu": donnees["lieu"] or "À définir",
+            ":material/groups: Invités": donnees["nombre_invites"] or "À définir"
         })
 
-        for cle, libelle in champs_du_type(data).items():
-            valeur = data[cle]
+        for cle, libelle in champs_du_type(donnees).items():
+            valeur = donnees[cle]
 
             if isinstance(valeur, list):
                 valeur = ", ".join(valeur)
@@ -98,25 +98,25 @@ class VuesPartagees:
                 st.markdown(f"**{libelle}** : {date_lisible(valeur) if cle.startswith('date') else valeur}")
 
         st.subheader(":material/event: Prochains rendez-vous")
-        self.show_prochains_rdvs()
+        self.afficher_prochains_rdvs()
 
 
-    def show_budget_client(self):
+    def afficher_budget_client(self):
         st.caption("Suivi en lecture seule. Pour toute modification, écrivez à votre organisateur.")
-        self.show_alertes_factures(self.budget)
+        self.afficher_alertes_factures(self.budget)
 
         if not self.budget.postes:
             st.info("Le budget n'a pas encore été détaillé.")
 
-        self.show_budget_postes(self.budget, self.event_sheet.data["budget"], "budget_client", lecture_seule=True)
+        self.afficher_budget_postes(self.budget, self.fiche_evenement.donnees["budget"], "budget_client", lecture_seule=True)
 
 
-    def show_invitations(self):
+    def afficher_invitations(self):
         if not self.liste_invites.invites:
             st.info("La liste d'invités n'a pas encore été créée.")
             return
 
-        self.show_compteurs_invites()
+        self.afficher_compteurs_invites()
         st.dataframe(
             pd.DataFrame(self.liste_invites.invites, columns=["nom", "groupe", "accompagnants", "statut"]),
             column_config={
@@ -131,13 +131,13 @@ class VuesPartagees:
                 st.markdown(self.liste_invites.faire_part)
 
 
-    def show_agenda_prestataire(self):
-        self.show_rappels_rdv()
-        self.show_rdvs(lecture_seule=True)
+    def afficher_agenda_prestataire(self):
+        self.afficher_rappels_rdv()
+        self.afficher_rdvs(lecture_seule=True)
 
 
-    def show_devis_prestataire(self, profil):
-        self.show_devis(profil)
+    def afficher_devis_prestataire(self, profil):
+        self.afficher_devis(profil)
         st.subheader(":material/receipt_long: Factures")
         factures = self.budget.factures_de(self.prestataire)
 

@@ -15,16 +15,22 @@ from ui.commun import COLONNES_DEVIS, CONFIG_COLONNES_DEVIS, FORMAT_DATE, lire_d
 
 class VueBudget:
     @staticmethod
-    def show_alertes_factures(budget):
+    def afficher_alertes_factures(budget):
         for facture in budget.factures_a_payer():
             if facture["jours_restants"] < 0:
-                st.error(f"Facture en retard : {facture['libelle']} ({montant(facture['montant'])}) — échéance dépassée le {date_lisible(facture['echeance'])}", icon=":material/error:")
+                st.error(
+                    f"Facture en retard : {facture['libelle']} ({montant(facture['montant'])}) — échéance dépassée le {date_lisible(facture['echeance'])}",
+                    icon=":material/error:"
+                )
             elif facture["jours_restants"] <= 7:
-                st.warning(f"À payer {echeance_texte(facture['jours_restants'])} : {facture['libelle']} ({montant(facture['montant'])}, poste {facture['poste']})", icon=":material/schedule:")
+                st.warning(
+                    f"À payer {echeance_texte(facture['jours_restants'])} : {facture['libelle']} ({montant(facture['montant'])}, poste {facture['poste']})",
+                    icon=":material/schedule:"
+                )
 
 
     @staticmethod
-    def show_budget_postes(budget, budget_total, cle, libelle_poste="prévus", lecture_seule=False):
+    def afficher_budget_postes(budget, budget_total, cle, libelle_poste="prévus", lecture_seule=False):
         total_engage = budget.total_engage()
 
         if budget_total:
@@ -37,24 +43,24 @@ class VueBudget:
 
             with st.expander(f"{poste['nom']} — {montant(engage)} / {montant(poste['montant_prevu'])} {libelle_poste}", icon=icone):
                 for facture in poste["factures"]:
-                    statut = ":green[:material/check_circle:] payée" if facture["payee"] else f":material/hourglass_top: à payer avant le {date_lisible(facture['echeance'])}"
+                    a_payer = f":material/hourglass_top: à payer avant le {date_lisible(facture['echeance'])}"
+                    statut = ":green[:material/check_circle:] payée" if facture["payee"] else a_payer
                     st.markdown(f"- {facture['libelle']} : {montant(facture['montant'])} ({statut})")
 
-                    if not facture["payee"] and not lecture_seule:
-                        if st.button("Marquer payée", key=f"{cle}_payee_{poste['nom']}_{facture['libelle']}"):
+                    if not facture["payee"] and not lecture_seule and st.button("Marquer payée", key=f"{cle}_payee_{poste['nom']}_{facture['libelle']}"):
                             budget.marquer_payee(poste["nom"], facture["libelle"])
                             st.rerun()
 
 
     @staticmethod
-    def show_budget_forms(budget, cle, exemple_poste="traiteur", exemple_facture="acompte traiteur"):
+    def afficher_budget_forms(budget, cle, exemple_poste="traiteur", exemple_facture="acompte traiteur"):
         with st.expander("Ajouter un poste", icon=":material/add:"):
             with st.form(f"{cle}_form_poste", clear_on_submit=True):
                 nom = st.text_input(f"Nom du poste (ex : {exemple_poste})")
                 montant = st.number_input("Montant prévu (€)", min_value=0, step=100)
 
                 if st.form_submit_button("Ajouter le poste") and nom:
-                    budget.add_poste(nom, montant)
+                    budget.ajouter_poste(nom, montant)
                     st.rerun()
 
         with st.expander("Ajouter une facture", icon=":material/receipt_long:"):
@@ -68,41 +74,40 @@ class VueBudget:
                     payee = st.checkbox("Déjà payée")
 
                     if st.form_submit_button("Ajouter la facture") and libelle:
-                        budget.add_facture(poste_choisi, libelle, montant, str(echeance), payee)
+                        budget.ajouter_facture(poste_choisi, libelle, montant, str(echeance), payee)
                         st.rerun()
             else:
                 st.caption("Ajoute d'abord un poste.")
 
 
-    def show_achats(self):
+    def afficher_achats(self):
         identifiant = self.prestataire["id"]
-        achats = self.get_persistant(
+        achats = self.obtenir_persistant(
             f"achats_{self.dossier_id}_{identifiant}", lambda: Budget(chemin(self.dossier_id, f"achats_{identifiant}.json"))
         )
         st.caption("Vos achats pour cet événement (denrées, boissons, location…) et les factures de vos fournisseurs, avec leurs échéances.")
-        self.show_alertes_factures(achats)
-        self.show_budget_postes(achats, None, "achats", "budgétés")
-        self.show_budget_forms(achats, "achats", "viandes et poissons", "facture grossiste")
+        self.afficher_alertes_factures(achats)
+        self.afficher_budget_postes(achats, None, "achats", "budgétés")
+        self.afficher_budget_forms(achats, "achats", "viandes et poissons", "facture grossiste")
 
 
-    def show_budget(self):
-        self.show_alertes_factures(self.budget)
+    def afficher_budget(self):
+        self.afficher_alertes_factures(self.budget)
 
         if not self.budget.postes:
             st.info("Aucun poste de budget pour l'instant.")
 
-            if self.event_sheet.data["budget"]:
-                if st.button("Proposer une répartition adaptée à mon événement", icon=":material/lightbulb:"):
-                    postes = self.conversation_agent_object.suggest_budget_postes(self.event_sheet.data)
+            if self.fiche_evenement.donnees["budget"] and st.button("Proposer une répartition adaptée à mon événement", icon=":material/lightbulb:"):
+                    postes = self.agent.suggerer_budget_postes(self.fiche_evenement.donnees)
 
                     for poste in postes:
-                        self.budget.add_poste(poste["nom"], poste["montant_prevu"])
+                        self.budget.ajouter_poste(poste["nom"], poste["montant_prevu"])
 
                     st.rerun()
         else:
-            self.show_budget_postes(self.budget, self.event_sheet.data["budget"], "budget")
+            self.afficher_budget_postes(self.budget, self.fiche_evenement.donnees["budget"], "budget")
 
-        self.show_budget_forms(self.budget, "budget")
+        self.afficher_budget_forms(self.budget, "budget")
 
 
     def nouvelles_lignes_devis(self, lignes):
@@ -113,14 +118,14 @@ class VueBudget:
     def accepter_devis(self, devis, montants):
         prestataire = self.carnet.trouver(devis["prestataire_id"])
         poste = (prestataire["poste_budget"] or prestataire["categorie"]) if prestataire else POSTE_ORGANISATION
-        echeance_solde = lire_date(self.event_sheet.data["date"]) or date.today() + timedelta(days=30)
+        echeance_solde = lire_date(self.fiche_evenement.donnees["date"]) or date.today() + timedelta(days=30)
         self.budget.enregistrer_devis(devis["numero"], montants, poste, echeance_solde)
 
         if prestataire:
             self.changer_statut_prestataire(prestataire, "Réservé")
 
 
-    def show_devis_form(self, deja_des_devis):
+    def afficher_devis_form(self, deja_des_devis):
         if self.prestataire:
             emetteurs = {self.prestataire["nom"]: self.prestataire}
         else:
@@ -132,10 +137,10 @@ class VueBudget:
 
             if st.button("Proposer les lignes avec AURORE", icon=":material/auto_awesome:"):
                 categorie = prestataire["categorie"] if prestataire else "Organisation d'événements"
-                infos = self.infos_pour_destinataire(self.prestataire["id"]) if self.prestataire else self.event_sheet.infos_sans_historique()
+                infos = self.infos_pour_destinataire(self.prestataire["id"]) if self.prestataire else self.fiche_evenement.infos_sans_historique()
 
                 with st.spinner("AURORE prépare les lignes du devis…"):
-                    suggestions = self.conversation_agent_object.suggest_devis_lignes(emetteur, categorie, infos)
+                    suggestions = self.agent.suggerer_devis_lignes(emetteur, categorie, infos)
 
                 self.nouvelles_lignes_devis(lignes_valides(suggestions))
 
@@ -159,17 +164,17 @@ class VueBudget:
                 if not lignes:
                     st.warning("Ajoute au moins une ligne avec une désignation.")
                 else:
-                    self.carnet_devis.add_devis(
+                    self.carnet_devis.ajouter_devis(
                         emetteur,
                         prestataire["id"] if prestataire else None,
-                        noms_clients(self.event_sheet.data),
+                        noms_clients(self.fiche_evenement.donnees),
                         lignes, tva, acompte, validite, notes
                     )
                     self.nouvelles_lignes_devis([])
                     st.rerun()
 
 
-    def show_devis_carte(self, devis, profil):
+    def afficher_devis_carte(self, devis, profil):
         montants = totaux(devis)
         numero = devis["numero"]
 
@@ -204,7 +209,7 @@ class VueBudget:
             bouton_pdf, bouton_envoi, bouton_supprimer = st.columns([2, 3, 1])
             bouton_pdf.download_button(
                 "Télécharger le PDF", icon=":material/download:",
-                data=generer_pdf(devis, self.event_sheet.data),
+                data=generer_pdf(devis, self.fiche_evenement.donnees),
                 file_name=f"{numero}.pdf",
                 mime="application/pdf",
                 key=f"pdf_{numero}",
@@ -216,14 +221,14 @@ class VueBudget:
 
             if bouton_envoi.button("Préparer le message d'envoi", icon=":material/mail:", key=f"envoi_{numero}", width="stretch"):
                 contexte = {**devis, "totaux": montants}
-                self.rediger(suggestion(f"envoi_devis_{numero}", "envoi_devis", destinataire_clients(self.event_sheet.data), contexte))
+                self.rediger(suggestion(f"envoi_devis_{numero}", "envoi_devis", destinataire_clients(self.fiche_evenement.donnees), contexte))
 
             if bouton_supprimer.button("Supprimer", key=f"suppr_devis_{numero}"):
                 self.carnet_devis.supprimer(numero)
                 st.rerun()
 
 
-    def show_devis(self, profil):
+    def afficher_devis(self, profil):
         devis_visibles = [
             devis for devis in self.carnet_devis.devis
             if not self.prestataire or meme_nom(devis["emetteur"], self.prestataire["nom"])
@@ -233,7 +238,7 @@ class VueBudget:
             st.info("Aucun devis pour l'instant.")
 
         for devis in reversed(devis_visibles):
-            self.show_devis_carte(devis, profil)
+            self.afficher_devis_carte(devis, profil)
 
         if profil == ORGANISATEUR:
-            self.show_devis_form(bool(devis_visibles))
+            self.afficher_devis_form(bool(devis_visibles))

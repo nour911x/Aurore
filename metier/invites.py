@@ -2,12 +2,13 @@ import csv
 import io
 import uuid
 from collections import Counter
+from typing import Any
 
 from fpdf import FPDF
 
-from donnees.storage import load_json, save_json
+from donnees.stockage import charger_json, sauvegarder_json
 from metier.devis import date_lisible, texte_pdf
-from textes import format_person_name, noms_courts
+from textes import formater_nom, noms_courts
 
 
 GROUPES = ["Famille", "Amis", "Collègues", "Autre"]
@@ -17,11 +18,11 @@ STATUTS_INVITE = ["À inviter", "Invité", "Confirmé", "Décliné"]
 REGIMES = ["Aucun", "Végétarien", "Végan", "Sans gluten", "Sans lactose", "Halal", "Casher", "Sans porc", "Autre"]
 
 
-def texte(valeur):
+def texte(valeur: Any) -> str:
     return valeur.strip() if isinstance(valeur, str) else ""
 
 
-def entier(valeur):
+def entier(valeur: Any) -> int:
     try:
         valeur = float(valeur)
     except (TypeError, ValueError):
@@ -30,14 +31,17 @@ def entier(valeur):
     return int(valeur) if valeur == valeur else 0
 
 
-def choix(valeur, options):
+def choix(valeur: str | None, options: list[str]) -> str:
     return valeur if valeur in options else options[0]
 
 
-def nouvel_invite(nom, groupe="Autre", telephone="", email="", accompagnants=0, regime="Aucun", allergies="", statut="À inviter", invite_id=None):
+def nouvel_invite(
+    nom: str, groupe: str | None = "Autre", telephone: str = "", email: str = "", accompagnants: int = 0,
+    regime: str | None = "Aucun", allergies: str = "", statut: str | None = "À inviter", invite_id: str | None = None
+) -> dict:
     return {
         "id": invite_id or uuid.uuid4().hex[:8],
-        "nom": format_person_name(nom),
+        "nom": formater_nom(nom),
         "groupe": choix(groupe, GROUPES),
         "telephone": telephone,
         "email": email,
@@ -48,7 +52,7 @@ def nouvel_invite(nom, groupe="Autre", telephone="", email="", accompagnants=0, 
     }
 
 
-def nettoyer(lignes):
+def nettoyer(lignes: list[dict]) -> list[dict]:
     return [
         nouvel_invite(
             texte(ligne.get("nom")),
@@ -66,7 +70,7 @@ def nettoyer(lignes):
     ]
 
 
-def lire_vcf(contenu):
+def lire_vcf(contenu: str) -> list[dict]:
     contacts = []
 
     for carte in contenu.split("BEGIN:VCARD")[1:]:
@@ -88,7 +92,7 @@ def lire_vcf(contenu):
     return contacts
 
 
-def colonne(ligne, *mots):
+def colonne(ligne: dict, *mots: str) -> str:
     for nom_colonne, valeur in ligne.items():
         if nom_colonne and texte(valeur) and any(mot in nom_colonne.lower() for mot in mots):
             return texte(valeur)
@@ -96,7 +100,7 @@ def colonne(ligne, *mots):
     return ""
 
 
-def lire_csv(contenu):
+def lire_csv(contenu: str) -> list[dict]:
     separateur = ";" if contenu.count(";") > contenu.count(",") else ","
     contacts = []
 
@@ -113,7 +117,7 @@ def lire_csv(contenu):
     return contacts
 
 
-def lire_contacts(nom_fichier, contenu_brut):
+def lire_contacts(nom_fichier: str, contenu_brut: bytes) -> list[dict]:
     try:
         contenu = contenu_brut.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -125,27 +129,27 @@ def lire_contacts(nom_fichier, contenu_brut):
 
 
 class ListeInvites:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.invites = []
+    def __init__(self, chemin_fichier: str) -> None:
+        self.chemin_fichier = chemin_fichier
+        self.invites: list[dict] = []
         self.faire_part = ""
         self.faire_part_valide = False
-        self.load()
+        self.charger()
 
-    def load(self):
-        data = load_json(self.file_path, {"invites": [], "faire_part": ""})
-        self.invites = data["invites"]
-        self.faire_part = data["faire_part"]
-        self.faire_part_valide = data.get("faire_part_valide", False)
+    def charger(self) -> None:
+        donnees = charger_json(self.chemin_fichier, {"invites": [], "faire_part": ""})
+        self.invites = donnees["invites"]
+        self.faire_part = donnees["faire_part"]
+        self.faire_part_valide = donnees.get("faire_part_valide", False)
 
-    def save(self):
-        save_json(self.file_path, {"invites": self.invites, "faire_part": self.faire_part, "faire_part_valide": self.faire_part_valide})
+    def sauvegarder(self) -> None:
+        sauvegarder_json(self.chemin_fichier, {"invites": self.invites, "faire_part": self.faire_part, "faire_part_valide": self.faire_part_valide})
 
-    def remplacer(self, invites):
+    def remplacer(self, invites: list[dict]) -> None:
         self.invites = invites
-        self.save()
+        self.sauvegarder()
 
-    def a_importer(self, contacts):
+    def a_importer(self, contacts: list[dict]) -> list[dict]:
         deja_la = {(invite["nom"].lower(), invite["telephone"]) for invite in self.invites}
         nouveaux = []
 
@@ -158,7 +162,7 @@ class ListeInvites:
 
         return nouveaux
 
-    def importer(self, contacts, groupe):
+    def importer(self, contacts: list[dict], groupe: str) -> int:
         nouveaux = [
             nouvel_invite(contact["nom"], groupe, contact["telephone"], contact["email"])
             for contact in self.a_importer(contacts)
@@ -167,28 +171,28 @@ class ListeInvites:
 
         return len(nouveaux)
 
-    def changer_statut(self, invite_id, statut):
+    def changer_statut(self, invite_id: str, statut: str) -> None:
         for invite in self.invites:
             if invite["id"] == invite_id:
                 invite["statut"] = statut
-        self.save()
+        self.sauvegarder()
 
-    def set_faire_part(self, contenu):
+    def definir_faire_part(self, contenu: str) -> None:
         self.faire_part = contenu
         self.faire_part_valide = False
-        self.save()
+        self.sauvegarder()
 
-    def valider_faire_part(self, valide=True):
+    def valider_faire_part(self, valide: bool = True) -> None:
         self.faire_part_valide = valide and bool(self.faire_part)
-        self.save()
+        self.sauvegarder()
 
-    def personnes(self, statuts):
+    def personnes(self, statuts: list[str]) -> int:
         return sum(1 + invite["accompagnants"] for invite in self.invites if invite["statut"] in statuts)
 
-    def compter_par_statut(self):
+    def compter_par_statut(self) -> Counter[str]:
         return Counter(invite["statut"] for invite in self.invites)
 
-    def recap_traiteur(self):
+    def recap_traiteur(self) -> dict:
         confirmes = [invite for invite in self.invites if invite["statut"] == "Confirmé"]
 
         return {
@@ -199,12 +203,12 @@ class ListeInvites:
         }
 
 
-def message_personnel(invite, faire_part):
+def message_personnel(invite: dict, faire_part: str) -> str:
     prenom = invite["nom"].split()[0]
     return f"Bonjour {prenom},\n\n{faire_part}"
 
 
-def generer_faire_part_pdf(faire_part, event_data):
+def generer_faire_part_pdf(faire_part: str, donnees_evenement: dict) -> bytes:
     pdf = FPDF(format=(148, 210))
     pdf.add_page()
     pdf.set_auto_page_break(auto=False)
@@ -216,7 +220,7 @@ def generer_faire_part_pdf(faire_part, event_data):
     pdf.set_y(50)
     pdf.set_text_color(150, 100, 125)
     pdf.set_font("Times", "BI", 26)
-    noms = noms_courts(event_data["noms"])
+    noms = noms_courts(donnees_evenement["noms"])
     pdf.multi_cell(0, 12, texte_pdf(noms), align="C")
 
     pdf.line(54, pdf.get_y() + 4, 94, pdf.get_y() + 4)
@@ -226,7 +230,7 @@ def generer_faire_part_pdf(faire_part, event_data):
     pdf.set_x(20)
     pdf.multi_cell(108, 6.5, texte_pdf(faire_part), align="C")
 
-    details = " - ".join(filter(None, [date_lisible(event_data["date"]), event_data["lieu"]]))
+    details = " - ".join(filter(None, [date_lisible(donnees_evenement["date"]), donnees_evenement["lieu"]]))
 
     if details:
         pdf.set_y(178)

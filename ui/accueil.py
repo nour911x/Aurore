@@ -28,7 +28,7 @@ class VueAccueil:
         return conteneur
 
 
-    def show_rdvs_du_jour(self, rdvs):
+    def afficher_rdvs_du_jour(self, rdvs):
         with self.section_accueil("Aujourd'hui", "today"):
             if not rdvs:
                 st.caption("Aucun rendez-vous aujourd'hui.")
@@ -43,7 +43,7 @@ class VueAccueil:
                 self.bouton_ouvrir(f"jour_{index}", rdv["dossier_id"], "planning", "agenda")
 
 
-    def show_conflits(self, paires, doubles):
+    def afficher_conflits(self, paires, doubles):
         with self.section_accueil("Conflits", "warning"):
             if not paires and not doubles:
                 st.caption("Aucun chevauchement dans le calendrier, aucun prestataire réservé deux fois le même jour.")
@@ -65,7 +65,7 @@ class VueAccueil:
         self.agenda.confirmer(rdv["titre"], rdv["date_heure"], rdv["dossier_id"])
 
 
-    def show_a_faire(self, elements):
+    def afficher_a_faire(self, elements):
         with self.section_accueil("À faire", "task_alt"):
             if not elements:
                 st.caption("Rien en attente.")
@@ -96,7 +96,7 @@ class VueAccueil:
                     self.bouton_ouvrir(f"faire_{element['dossier_id']}", element["dossier_id"], "messages", "a_envoyer", "Ouvrir les messages")
 
 
-    def show_paiements(self, factures):
+    def afficher_paiements(self, factures):
         with self.section_accueil("Paiements", "payments"):
             if not factures:
                 st.caption("Aucune facture en retard ni à échéance dans les 7 jours.")
@@ -108,7 +108,7 @@ class VueAccueil:
                 self.bouton_ouvrir(f"paiement_{index}", facture["dossier_id"], "budget", "budget")
 
 
-    def show_a_surveiller(self, dossiers):
+    def afficher_a_surveiller(self, dossiers):
         with self.section_accueil(f"Dossiers à surveiller (J-{JOURS_SURVEILLANCE} et moins)", "visibility"):
             if not dossiers:
                 st.caption(f"Aucun événement dans les {JOURS_SURVEILLANCE} prochains jours.")
@@ -119,7 +119,7 @@ class VueAccueil:
                 self.bouton_ouvrir(f"surveiller_{dossier['dossier_id']}", dossier["dossier_id"], "fiche")
 
 
-    def show_demo(self):
+    def afficher_demo(self):
         with st.expander("Données de démonstration", icon=":material/science:"):
             if demo_active():
                 st.caption(
@@ -140,11 +140,11 @@ class VueAccueil:
                     st.rerun()
 
 
-    def show_aujourd_hui(self):
+    def afficher_aujourd_hui(self):
         maintenant = datetime.now()
         donnees = synthese(maintenant=maintenant)
         st.markdown(aujourdhui_html(maintenant), unsafe_allow_html=True)
-        self.show_compteurs({
+        self.afficher_compteurs({
             ":material/today: Rendez-vous aujourd'hui": len(donnees["rdvs_du_jour"]),
             ":material/task_alt: Dossiers à traiter": len(donnees["a_faire"]),
             ":material/payments: Paiements à suivre": len(donnees["paiements"]),
@@ -153,34 +153,34 @@ class VueAccueil:
         gauche, droite = st.columns(2)
 
         with gauche:
-            self.show_rdvs_du_jour(donnees["rdvs_du_jour"])
-            self.show_conflits(donnees["conflits"], donnees["doubles_reservations"])
+            self.afficher_rdvs_du_jour(donnees["rdvs_du_jour"])
+            self.afficher_conflits(donnees["conflits"], donnees["doubles_reservations"])
 
         with droite:
-            self.show_a_faire(donnees["a_faire"])
-            self.show_paiements(donnees["paiements"])
+            self.afficher_a_faire(donnees["a_faire"])
+            self.afficher_paiements(donnees["paiements"])
 
-        self.show_a_surveiller(donnees["a_surveiller"])
-        self.show_demo()
+        self.afficher_a_surveiller(donnees["a_surveiller"])
+        self.afficher_demo()
 
 
-    def show_tableau_de_bord(self):
-        historique = self.conversation_agent_object.get_conversation_history()
-        self.show_aujourd_hui()
+    def afficher_tableau_de_bord(self):
+        historique = self.agent.lire_historique()
+        self.afficher_aujourd_hui()
         st.caption("Demander à AURORE")
-        self.show_boutons_messages("raccourcis", RACCOURCIS)
+        self.afficher_boutons_messages("raccourcis", RACCOURCIS)
 
         if historique:
             st.caption("Dernier échange avec AURORE. Toute la discussion est dans l'onglet Messages.")
-            self.show_conversation(historique[-2:])
+            self.afficher_conversation(historique[-2:])
 
 
-    def show_accueil(self, profil):
+    def afficher_accueil(self, profil):
         st.markdown(accueil_html(profil), unsafe_allow_html=True)
 
 
     @staticmethod
-    def show_conversation(messages):
+    def afficher_conversation(messages):
         for message in messages:
             with st.chat_message(message["role"]):
                 if message.get("image"):
@@ -191,8 +191,8 @@ class VueAccueil:
         st.markdown(AVERTISSEMENT_HTML, unsafe_allow_html=True)
 
 
-    def show_discussion(self, profil):
-        historique = self.conversation_agent_object.get_conversation_history()
+    def afficher_discussion(self, profil):
+        historique = self.agent.lire_historique()
 
         if historique:
             st.button(
@@ -202,10 +202,10 @@ class VueAccueil:
 
         if profil != ORGANISATEUR:
             if not historique:
-                self.show_accueil(profil)
+                self.afficher_accueil(profil)
 
-            self.show_boutons_messages("raccourcis", RACCOURCIS_PRESTATAIRE if self.prestataire else RACCOURCIS_CLIENTS)
+            self.afficher_boutons_messages("raccourcis", RACCOURCIS_PRESTATAIRE if self.prestataire else RACCOURCIS_CLIENTS)
         elif not historique:
             st.caption("Aucune discussion pour l'instant : écrivez à AURORE dans la zone de saisie en bas de page.")
 
-        self.show_conversation(historique)
+        self.afficher_conversation(historique)

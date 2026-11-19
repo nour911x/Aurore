@@ -1,4 +1,4 @@
-from app import UserInterface
+from app import InterfaceUtilisateur
 from config import features
 from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
 from llm.outils import OUTILS_PAR_ESPACE
@@ -6,9 +6,9 @@ from ui.commun import ESPACES
 
 
 def test_sections_masquees_selon_les_flags():
-    assert ("salle_3d" in UserInterface.sections("planning")) == features.DIGITAL_EVENT_REPRESENTATION
-    assert ("instagram" in UserInterface.sections("inspiration")) == features.INSTAGRAM_FEEDBACK
-    assert ("adresses" in UserInterface.sections("inspiration")) == features.VENDOR_RECOMMENDATIONS
+    assert ("salle_3d" in InterfaceUtilisateur.sections("planning")) == features.DIGITAL_EVENT_REPRESENTATION
+    assert ("instagram" in InterfaceUtilisateur.sections("inspiration")) == features.INSTAGRAM_FEEDBACK
+    assert ("adresses" in InterfaceUtilisateur.sections("inspiration")) == features.VENDOR_RECOMMENDATIONS
 
 
 def test_aucun_envoi_whatsapp_automatique():

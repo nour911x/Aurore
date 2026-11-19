@@ -117,9 +117,9 @@ def resume_contexte(contexte):
     return contexte.get("titre") or contexte.get("libelle") or contexte.get("nom") or ""
 
 
-def details_dossier(data, prive=True):
-    details = {"noms": type_du_dossier(data)["personnes"], "type_evenement": "Événement", "theme": "Thème"}
-    details |= champs_du_type(data)
+def details_dossier(donnees, prive=True):
+    details = {"noms": type_du_dossier(donnees)["personnes"], "type_evenement": "Événement", "theme": "Thème"}
+    details |= champs_du_type(donnees)
     details["allergies_interdits"] = "Allergies"
 
     if prive:
@@ -162,8 +162,8 @@ def echeance_lisible(jours):
     return f":orange[Dans {pluriel(jours, 'jour')}]"
 
 
-def personnes_du_dossier(data):
-    noms = data["noms"] or ""
+def personnes_du_dossier(donnees):
+    noms = donnees["noms"] or ""
     return [nom.strip() for nom in noms.replace(" & ", ",").replace(" et ", ",").split(",") if nom.strip()]
 
 
@@ -181,7 +181,7 @@ def fermer_nouveau_dossier():
     st.session_state.ouvrir_nouveau_dossier = False
 
 
-def show_tuiles(cle, au_clic):
+def afficher_tuiles(cle, au_clic):
     with st.container(horizontal=True, key=cle):
         for cle_type, type_evenement in TYPES_EVENEMENT.items():
             st.button(
@@ -197,7 +197,7 @@ def nouveau_dossier():
 
     if not cle_type:
         st.markdown("Quel type d'événement organisez-vous ?")
-        show_tuiles("tuiles-dialogue", choisir_type)
+        afficher_tuiles("tuiles-dialogue", choisir_type)
         return
 
     type_evenement = TYPES_EVENEMENT[cle_type]

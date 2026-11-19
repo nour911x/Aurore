@@ -9,14 +9,14 @@ from donnees.dossiers import supprimer as supprimer_dossier
 from metier.devis import date_lisible
 from metier.invites import entier
 from metier.rgpd import PERIMETRES_IMAGE, TEXTE_CONSENTEMENT_SANTE, consentement, exporter
-from textes import CHAMPS_LISTES, SOURCES_ECHANGE, format_person_name
+from textes import CHAMPS_LISTES, SOURCES_ECHANGE, formater_nom
 from ui.commun import FORMAT_DATE, OUI_NON, lire_date, personnes_du_dossier, texte_vers_liste
 
 
 class VueFiche:
-    def show_type_evenement(self):
-        data = self.event_sheet.data
-        actuel = cle_type(data["type_evenement"])
+    def afficher_type_evenement(self):
+        donnees = self.fiche_evenement.donnees
+        actuel = cle_type(donnees["type_evenement"])
         version = st.session_state.get("version_type", 0)
         choix = st.segmented_control(
             "Type d'événement", list(TYPES_EVENEMENT), default=actuel,
@@ -26,7 +26,7 @@ class VueFiche:
         if not choix or choix == actuel:
             return
 
-        masques = champs_masques(data, choix)
+        masques = champs_masques(donnees, choix)
 
         with st.container(border=True):
             st.warning(
@@ -43,7 +43,7 @@ class VueFiche:
             confirmer, annuler = st.columns(2)
 
             if confirmer.button("Confirmer le changement", icon=":material/check:", type="primary"):
-                self.event_sheet.changer_type(choix)
+                self.fiche_evenement.changer_type(choix)
                 st.rerun()
 
             if annuler.button("Annuler", icon=":material/close:"):
@@ -72,34 +72,34 @@ class VueFiche:
         return texte_vers_liste(conteneur.text_area(libelle, value=", ".join(valeur), height=68, help=aide))
 
 
-    def show_fiche_form(self):
-        data = self.event_sheet.data
-        champs = type_du_dossier(data)["champs"]
+    def afficher_fiche_form(self):
+        donnees = self.fiche_evenement.donnees
+        champs = type_du_dossier(donnees)["champs"]
         simples = [cle for cle in champs if CHAMPS_SPECIFIQUES[cle][1] != "liste"]
         listes_du_type = [cle for cle in champs if CHAMPS_SPECIFIQUES[cle][1] == "liste"]
 
         with st.form("form_fiche"):
             gauche, droite = st.columns(2)
-            noms = gauche.text_input(type_du_dossier(data)["personnes"], value=data["noms"] or "")
-            lieu = droite.text_input("Lieu", value=data["lieu"] or "")
-            telephone = gauche.text_input("Téléphone du client", value=data["telephone"] or "")
-            email = droite.text_input("Email du client", value=data["email"] or "")
-            date_evenement = gauche.date_input("Date de l'événement", value=lire_date(data["date"]), format=FORMAT_DATE)
-            theme = droite.text_input("Thème", value=data["theme"] or "")
-            budget = gauche.number_input("Budget (€)", min_value=0, step=500, value=int(data["budget"]) if data["budget"] else None)
-            invites = droite.number_input("Nombre d'invités", min_value=0, step=5, value=int(data["nombre_invites"]) if data["nombre_invites"] else None)
+            noms = gauche.text_input(type_du_dossier(donnees)["personnes"], value=donnees["noms"] or "")
+            lieu = droite.text_input("Lieu", value=donnees["lieu"] or "")
+            telephone = gauche.text_input("Téléphone du client", value=donnees["telephone"] or "")
+            email = droite.text_input("Email du client", value=donnees["email"] or "")
+            date_evenement = gauche.date_input("Date de l'événement", value=lire_date(donnees["date"]), format=FORMAT_DATE)
+            theme = droite.text_input("Thème", value=donnees["theme"] or "")
+            budget = gauche.number_input("Budget (€)", min_value=0, step=500, value=int(donnees["budget"]) if donnees["budget"] else None)
+            invites = droite.number_input("Nombre d'invités", min_value=0, step=5, value=int(donnees["nombre_invites"]) if donnees["nombre_invites"] else None)
             colonnes = st.columns(2)
             specifiques = {
-                cle: self.champ_specifique(colonnes[index % 2], cle, data[cle])
+                cle: self.champ_specifique(colonnes[index % 2], cle, donnees[cle])
                 for index, cle in enumerate(simples)
             }
 
             st.caption("Pour les listes, sépare les éléments par des virgules.")
             listes = {
-                key: st.text_area(label, value=", ".join(data[key]), height=68)
-                for key, label in CHAMPS_LISTES.items()
+                cle: st.text_area(label, value=", ".join(donnees[cle]), height=68)
+                for cle, label in CHAMPS_LISTES.items()
             }
-            specifiques |= {cle: self.champ_specifique(st, cle, data[cle]) for cle in listes_du_type}
+            specifiques |= {cle: self.champ_specifique(st, cle, donnees[cle]) for cle in listes_du_type}
 
             if st.form_submit_button("Enregistrer la fiche", icon=":material/save:"):
                 nouvelle_fiche = {
@@ -114,22 +114,21 @@ class VueFiche:
                     "theme": theme or None
                 }
 
-                for key, texte in listes.items():
-                    nouvelle_fiche[key] = texte_vers_liste(texte)
+                for cle, texte in listes.items():
+                    nouvelle_fiche[cle] = texte_vers_liste(texte)
 
-                self.event_sheet.remplacer(nouvelle_fiche)
+                self.fiche_evenement.remplacer(nouvelle_fiche)
                 st.rerun()
 
 
-    def show_historique(self):
+    def afficher_historique(self):
         st.subheader(":material/history: Historique des échanges")
 
-        if self.conversation_agent_object.get_conversation_history():
-            if st.button("Ajouter un résumé de la discussion avec AURORE", icon=":material/summarize:"):
+        if self.agent.lire_historique() and st.button("Ajouter un résumé de la discussion avec AURORE", icon=":material/summarize:"):
                 with st.spinner("AURORE résume la discussion…"):
-                    resume = self.conversation_agent_object.summarize_conversation()
+                    resume = self.agent.resumer_conversation()
 
-                self.event_sheet.add_echange("Discussion avec AURORE", resume)
+                self.fiche_evenement.ajouter_echange("Discussion avec AURORE", resume)
                 st.rerun()
 
         with st.expander("Noter un échange (rendez-vous, appel, message…)", icon=":material/add:"):
@@ -138,10 +137,10 @@ class VueFiche:
                 resume = st.text_area("Ce qui a été dit ou décidé")
 
                 if st.form_submit_button("Ajouter à l'historique") and resume:
-                    self.event_sheet.add_echange(source, resume)
+                    self.fiche_evenement.ajouter_echange(source, resume)
                     st.rerun()
 
-        historique = self.event_sheet.data["historique"]
+        historique = self.fiche_evenement.donnees["historique"]
 
         if not historique:
             st.caption("Aucun échange enregistré pour l'instant.")
@@ -153,34 +152,34 @@ class VueFiche:
                 st.markdown(echange["resume"])
 
 
-    def show_consentement_sante(self):
-        data = self.event_sheet.data
-        accord = data["consentement_sante"] or {}
+    def afficher_consentement_sante(self):
+        donnees = self.fiche_evenement.donnees
+        accord = donnees["consentement_sante"] or {}
         accorde = st.toggle(TEXTE_CONSENTEMENT_SANTE, value=bool(accord.get("accorde")), key=f"sante_{self.dossier_id}_{accord.get('accorde')}")
 
         if accorde != bool(accord.get("accorde")):
-            self.event_sheet.set_consentement("consentement_sante", consentement(accorde))
+            self.fiche_evenement.definir_consentement("consentement_sante", consentement(accorde))
             st.rerun()
 
         if accord:
             st.caption(f"{'Accordé' if accord['accorde'] else 'Retiré'} le {date_lisible(accord['date'])}.")
 
-        if data["allergies_interdits"] and not accorde:
+        if donnees["allergies_interdits"] and not accorde:
             st.warning(
                 "Des allergies sont notées sans l'accord du client : elles restent visibles par vous seul·e, "
                 "ne sont envoyées ni aux prestataires ni à l'IA.", icon=":material/lock:"
             )
 
 
-    def show_consentements_image(self):
-        consentements = self.event_sheet.data["droit_image"]
+    def afficher_consentements_image(self):
+        consentements = self.fiche_evenement.donnees["droit_image"]
 
         for index, element in enumerate(consentements):
             texte, retirer = st.columns([5, 1], vertical_alignment="center")
             texte.markdown(f"**{element['personne']}** · {element['perimetre']} · :gray[recueilli le {date_lisible(element['date'])}]")
 
             if self.profil == ORGANISATEUR and retirer.button("Retirer", key=f"retirer_image_{index}", type="tertiary"):
-                self.event_sheet.set_consentement("droit_image", consentements[:index] + consentements[index + 1:])
+                self.fiche_evenement.definir_consentement("droit_image", consentements[:index] + consentements[index + 1:])
                 st.rerun()
 
         if not consentements:
@@ -190,7 +189,7 @@ class VueFiche:
             return
 
         with st.form(f"form_droit_image_{self.dossier_id}", clear_on_submit=True):
-            personnes = personnes_du_dossier(self.event_sheet.data)
+            personnes = personnes_du_dossier(self.fiche_evenement.donnees)
             gauche, milieu, droite = st.columns([2, 2, 1])
             personne = gauche.selectbox("Personne", personnes + ["Autre (préciser)"]) if personnes else "Autre (préciser)"
             autre = gauche.text_input("Nom") if not personnes else ""
@@ -199,11 +198,11 @@ class VueFiche:
             precision = st.text_input("Si « Autre », nom de la personne") if personnes else ""
 
             if st.form_submit_button("Enregistrer le consentement", icon=":material/verified_user:"):
-                nom = format_person_name(autre or precision if personne == "Autre (préciser)" else personne)
+                nom = formater_nom(autre or precision if personne == "Autre (préciser)" else personne)
 
                 if nom:
                     autres = [element for element in consentements if element["personne"] != nom]
-                    self.event_sheet.set_consentement(
+                    self.fiche_evenement.definir_consentement(
                         "droit_image", autres + [{"personne": nom, "perimetre": perimetre, "date": str(jour)}]
                     )
                     st.rerun()
@@ -216,10 +215,10 @@ class VueFiche:
             del st.session_state[cle]
 
         st.session_state.dossier_actif = None
-        self.agenda.load()
+        self.agenda.charger()
 
 
-    def show_donnees_client(self):
+    def afficher_donnees_client(self):
         with st.expander("Données personnelles du client (RGPD)", icon=":material/shield_person:"):
             st.download_button(
                 "Exporter toutes les données de ce client (JSON)", icon=":material/download:",
@@ -231,22 +230,22 @@ class VueFiche:
                 "Supprime définitivement la fiche, l'historique, le budget, les devis, les invités, les messages, "
                 "les photos et les rendez-vous de ce client. Cette action est irréversible : exportez d'abord si besoin."
             )
-            confirme = st.checkbox(f"Je confirme la suppression définitive du dossier « {libelle_dossier(self.event_sheet.data)} »")
+            confirme = st.checkbox(f"Je confirme la suppression définitive du dossier « {libelle_dossier(self.fiche_evenement.donnees)} »")
             st.button(
                 "Supprimer définitivement", icon=":material/delete_forever:", type="primary",
                 disabled=not confirme, on_click=self.retirer_dossier
             )
 
 
-    def show_fiche_client(self):
-        self.show_type_evenement()
-        self.show_fiche_form()
+    def afficher_fiche_client(self):
+        self.afficher_type_evenement()
+        self.afficher_fiche_form()
 
         st.subheader(":material/verified_user: Consentements")
         st.markdown("**Données de santé**")
-        self.show_consentement_sante()
+        self.afficher_consentement_sante()
         st.markdown("**Droit à l'image**")
-        self.show_consentements_image()
+        self.afficher_consentements_image()
 
-        self.show_historique()
-        self.show_donnees_client()
+        self.afficher_historique()
+        self.afficher_donnees_client()

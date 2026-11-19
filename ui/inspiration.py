@@ -15,7 +15,7 @@ from textes import noms_clients, pluriel
 
 class VueInspiration:
     @staticmethod
-    def show_palette(couleurs):
+    def afficher_palette(couleurs):
         pastilles = "".join(
             f'<div style="text-align:center;font-size:0.8em">'
             f'<div style="width:72px;height:72px;border-radius:14px;background:{couleur["hex"]};'
@@ -25,11 +25,11 @@ class VueInspiration:
         st.markdown(f'<div style="display:flex;flex-wrap:wrap;gap:12px">{pastilles}</div>', unsafe_allow_html=True)
 
 
-    def show_moodboard(self):
+    def afficher_moodboard(self):
         if st.button("Créer le moodboard à partir de la discussion", icon=":material/auto_awesome:"):
             with st.spinner("AURORE compose votre moodboard…"):
-                self.inspiration.set_moodboard(
-                    self.conversation_agent_object.suggest_moodboard(self.event_sheet.infos_sans_historique(), ELEMENTS_MOODBOARD)
+                self.inspiration.definir_moodboard(
+                    self.agent.suggerer_moodboard(self.fiche_evenement.infos_sans_historique(), ELEMENTS_MOODBOARD)
                 )
 
         moodboard = self.inspiration.moodboard
@@ -40,17 +40,17 @@ class VueInspiration:
 
         st.subheader(moodboard["titre"])
         st.markdown(moodboard["ambiance"])
-        self.show_palette(moodboard["couleurs"])
+        self.afficher_palette(moodboard["couleurs"])
         st.markdown(" ".join(f"`{mot}`" for mot in moodboard["mots_cles"]))
 
         if features.PINTEREST_MOODBOARD_AUTO:
             st.markdown("**:material/push_pin: Inspirations Pinterest**")
-            self.show_liens({f":material/push_pin: {element}": lien for element, lien in moodboard["liens"].items()})
+            self.afficher_liens({f":material/push_pin: {element}": lien for element, lien in moodboard["liens"].items()})
 
         bouton_pdf, bouton_envoi = st.columns(2)
         bouton_pdf.download_button(
             "Télécharger le moodboard (PDF)", icon=":material/download:",
-            data=generer_moodboard_pdf(moodboard, self.event_sheet.data["noms"], features.PINTEREST_MOODBOARD_AUTO),
+            data=generer_moodboard_pdf(moodboard, self.fiche_evenement.donnees["noms"], features.PINTEREST_MOODBOARD_AUTO),
             file_name="moodboard.pdf",
             mime="application/pdf",
             width="stretch"
@@ -61,12 +61,12 @@ class VueInspiration:
             avec_liens = features.PINTEREST_MOODBOARD_AUTO
             contexte = moodboard if avec_liens else {cle_moodboard: valeur for cle_moodboard, valeur in moodboard.items() if cle_moodboard != "liens"}
             self.rediger(
-                suggestion(cle, "envoi_moodboard", destinataire_clients(self.event_sheet.data), contexte),
+                suggestion(cle, "envoi_moodboard", destinataire_clients(self.fiche_evenement.donnees), contexte),
                 "Présente le style en une phrase" + (" et inclus les liens Pinterest du contexte, un par ligne." if avec_liens else ".")
             )
 
 
-    def show_recommandation(self, categorie, recommandation, lieu):
+    def afficher_recommandation(self, categorie, recommandation, lieu):
         st.markdown(f"**:material/euro: Budget à prévoir :** {recommandation.get('fourchette', '')}")
         st.markdown(recommandation.get("conseil", ""))
 
@@ -83,24 +83,24 @@ class VueInspiration:
                 st.markdown(f"- {question}")
 
 
-    def show_adresses(self):
+    def afficher_adresses(self):
         categorie = st.selectbox("Que cherchez-vous ?", list(CATEGORIES_BEAUTE))
-        lieu = st.text_input("Ville ou secteur de recherche", value=self.event_sheet.data["lieu"] or "")
+        lieu = st.text_input("Ville ou secteur de recherche", value=self.fiche_evenement.donnees["lieu"] or "")
 
         if st.button("Demander conseil à AURORE", icon=":material/auto_awesome:"):
             with st.spinner("AURORE réfléchit à ce qui vous correspond…"):
-                self.inspiration.set_recommandation(
+                self.inspiration.definir_recommandation(
                     categorie,
-                    self.conversation_agent_object.recommend_adresses(
-                        categorie, self.event_sheet.infos_sans_historique(), self.budget.resume()
+                    self.agent.recommander_adresses(
+                        categorie, self.fiche_evenement.infos_sans_historique(), self.budget.resume()
                     )
                 )
 
         recommandation = self.inspiration.recommandations.get(categorie)
 
         if recommandation:
-            self.show_recommandation(categorie, recommandation, lieu)
-            self.show_prestataire_form(
+            self.afficher_recommandation(categorie, recommandation, lieu)
+            self.afficher_prestataire_form(
                 "Vous avez trouvé une adresse ? Ajoutez-la au carnet",
                 f"form_adresse_{categorie}",
                 CATEGORIES_BEAUTE[categorie]
@@ -110,7 +110,7 @@ class VueInspiration:
     def analyser_photos(self, photos):
         for photo in photos:
             try:
-                analyse = self.conversation_agent_object.analyser_photo(self.galerie.lire(photo), CATEGORIES_PHOTO)
+                analyse = self.agent.analyser_photo(self.galerie.lire(photo), CATEGORIES_PHOTO)
             except RateLimitError:
                 st.warning("Limite de Groq atteinte : relance l'analyse des photos restantes dans une minute.")
                 return
@@ -124,7 +124,7 @@ class VueInspiration:
             )
 
 
-    def show_import_photos(self):
+    def afficher_import_photos(self):
         fichiers = st.file_uploader(
             "Ajouter des photos", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True,
             key=f"photos_{st.session_state.version_galerie}"
@@ -148,12 +148,12 @@ class VueInspiration:
             st.rerun()
 
 
-    def show_photo(self, photo):
+    def afficher_photo(self, photo):
         with st.container(border=True):
             st.image(self.galerie.lire(photo), width="stretch")
 
             for usage in USAGES_PHOTO:
-                ok, raison = publiable(photo, self.event_sheet.data["droit_image"], usage)
+                ok, raison = publiable(photo, self.fiche_evenement.donnees["droit_image"], usage)
                 etat = ":green[:material/check_circle: publiable]" if ok else ":material/lock: non publiable"
                 st.caption(f"**{usage}** : {etat} · {raison}")
 
@@ -183,8 +183,8 @@ class VueInspiration:
                 st.rerun()
 
 
-    def show_photos(self):
-        self.show_import_photos()
+    def afficher_photos(self):
+        self.afficher_import_photos()
 
         if not self.galerie.photos:
             st.info("Aucune photo pour l'instant. Ajoute les photos du jour J ci-dessus.")
@@ -196,30 +196,30 @@ class VueInspiration:
         for index, colonne in enumerate(st.columns(3)):
             with colonne:
                 for photo in photos[index::3]:
-                    self.show_photo(photo)
+                    self.afficher_photo(photo)
 
 
-    def show_droit_image(self, profil):
+    def afficher_droit_image(self, profil):
         st.caption(
             "Sans consentement, seules les photos sans personne reconnaissable (salle, déco, buffet, détails) sont publiables. "
             "Les photos où des invités sont reconnaissables ne sont jamais publiées."
         )
-        self.show_consentements_image()
+        self.afficher_consentements_image()
 
-        if profil == ORGANISATEUR:
-            if st.button("Préparer la demande d'autorisation aux clients", icon=":material/mail:"):
-                cle = f"droit_image_{uuid.uuid4().hex[:8]}"
-                self.rediger(suggestion(cle, "demande_droit_image", destinataire_clients(self.event_sheet.data), {"usage": "Instagram et site d'AURORE"}))
+        if profil == ORGANISATEUR and st.button("Préparer la demande d'autorisation aux clients", icon=":material/mail:"):
+            cle = f"droit_image_{uuid.uuid4().hex[:8]}"
+            destinataire = destinataire_clients(self.fiche_evenement.donnees)
+            self.rediger(suggestion(cle, "demande_droit_image", destinataire, {"usage": "Instagram et site d'AURORE"}))
 
         st.download_button(
             "Télécharger l'autorisation à signer (PDF)", icon=":material/download:",
-            data=generer_autorisation_pdf(self.event_sheet.data),
+            data=generer_autorisation_pdf(self.fiche_evenement.donnees),
             file_name="autorisation-droit-image.pdf",
             mime="application/pdf"
         )
 
 
-    def show_publication(self, photo):
+    def afficher_publication(self, photo):
         with st.container(border=True):
             image, texte = st.columns([1, 2])
             contenu = self.galerie.lire(photo)
@@ -228,8 +228,8 @@ class VueInspiration:
             with texte:
                 if st.button("Rédiger la légende avec AURORE", icon=":material/auto_awesome:", key=f"legende_{photo['id']}"):
                     with st.spinner("AURORE écrit la légende…"):
-                        legende = self.conversation_agent_object.write_legende(
-                            f"photo « {photo['categorie']} » : {photo['description']}", self.event_sheet.infos_pour_prestataire()
+                        legende = self.agent.rediger_legende(
+                            f"photo « {photo['categorie']} » : {photo['description']}", self.fiche_evenement.infos_pour_prestataire()
                         )
 
                     self.galerie.modifier(photo["id"], legende=legende)
@@ -254,8 +254,8 @@ class VueInspiration:
                     st.rerun()
 
 
-    def show_instagram(self):
-        a_publier = [photo for photo in self.galerie.publiables(self.event_sheet.data["droit_image"]) if not photo["publiee"]]
+    def afficher_instagram(self):
+        a_publier = [photo for photo in self.galerie.publiables(self.fiche_evenement.donnees["droit_image"]) if not photo["publiee"]]
         deja_publiees = [photo for photo in self.galerie.photos if photo["publiee"]]
         st.caption("Seules les photos autorisées apparaissent ici. Copie la légende, télécharge la photo et publie-la depuis Instagram.")
 
@@ -263,25 +263,26 @@ class VueInspiration:
             st.info("Aucune photo publiable en attente.")
 
         for photo in a_publier:
-            self.show_publication(photo)
+            self.afficher_publication(photo)
 
         if deja_publiees:
             st.caption(f":material/push_pin: {pluriel(len(deja_publiees), 'photo déjà publiée', 'photos déjà publiées')}.")
 
 
-    def show_avis(self, profil):
+    def afficher_avis(self, profil):
         with st.expander("Enregistrer un avis reçu", icon=":material/add:"):
             with st.form("form_avis", clear_on_submit=True):
                 note = st.slider("Note", 1, 5, 5)
                 commentaire = st.text_area("Avis des clients sur l'organisation de leur événement")
 
                 if st.form_submit_button("Enregistrer l'avis") and commentaire:
-                    self.galerie.ajouter_avis(noms_clients(self.event_sheet.data), note, commentaire)
+                    self.galerie.ajouter_avis(noms_clients(self.fiche_evenement.donnees), note, commentaire)
                     st.rerun()
 
         if st.button("Demander un avis aux clients", icon=":material/mail:"):
             cle = f"avis_manuel_{uuid.uuid4().hex[:8]}"
-            self.rediger(suggestion(cle, "demande_avis", destinataire_clients(self.event_sheet.data), {"date_evenement": self.event_sheet.data["date"]}))
+            destinataire = destinataire_clients(self.fiche_evenement.donnees)
+            self.rediger(suggestion(cle, "demande_avis", destinataire, {"date_evenement": self.fiche_evenement.donnees["date"]}))
 
         if not self.galerie.avis:
             st.caption("Aucun avis pour l'instant.")
@@ -294,19 +295,19 @@ class VueInspiration:
                 if not features.INSTAGRAM_FEEDBACK:
                     continue
 
-                if consentements_manquants(self.event_sheet.data["droit_image"], "Réseaux sociaux"):
+                if consentements_manquants(self.fiche_evenement.donnees["droit_image"], "Réseaux sociaux"):
                     st.caption(":material/lock: Pour en faire un post, il faut le consentement de droit à l'image de chaque client pour les réseaux sociaux.")
                     continue
 
                 if st.button("Transformer en post témoignage", icon=":material/auto_awesome:", key=f"post_avis_{avis['id']}"):
                     with st.spinner("AURORE prépare le post…"):
-                        post = self.conversation_agent_object.write_legende(
+                        publication = self.agent.rediger_legende(
                             f"témoignage des clients, note {avis['note']}/5 : « {avis['commentaire']} »",
-                            self.event_sheet.infos_pour_prestataire(),
+                            self.fiche_evenement.infos_pour_prestataire(),
                             "Cite un court extrait de leur avis entre guillemets."
                         )
 
-                    self.galerie.modifier_avis(avis["id"], post=post)
+                    self.galerie.modifier_avis(avis["id"], post=publication)
                     st.rerun()
 
                 if avis["post"]:

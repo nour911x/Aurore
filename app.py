@@ -6,8 +6,8 @@ from config.profils import ORGANISATEUR, PRESTATAIRE
 from donnees.demo import demo_au_premier_lancement
 from donnees.dossiers import FICHIER_FICHE, FICHIER_SELECTION, chemin, chemin_agenda, chemin_annuaire, libelle_court
 from donnees.dossiers import lister as lister_dossiers
-from donnees.event_state import EventSheet
-from llm.llm_agent import PROFILS, ConversationAgent
+from donnees.fiche_evenement import FicheEvenement
+from llm.agent import PROFILS, AgentConversation
 from llm.outils import Outils
 from metier.agenda import Agenda
 from metier.budget import Budget
@@ -19,12 +19,21 @@ from metier.jour_j import JourJ
 from metier.messages import MODIFIABLES, Messagerie, detecter_messages
 from metier.prestataires import Annuaire, Carnet
 from metier.rgpd import peut_recevoir_sante
-from textes import (CHAMPS_DOSSIER_PRESTATAIRE, ERREUR_IA_PAR_DEFAUT, ERREURS_IA, LIBELLES_PROFIL, LIBELLES_SECTIONS,
-                    ONGLETS, PLACEHOLDERS, pluriel)
+from textes import CHAMPS_DOSSIER_PRESTATAIRE, ERREUR_IA_PAR_DEFAUT, ERREURS_IA, LIBELLES_PROFIL, LIBELLES_SECTIONS, ONGLETS, TEXTES_INDICATIFS, pluriel
 from ui.accueil import VueAccueil
 from ui.budget import VueBudget
-from ui.commun import (ESPACES, INFOS_PAR_CATEGORIE, PROFILS_ACTIFS, SECTIONS, SECTIONS_ACTIVES, details_dossier,
-                       nouveau_dossier, ouvrir_messages, ouvrir_nouveau_dossier, show_tuiles)
+from ui.commun import (
+    ESPACES,
+    INFOS_PAR_CATEGORIE,
+    PROFILS_ACTIFS,
+    SECTIONS,
+    SECTIONS_ACTIVES,
+    afficher_tuiles,
+    details_dossier,
+    nouveau_dossier,
+    ouvrir_messages,
+    ouvrir_nouveau_dossier,
+)
 from ui.composants import Composants
 from ui.fiche import VueFiche
 from ui.habillage import accueil_html, dossier_html, marque_html, particules_html, style_html, theme_html
@@ -37,19 +46,19 @@ from ui.vues_partagees import VuesPartagees
 
 
 PREFIXES_DONNEES = (
-    "event_sheet_", "budget_", "carnet_", "messagerie_", "liste_invites_", "inspiration_", "jour_j_", "galerie_", "achats_"
+    "fiche_evenement_", "budget_", "carnet_", "messagerie_", "liste_invites_", "inspiration_", "jour_j_", "galerie_", "achats_"
 )
 
 
-class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, VuePrestataires, VueBudget, VueInvites, VueInspiration, VuesPartagees):
+class InterfaceUtilisateur(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, VuePrestataires, VueBudget, VueInvites, VueInspiration, VuesPartagees):
     def __init__(self):
         st.set_page_config(page_title="AURORE", page_icon=":material/wb_twilight:", layout="wide")
         st.html(style_html())
         self.prestataire = None
         self.profil = None
         self.dossier_id = self.choisir_dossier()
-        self.agenda = self.get_persistant("agenda", lambda: Agenda(chemin_agenda()))
-        self.annuaire = self.get_persistant("annuaire", lambda: Annuaire(chemin_annuaire()))
+        self.agenda = self.obtenir_persistant("agenda", lambda: Agenda(chemin_agenda()))
+        self.annuaire = self.obtenir_persistant("annuaire", lambda: Annuaire(chemin_annuaire()))
         st.session_state.setdefault("version_galerie", 0)
         st.session_state.setdefault("version_invites", 0)
         st.session_state.setdefault("briefings", {})
@@ -70,28 +79,28 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
         return st.session_state.dossier_actif
 
 
-    def get_du_dossier(self, cle, classe, fichier):
-        return self.get_persistant(f"{cle}_{self.dossier_id}", lambda: classe(chemin(self.dossier_id, fichier)))
+    def obtenir_du_dossier(self, cle, classe, fichier):
+        return self.obtenir_persistant(f"{cle}_{self.dossier_id}", lambda: classe(chemin(self.dossier_id, fichier)))
 
 
     def charger_dossier(self):
         self.agenda.pour_dossier(self.dossier_id)
-        self.event_sheet = self.get_du_dossier("event_sheet", EventSheet, FICHIER_FICHE)
-        self.budget = self.get_du_dossier("budget", Budget, "budget_data.json")
-        self.carnet = self.get_persistant(
+        self.fiche_evenement = self.obtenir_du_dossier("fiche_evenement", FicheEvenement, FICHIER_FICHE)
+        self.budget = self.obtenir_du_dossier("budget", Budget, "budget_data.json")
+        self.carnet = self.obtenir_persistant(
             f"carnet_{self.dossier_id}", lambda: Carnet(self.annuaire, chemin(self.dossier_id, FICHIER_SELECTION))
         )
-        self.messagerie = self.get_du_dossier("messagerie", Messagerie, "messages_data.json")
-        self.carnet_devis = self.get_du_dossier("carnet_devis", CarnetDevis, "devis_data.json")
-        self.liste_invites = self.get_du_dossier("liste_invites", ListeInvites, "invites_data.json")
-        self.inspiration = self.get_du_dossier("inspiration", Inspiration, "inspiration_data.json")
-        self.jour_j = self.get_du_dossier("jour_j", JourJ, "jour_j_data.json")
-        self.galerie = self.get_persistant(
+        self.messagerie = self.obtenir_du_dossier("messagerie", Messagerie, "messages_data.json")
+        self.carnet_devis = self.obtenir_du_dossier("carnet_devis", CarnetDevis, "devis_data.json")
+        self.liste_invites = self.obtenir_du_dossier("liste_invites", ListeInvites, "invites_data.json")
+        self.inspiration = self.obtenir_du_dossier("inspiration", Inspiration, "inspiration_data.json")
+        self.jour_j = self.obtenir_du_dossier("jour_j", JourJ, "jour_j_data.json")
+        self.galerie = self.obtenir_persistant(
             f"galerie_{self.dossier_id}",
             lambda: Galerie(chemin(self.dossier_id, "galerie_data.json"), chemin(self.dossier_id, "galerie"))
         )
         self.outils = Outils(
-            self.event_sheet, self.agenda, self.budget, self.carnet,
+            self.fiche_evenement, self.agenda, self.budget, self.carnet,
             self.liste_invites, self.messagerie, self.carnet_devis, self.jour_j
         )
 
@@ -107,21 +116,21 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
 
         utiles = set(INFOS_PAR_CATEGORIE.get(self.prestataire["categorie"], set()))
 
-        if not peut_recevoir_sante(self.event_sheet.data, self.prestataire) and utiles & {"allergies", "invites", "tables"}:
+        if not peut_recevoir_sante(self.fiche_evenement.donnees, self.prestataire) and utiles & {"allergies", "invites", "tables"}:
             utiles = (utiles - {"allergies", "invites", "tables"}) | {"couverts"}
 
         return utiles
 
 
-    def details_pour_prestataire(self, data):
+    def details_pour_prestataire(self, donnees):
         masques = {"allergies_interdits": "allergies", "preferences_musicales": "musique"}
         return {
-            cle: libelle for cle, libelle in details_dossier(data, prive=False).items()
+            cle: libelle for cle, libelle in details_dossier(donnees, prive=False).items()
             if masques.get(cle, "toujours") in self.infos_utiles() | {"toujours"}
         }
 
 
-    def show_choix_dossier(self):
+    def afficher_choix_dossier(self):
         identifiants = list(self.dossiers)
         choix = st.selectbox(
             "Dossier", identifiants, index=identifiants.index(self.dossier_id), label_visibility="collapsed",
@@ -135,19 +144,19 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
         st.button("Nouveau dossier", icon=":material/create_new_folder:", width="stretch", on_click=ouvrir_nouveau_dossier)
 
 
-    def show_event_sheet(self, profil):
-        data = self.event_sheet.data
-        affichage = {**data, "type_evenement": libelle_evenement(data)}
+    def afficher_fiche_evenement(self, profil):
+        donnees = self.fiche_evenement.donnees
+        affichage = {**donnees, "type_evenement": libelle_evenement(donnees)}
 
         with st.sidebar:
             if profil == ORGANISATEUR:
-                self.show_choix_dossier()
+                self.afficher_choix_dossier()
 
             if profil == PRESTATAIRE:
-                st.markdown(dossier_html(affichage, CHAMPS_DOSSIER_PRESTATAIRE, self.details_pour_prestataire(data)), unsafe_allow_html=True)
+                st.markdown(dossier_html(affichage, CHAMPS_DOSSIER_PRESTATAIRE, self.details_pour_prestataire(donnees)), unsafe_allow_html=True)
             else:
-                st.markdown(dossier_html(affichage, CHAMPS_ESSENTIELS, details_dossier(data)), unsafe_allow_html=True)
-                nombre_echanges = len(self.event_sheet.data["historique"])
+                st.markdown(dossier_html(affichage, CHAMPS_ESSENTIELS, details_dossier(donnees)), unsafe_allow_html=True)
+                nombre_echanges = len(self.fiche_evenement.donnees["historique"])
 
                 if nombre_echanges:
                     st.caption(f":material/history: {pluriel(nombre_echanges, 'échange')} dans l'historique")
@@ -157,8 +166,8 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
         for cle in [cle for cle in st.session_state if str(cle).startswith(PREFIXES_DONNEES)]:
             del st.session_state[cle]
 
-        self.agenda.load()
-        self.annuaire.load()
+        self.agenda.charger()
+        self.annuaire.charger()
 
 
     def nouvelle_conversation(self, profil):
@@ -166,7 +175,7 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
         st.session_state.briefings = {}
 
 
-    def show_notification(self, profil, suggestions):
+    def afficher_notification(self, profil, suggestions):
         a_preparer = len(suggestions)
         a_valider = len(self.messagerie.par_statut(*MODIFIABLES))
         a_envoyer = len(self.messagerie.par_statut("validé"))
@@ -187,9 +196,9 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
             )
 
 
-    def show_barre_haut(self):
+    def afficher_barre_haut(self):
         with st.container(horizontal=True, key="barre-haut"):
-            st.markdown(marque_html(self.event_sheet.data), unsafe_allow_html=True)
+            st.markdown(marque_html(self.fiche_evenement.donnees), unsafe_allow_html=True)
 
             with st.container(horizontal=True, key="barre-actions"):
                 profil = st.segmented_control(
@@ -206,16 +215,16 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
                     self.prestataire = self.carnet.trouver_par_nom(nom)
 
         self.outils.pour_espace(profil, self.prestataire)
-        self.conversation_agent_object = self.get_persistant(self.cle_conversation(profil), ConversationAgent)
+        self.agent = self.obtenir_persistant(self.cle_conversation(profil), AgentConversation)
         st.html(theme_html(profil))
-        st.markdown(particules_html(self.event_sheet.data["type_evenement"]), unsafe_allow_html=True)
+        st.markdown(particules_html(self.fiche_evenement.donnees["type_evenement"]), unsafe_allow_html=True)
 
         return profil
 
 
     def lire_saisie(self, profil):
         saisie = st.chat_input(
-            PLACEHOLDERS[profil],
+            TEXTES_INDICATIFS[profil],
             accept_file=True,
             accept_audio=True,
             file_type=["jpg", "jpeg", "png", "webp"]
@@ -229,7 +238,7 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
 
         if saisie.audio:
             with st.spinner("AURORE écoute ton message…"):
-                transcription = self.conversation_agent_object.transcribe(saisie.audio.getvalue())
+                transcription = self.agent.transcrire(saisie.audio.getvalue())
 
             texte = " ".join(filter(None, [texte, transcription]))
 
@@ -237,15 +246,15 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
 
 
     def traiter_message(self, profil):
-        text_interaction, image = self.lire_saisie(profil)
+        demande, image = self.lire_saisie(profil)
 
-        if text_interaction or image:
+        if demande or image:
             with st.spinner("AURORE regarde ta photo…" if image else "AURORE réfléchit…"):
-                self.conversation_agent_object.ask_llm(text_interaction, profil, self.outils, image)
+                self.agent.demander(demande, profil, self.outils, image)
 
                 if profil == ORGANISATEUR:
-                    new_info = self.conversation_agent_object.extract_event_info(self.event_sheet.infos_sans_historique())
-                    self.event_sheet.update(new_info)
+                    nouvelles_infos = self.agent.extraire_infos_evenement(self.fiche_evenement.infos_sans_historique())
+                    self.fiche_evenement.mettre_a_jour(nouvelles_infos)
 
             st.session_state.version_invites += 1
 
@@ -255,29 +264,29 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
         return [section for section in SECTIONS.get(onglet, [onglet]) if SECTIONS_ACTIVES.get(section, True)]
 
 
-    def show_onglets(self, profil, afficheurs):
+    def afficher_onglets(self, profil, afficheurs):
         onglets = ESPACES[profil]
-        tabs = st.tabs([ONGLETS[onglet] for onglet in onglets], key=f"onglets_{profil}", on_change="rerun")
+        panneaux = st.tabs([ONGLETS[onglet] for onglet in onglets], key=f"onglets_{profil}", on_change="rerun")
 
-        for onglet, tab in zip(onglets, tabs):
-            if not tab.open:
+        for onglet, panneau in zip(onglets, panneaux, strict=True):
+            if not panneau.open:
                 continue
 
-            with tab:
+            with panneau:
                 sections = self.sections(onglet)
 
                 if len(sections) == 1:
                     afficheurs[sections[0]]()
                     continue
 
-                sous_tabs = st.tabs(
+                sous_panneaux = st.tabs(
                     [LIBELLES_SECTIONS[section] for section in sections],
                     key=f"sections_{profil}_{onglet}", on_change="rerun"
                 )
 
-                for section, sous_tab in zip(sections, sous_tabs):
-                    if sous_tab.open:
-                        with sous_tab:
+                for section, sous_panneau in zip(sections, sous_panneaux, strict=True):
+                    if sous_panneau.open:
+                        with sous_panneau:
                             afficheurs[section]()
 
 
@@ -287,61 +296,61 @@ class UserInterface(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, 
             nouveau_dossier()
 
 
-    def show_premier_dossier(self):
+    def afficher_premier_dossier(self):
         st.markdown(marque_html({}), unsafe_allow_html=True)
         st.markdown(accueil_html(ORGANISATEUR), unsafe_allow_html=True)
-        show_tuiles("tuiles", ouvrir_nouveau_dossier)
+        afficher_tuiles("tuiles", ouvrir_nouveau_dossier)
 
 
-    def run(self):
+    def lancer(self):
         if not self.dossier_id:
-            self.show_premier_dossier()
+            self.afficher_premier_dossier()
             self.ouvrir_dialogue_si_demande()
             return
 
-        profil = self.show_barre_haut()
+        profil = self.afficher_barre_haut()
 
         if profil == PRESTATAIRE and not self.prestataire:
             st.info("Aucun prestataire dans le carnet : ajoutez-en depuis l'espace Organisateur (onglet Prestataires).")
-            self.show_event_sheet(profil)
+            self.afficher_fiche_evenement(profil)
             return
 
         self.traiter_message(profil)
         suggestions = self.messagerie.a_preparer(
-            detecter_messages(self.event_sheet.data, self.carnet, self.agenda, self.budget)
+            detecter_messages(self.fiche_evenement.donnees, self.carnet, self.agenda, self.budget)
         )
 
         if profil == ORGANISATEUR and st.session_state.get(f"onglets_{profil}", ONGLETS["accueil"]) != ONGLETS["accueil"]:
-            self.show_notification(profil, suggestions)
+            self.afficher_notification(profil, suggestions)
 
-        self.show_onglets(profil, {
-            "accueil": self.show_tableau_de_bord,
-            "recap": self.show_recap_client,
-            "budget_client": self.show_budget_client,
-            "invitations": self.show_invitations,
-            "agenda_prestataire": self.show_agenda_prestataire,
-            "devis_prestataire": lambda: self.show_devis_prestataire(profil),
-            "discussion": lambda: self.show_discussion(profil),
-            "a_envoyer": lambda: self.show_messages(suggestions),
-            "fiche": self.show_fiche_client,
-            "evenement": self.show_evenement,
-            "invites": self.show_invites,
-            "prestataires": self.show_prestataires,
-            "budget": self.show_budget,
-            "devis": lambda: self.show_devis(profil),
-            "agenda": self.show_agenda,
-            "deroule": self.show_deroule,
-            "plan_salle": self.show_plan_salle,
-            "salle_3d": self.show_salle_3d,
-            "moodboard": self.show_moodboard,
-            "adresses": self.show_adresses,
-            "photos": self.show_photos,
-            "droit_image": lambda: self.show_droit_image(profil),
-            "avis": lambda: self.show_avis(profil),
-            "instagram": self.show_instagram
+        self.afficher_onglets(profil, {
+            "accueil": self.afficher_tableau_de_bord,
+            "recap": self.afficher_recap_client,
+            "budget_client": self.afficher_budget_client,
+            "invitations": self.afficher_invitations,
+            "agenda_prestataire": self.afficher_agenda_prestataire,
+            "devis_prestataire": lambda: self.afficher_devis_prestataire(profil),
+            "discussion": lambda: self.afficher_discussion(profil),
+            "a_envoyer": lambda: self.afficher_messages(suggestions),
+            "fiche": self.afficher_fiche_client,
+            "evenement": self.afficher_evenement,
+            "invites": self.afficher_invites,
+            "prestataires": self.afficher_prestataires,
+            "budget": self.afficher_budget,
+            "devis": lambda: self.afficher_devis(profil),
+            "agenda": self.afficher_agenda,
+            "deroule": self.afficher_deroule,
+            "plan_salle": self.afficher_plan_salle,
+            "salle_3d": self.afficher_salle_3d,
+            "moodboard": self.afficher_moodboard,
+            "adresses": self.afficher_adresses,
+            "photos": self.afficher_photos,
+            "droit_image": lambda: self.afficher_droit_image(profil),
+            "avis": lambda: self.afficher_avis(profil),
+            "instagram": self.afficher_instagram
         })
 
-        self.show_event_sheet(profil)
+        self.afficher_fiche_evenement(profil)
         self.ouvrir_dialogue_si_demande()
 
 
@@ -354,9 +363,9 @@ def message_erreur(erreur):
 
 
 if __name__ == "__main__":
-    user_interface_object = UserInterface()
+    interface = InterfaceUtilisateur()
 
     try:
-        user_interface_object.run()
+        interface.lancer()
     except APIError as erreur:
         st.error(message_erreur(erreur), icon=":material/cloud_off:")

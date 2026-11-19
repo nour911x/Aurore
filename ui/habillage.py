@@ -4,7 +4,7 @@ from html import escape
 from pathlib import Path
 
 from config.profils import CLIENTS
-from donnees.event_state import renseigne
+from donnees.fiche_evenement import renseigne
 from metier.devis import date_lisible
 from metier.jour_j import TABLE_HONNEUR
 from textes import ACCUEILS, AVERTISSEMENT, BASELINE, date_longue, montant, noms_courts
@@ -104,9 +104,9 @@ def particules_html(type_evenement):
     return f'<div class="particules" aria-hidden="true">{"".join(spans)}</div>'
 
 
-def marque_html(event_data):
-    compte = compte_a_rebours(jours_restants(event_data.get("date")))
-    noms = noms_courts(event_data.get("noms"))
+def marque_html(donnees_evenement):
+    compte = compte_a_rebours(jours_restants(donnees_evenement.get("date")))
+    noms = noms_courts(donnees_evenement.get("noms"))
     pastille = " · ".join(filter(None, [compte, escape(noms)]))
     pastille_html = f'<span class="aurore-compte">{pastille}</span>' if pastille else ""
 
@@ -261,12 +261,12 @@ def salle_3d_html(disposition, palette):
     return FICHIER_SALLE_3D.read_text(encoding="utf-8").replace("__DONNEES__", donnees.replace("</", "<\\/"))
 
 
-def dossier_html(event_data, champs_essentiels, champs_details):
-    compte = compte_a_rebours(jours_restants(event_data["date"]))
+def dossier_html(donnees_evenement, champs_essentiels, champs_details):
+    compte = compte_a_rebours(jours_restants(donnees_evenement["date"]))
     badge = f'<span class="aurore-compte">{compte}</span>' if compte else ""
 
     def valeur(cle):
-        contenu = event_data[cle]
+        contenu = donnees_evenement[cle]
 
         if isinstance(contenu, bool):
             return "Oui" if contenu else "Non"
@@ -282,8 +282,8 @@ def dossier_html(event_data, champs_essentiels, champs_details):
 
         return contenu
 
-    connus = [(label, valeur(cle)) for cle, label in {**champs_essentiels, **champs_details}.items() if renseigne(event_data[cle])]
-    manquants = [label.lower() for cle, label in champs_essentiels.items() if not renseigne(event_data[cle])]
+    connus = [(label, valeur(cle)) for cle, label in {**champs_essentiels, **champs_details}.items() if renseigne(donnees_evenement[cle])]
+    manquants = [label.lower() for cle, label in champs_essentiels.items() if not renseigne(donnees_evenement[cle])]
 
     lignes = "".join(f"<div><dt>{escape(label)}</dt><dd>{escape(str(contenu))}</dd></div>" for label, contenu in connus)
     corps = f"<dl>{lignes}</dl>" if connus else '<p class="a-definir">AURORE remplit ce dossier au fil de la discussion.</p>'

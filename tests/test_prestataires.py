@@ -6,7 +6,7 @@ def test_un_prestataire_commun_garde_statut_et_tarif_propres_a_chaque_dossier(tm
     mariage = Carnet(annuaire, str(tmp_path / "mariage.json"))
     anniversaire = Carnet(annuaire, str(tmp_path / "anniversaire.json"))
 
-    traiteur = mariage.add_prestataire("Saveurs d'Orient", "Traiteur", "", "0612345678", "", "", 9500, "Traiteur", "")
+    traiteur = mariage.ajouter_prestataire("Saveurs d'Orient", "Traiteur", "", "0612345678", "", "", 9500, "Traiteur", "")
     anniversaire.selectionner(traiteur, 2000)
     mariage.changer_statut(traiteur, "Réservé")
 
@@ -20,7 +20,7 @@ def test_un_prestataire_commun_garde_statut_et_tarif_propres_a_chaque_dossier(tm
 def test_retirer_d_un_dossier_garde_le_prestataire_dans_le_carnet(tmp_path):
     annuaire = Annuaire(str(tmp_path / "annuaire.json"))
     carnet = Carnet(annuaire, str(tmp_path / "dossier.json"))
-    prestataire_id = carnet.add_prestataire("DJ Max", "DJ / Musiciens", "", "", "", "", 0, None, "")
+    prestataire_id = carnet.ajouter_prestataire("DJ Max", "DJ / Musiciens", "", "", "", "", 0, None, "")
 
     carnet.supprimer(prestataire_id)
 

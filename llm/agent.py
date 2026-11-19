@@ -28,7 +28,10 @@ MAX_JETONS_ANALYSE = 120
 TEXTE_PHOTO_SEULE = "Voici une photo pour notre projet, qu'en penses-tu ?"
 
 PROFILS = {
-    ORGANISATEUR: "un organisateur ou une organisatrice d'événements professionnel(le) qui gère l'événement de ses clients. Vouvoie-le ou la, ton professionnel.",
+    ORGANISATEUR: (
+        "un organisateur ou une organisatrice d'événements professionnel(le) qui gère l'événement de ses clients. "
+        "Vouvoie-le ou la, ton professionnel."
+    ),
     CLIENTS: "les clients dont on organise l'événement (mariage, baby shower, anniversaire…). Tutoie-les, ton chaleureux et complice.",
     PRESTATAIRE: "un prestataire (traiteur, DJ, domaine...) qui travaille sur cet événement. Vouvoie-le ou la, ton professionnel."
 }
@@ -58,36 +61,36 @@ def message_avec_image(texte, image):
     }
 
 
-class ConversationAgent:
+class AgentConversation:
     def __init__(self):
         load_dotenv()
-        self.groq_client = Groq(api_key=os.environ["GROQ_KEY"])
-        self.conversation_history = [
+        self.client_groq = Groq(api_key=os.environ["GROQ_KEY"])
+        self.historique_conversation = [
                 {
                     "role": "system",
-                    "content": self.read_file(file_path=FICHIER_CONTEXTE)
+                    "content": self.lire_fichier(chemin_fichier=FICHIER_CONTEXTE)
                 }
             ]
 
 
     @staticmethod
-    def read_file(file_path):
-        with open(file_path, "r", encoding="utf-8") as file:
-            return file.read()
+    def lire_fichier(chemin_fichier):
+        with open(chemin_fichier, encoding="utf-8") as fichier:
+            return fichier.read()
 
 
-    def get_conversation_history(self):
-        return self.conversation_history[1: ]
+    def lire_historique(self):
+        return self.historique_conversation[1: ]
 
 
-    def update_conversation_history(self, role, content, image=None, description=None):
-        message = {"role": role, "content": content}
+    def ajouter_a_historique(self, role, contenu, image=None, description=None):
+        message = {"role": role, "content": contenu}
 
         if image:
             message["image"] = image
             message["description"] = description
 
-        self.conversation_history.append(message)
+        self.historique_conversation.append(message)
 
 
     def historique_api(self):
@@ -96,7 +99,7 @@ class ConversationAgent:
                 "role": message["role"],
                 "content": message["content"] + (f"\n\n[Photo jointe : {message['description']}]" if message.get("description") else "")
             }
-            for message in self.conversation_history
+            for message in self.historique_conversation
         ]
 
 
@@ -110,8 +113,8 @@ class ConversationAgent:
         return self.appel([message_avec_image(instruction, image)], modele=MODELE_VISION, max_tokens=MAX_JETONS_DESCRIPTION).content
 
 
-    def transcribe(self, audio):
-        return self.groq_client.audio.transcriptions.create(
+    def transcrire(self, audio):
+        return self.client_groq.audio.transcriptions.create(
             file=("audio.wav", audio),
             model=MODELE_TRANSCRIPTION,
             language="fr"
@@ -140,15 +143,15 @@ class ConversationAgent:
         fiche = None
 
         if prestataire:
-            event_sheet = avec_outils.event_sheet
-            fiche = event_sheet.infos_pour_prestataire(avec_sante=peut_recevoir_sante(event_sheet.data, prestataire))
+            fiche_evenement = avec_outils.fiche_evenement
+            fiche = fiche_evenement.infos_pour_prestataire(avec_sante=peut_recevoir_sante(fiche_evenement.donnees, prestataire))
             consignes += (
                 f" Ce prestataire est {prestataire['nom']} ({prestataire['categorie']}). "
                 "Ne lui révèle jamais le budget de l'événement, les autres prestataires, les notes internes "
                 "ni les coordonnées des clients. Tu ne vois que ses propres rendez-vous et devis."
             )
         elif avec_outils:
-            fiche = avec_outils.event_sheet.infos_sans_historique()
+            fiche = avec_outils.fiche_evenement.infos_sans_historique()
 
         if fiche:
             consignes += (
@@ -159,15 +162,15 @@ class ConversationAgent:
         return {"role": "system", "content": consignes}
 
 
-    def ask_llm(self, text_interaction, profil=ORGANISATEUR, outils=None, image=None):
+    def demander(self, demande, profil=ORGANISATEUR, outils=None, image=None):
 
-        texte = text_interaction or TEXTE_PHOTO_SEULE
+        texte = demande or TEXTE_PHOTO_SEULE
         image = preparer_image(image) if image else None
         description = self.decrire_image(image, texte) if image else None
-        self.update_conversation_history(role="user", content=texte, image=image, description=description)
+        self.ajouter_a_historique(role="user", contenu=texte, image=image, description=description)
         historique = self.historique_api()
         messages = historique[:1] + [self.consignes_session(profil, outils)] + historique[1:]
-        response = "Je n'ai pas réussi à terminer : trop d'actions à la suite. Peux-tu reformuler ?"
+        reponse = "Je n'ai pas réussi à terminer : trop d'actions à la suite. Peux-tu reformuler ?"
 
         for _ in range(MAX_TOURS_OUTILS):
             try:
@@ -175,11 +178,11 @@ class ConversationAgent:
             except BadRequestError:
                 continue
             except APIError:
-                self.conversation_history.pop()
+                self.historique_conversation.pop()
                 raise
 
             if not message.tool_calls:
-                response = message.content
+                reponse = message.content
                 break
 
             messages.append({
@@ -189,22 +192,22 @@ class ConversationAgent:
             })
 
             for appel_outil in message.tool_calls:
-                arguments = self.parse_json(appel_outil.function.arguments or "{}", r"\{.*\}", {})
+                arguments = self.extraire_json(appel_outil.function.arguments or "{}", r"\{.*\}", {})
                 messages.append({
                     "role": "tool",
                     "tool_call_id": appel_outil.id,
                     "content": outils.executer(appel_outil.function.name, arguments)
                 })
 
-        self.update_conversation_history(role="assistant", content=response)
+        self.ajouter_a_historique(role="assistant", contenu=reponse)
 
-        return response
+        return reponse
 
 
-    def extract_event_info(self, current_data):
+    def extraire_infos_evenement(self, donnees_actuelles):
         instruction = (
             "Voici la fiche actuelle de l'événement au format JSON :\n"
-            f"{json.dumps(current_data, ensure_ascii=False)}\n\n"
+            f"{json.dumps(donnees_actuelles, ensure_ascii=False)}\n\n"
             "En te basant sur toute la conversation, renvoie cette fiche mise à jour. "
             "Réponds UNIQUEMENT avec le JSON, sans aucun texte autour. "
             "Garde exactement les mêmes clés. "
@@ -218,15 +221,15 @@ class ConversationAgent:
             "Laisse à null les champs qui ne concernent pas le type de cet événement."
         )
 
-        response = self.complete(self.historique_api() + [{"role": "user", "content": instruction}])
+        reponse = self.completer(self.historique_api() + [{"role": "user", "content": instruction}])
 
-        return self.parse_json(response, r"\{.*\}", {})
+        return self.extraire_json(reponse, r"\{.*\}", {})
 
 
-    def suggest_budget_postes(self, event_data):
+    def suggerer_budget_postes(self, donnees_evenement):
         instruction = (
             "Voici la fiche de l'événement :\n"
-            f"{json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"{json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             "Propose une répartition du budget total en postes adaptés à ce type d'événement "
             "(par exemple lieu, traiteur, décoration, animation...). "
             "Réponds UNIQUEMENT avec un JSON : une liste d'objets ayant les clés "
@@ -234,15 +237,15 @@ class ConversationAgent:
             "La somme des montant_prevu doit être égale au budget de la fiche."
         )
 
-        response = self.complete([{"role": "user", "content": instruction}])
+        reponse = self.completer([{"role": "user", "content": instruction}])
 
-        return self.parse_json(response, r"\[.*\]", [])
+        return self.extraire_json(reponse, r"\[.*\]", [])
 
 
-    def suggest_devis_lignes(self, emetteur, categorie, event_data):
+    def suggerer_devis_lignes(self, emetteur, categorie, donnees_evenement):
         instruction = (
             f"Tu prépares un brouillon de devis émis par : {emetteur} ({categorie}).\n\n"
-            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             "Propose les lignes de prestations adaptées à cet émetteur et à l'événement "
             "(nombre d'invités, allergies, préférences...). Les prix sont indicatifs, hors taxes, "
             "réalistes pour la France et cohérents avec le budget. "
@@ -250,9 +253,9 @@ class ConversationAgent:
             "designation (texte court), quantite (nombre) et prix_unitaire (nombre)."
         )
 
-        response = self.complete([{"role": "user", "content": instruction}])
+        reponse = self.completer([{"role": "user", "content": instruction}])
 
-        return self.parse_json(response, r"\[.*\]", [])
+        return self.extraire_json(reponse, r"\[.*\]", [])
 
 
     def analyser_photo(self, contenu, categories):
@@ -264,12 +267,12 @@ class ConversationAgent:
         )
         message = self.appel([message_avec_image(instruction, preparer_image(contenu))], modele=MODELE_VISION, max_tokens=MAX_JETONS_ANALYSE)
 
-        return self.parse_json(message.content or "", r"\{.*\}", {})
+        return self.extraire_json(message.content or "", r"\{.*\}", {})
 
 
-    def write_legende(self, sujet, event_data, consigne=""):
+    def rediger_legende(self, sujet, donnees_evenement, consigne=""):
         instruction = (
-            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             f"Sujet du post : {sujet}\n\n{consigne}\n\n"
             "Rédige la légende d'un post Instagram pour le compte d'AURORE, organisatrice d'événements : "
             "2 à 4 phrases élégantes et chaleureuses, quelques emojis, puis une ligne de 6 à 10 hashtags en français. "
@@ -277,30 +280,30 @@ class ConversationAgent:
             "Réponds uniquement avec la légende."
         )
 
-        return self.complete([{"role": "user", "content": instruction}])
+        return self.completer([{"role": "user", "content": instruction}])
 
 
-    def suggest_deroule(self, event_data, prestataires, rdvs):
+    def suggerer_deroule(self, donnees_evenement, prestataires, rdvs):
         instruction = (
-            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             f"Prestataires réservés : {json.dumps(prestataires, ensure_ascii=False)}\n\n"
             f"Rendez-vous déjà prévus le jour J : {json.dumps(rdvs, ensure_ascii=False)}\n\n"
             "Construis le déroulé heure par heure du jour J, des préparatifs à la fin de soirée "
             "(12 à 18 moments), adapté à ce type d'événement, au lieu et aux prestataires réservés. "
-            f"{type_du_dossier(event_data)['deroule']} Les prestataires arrivent avant les invités pour l'installation. "
+            f"{type_du_dossier(donnees_evenement)['deroule']} Les prestataires arrivent avant les invités pour l'installation. "
             "Réponds UNIQUEMENT avec un JSON : une liste d'objets ayant les clés heure (format HH:MM), "
             "moment (titre court), lieu, intervenants (noms exacts des prestataires concernés, séparés par des virgules, "
             "ou les rôles comme « clients », « témoins ») et details (une phrase)."
         )
 
-        response = self.complete([{"role": "user", "content": instruction}])
+        reponse = self.completer([{"role": "user", "content": instruction}])
 
-        return self.parse_json(response, r"\[.*\]", [])
+        return self.extraire_json(reponse, r"\[.*\]", [])
 
 
-    def suggest_placement(self, invites, tables, event_data):
+    def suggerer_placement(self, invites, tables, donnees_evenement):
         instruction = (
-            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             f"Tables (nom et nombre de places) : {json.dumps(tables, ensure_ascii=False)}\n\n"
             f"Invités (id, nom, groupe, personnes = invité + accompagnants, régime) : {json.dumps(invites, ensure_ascii=False)}\n\n"
             "Propose un plan de table : la table d'honneur pour la famille la plus proche, les membres d'un même groupe "
@@ -308,14 +311,14 @@ class ConversationAgent:
             "Réponds UNIQUEMENT avec un JSON : un objet dont les clés sont les id des invités et les valeurs le nom exact de leur table."
         )
 
-        response = self.complete([{"role": "user", "content": instruction}])
+        reponse = self.completer([{"role": "user", "content": instruction}])
 
-        return self.parse_json(response, r"\{.*\}", {})
+        return self.extraire_json(reponse, r"\{.*\}", {})
 
 
-    def write_faire_part(self, event_data):
+    def rediger_faire_part(self, donnees_evenement):
         instruction = (
-            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             "Rédige le texte d'un faire-part élégant et chaleureux, écrit par les personnes fêtées, "
             "en 5 à 8 lignes : l'annonce, la date, le lieu, le thème s'il y en a un, "
             "et une demande de confirmation de présence. "
@@ -324,12 +327,12 @@ class ConversationAgent:
             "Réponds uniquement avec le texte, sans emoji ni markdown."
         )
 
-        return self.complete([{"role": "user", "content": instruction}])
+        return self.completer([{"role": "user", "content": instruction}])
 
 
-    def suggest_moodboard(self, event_data, elements):
+    def suggerer_moodboard(self, donnees_evenement, elements):
         instruction = (
-            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             "À partir de toute la conversation et de la fiche, crée le moodboard du projet "
             "(style, saison, couleurs et goûts exprimés). "
             "Réponds UNIQUEMENT avec un JSON ayant les clés : "
@@ -341,15 +344,15 @@ class ConversationAgent:
             "chaque valeur est une recherche Pinterest précise en français, ex : \"centre de table bohème terracotta\")."
         )
 
-        response = self.complete(self.historique_api() + [{"role": "user", "content": instruction}])
+        reponse = self.completer(self.historique_api() + [{"role": "user", "content": instruction}])
 
-        return self.parse_json(response, r"\{.*\}", {})
+        return self.extraire_json(reponse, r"\{.*\}", {})
 
 
-    def recommend_adresses(self, categorie, event_data, postes_budget):
+    def recommander_adresses(self, categorie, donnees_evenement, postes_budget):
         instruction = (
             f"Les clients cherchent : {categorie}.\n\n"
-            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             f"Budget par poste : {json.dumps(postes_budget, ensure_ascii=False)}\n\n"
             "Conseille-les selon leur style et leur budget. Ne cite AUCUN nom de boutique ou de personne réelle. "
             "Réponds UNIQUEMENT avec un JSON ayant les clés : "
@@ -360,29 +363,29 @@ class ConversationAgent:
             "questions (liste de 4 questions à poser)."
         )
 
-        response = self.complete([{"role": "user", "content": instruction}])
+        reponse = self.completer([{"role": "user", "content": instruction}])
 
-        return self.parse_json(response, r"\{.*\}", {})
+        return self.extraire_json(reponse, r"\{.*\}", {})
 
 
     @staticmethod
-    def parse_json(response, pattern, default):
-        match = re.search(pattern, response, re.DOTALL)
+    def extraire_json(reponse, motif, defaut):
+        trouve = re.search(motif, reponse, re.DOTALL)
 
-        if not match:
-            return default
+        if not trouve:
+            return defaut
 
         try:
-            return json.loads(match.group())
+            return json.loads(trouve.group())
         except json.JSONDecodeError:
-            return default
+            return defaut
 
 
     def appel(self, messages, tools=None, modele=MODELE, **options):
         if tools:
             options["tools"] = tools
 
-        return self.groq_client.chat.completions.create(
+        return self.client_groq.chat.completions.create(
             messages=messages,
             model=modele,
             include_reasoning=False,
@@ -390,27 +393,27 @@ class ConversationAgent:
         ).choices[0].message
 
 
-    def complete(self, messages):
+    def completer(self, messages):
         return self.appel(messages).content
 
 
-    def summarize_conversation(self):
+    def resumer_conversation(self):
         instruction = (
             "Résume cette conversation pour l'historique du dossier client, en 3 à 6 puces markdown : "
             "les décisions prises, les nouvelles informations sur les clients et ce qu'il reste à faire. "
             "Réponds uniquement avec les puces."
         )
 
-        return self.complete(self.historique_api() + [{"role": "user", "content": instruction}])
+        return self.completer(self.historique_api() + [{"role": "user", "content": instruction}])
 
 
-    def prepare_briefing(self, rdv, event_data, historique, postes_budget, prestataire=None):
+    def preparer_briefing(self, rdv, donnees_evenement, historique, postes_budget, prestataire=None):
         instruction = (
             "Tu prépares le briefing d'AURORE juste avant un rendez-vous, pour arriver "
             "en connaissant parfaitement le dossier.\n\n"
             f"Rendez-vous : {json.dumps(rdv, ensure_ascii=False)}\n\n"
             f"Fiche du prestataire rencontré : {json.dumps(prestataire, ensure_ascii=False)}\n\n"
-            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             f"Historique des échanges : {json.dumps(historique, ensure_ascii=False)}\n\n"
             f"Budget par poste (prévu et déjà engagé) : {json.dumps(postes_budget, ensure_ascii=False)}\n\n"
             "Rédige en français et en markdown, court et concret, avec ces sections :\n"
@@ -424,15 +427,15 @@ class ConversationAgent:
             "N'invente rien : si une information manque, dis-le et propose de la demander pendant le rendez-vous."
         )
 
-        return self.complete([{"role": "user", "content": instruction}])
+        return self.completer([{"role": "user", "content": instruction}])
 
 
-    def write_message(self, type_message, destinataire, contexte, event_data, consigne=""):
+    def rediger_message(self, type_message, destinataire, contexte, donnees_evenement, consigne=""):
         instruction = (
             f"Tu es AURORE, assistante d'organisation d'événements. Rédige un message de type « {type_message} » "
             f"à envoyer par WhatsApp ou email à : {destinataire}.\n\n"
             f"Contexte : {json.dumps(contexte, ensure_ascii=False)}\n\n"
-            f"Fiche de l'événement : {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            f"Fiche de l'événement : {json.dumps(donnees_evenement, ensure_ascii=False)}\n\n"
             f"{consigne}\n\n"
             "Le message est court, chaleureux et professionnel, en français, prêt à être envoyé. "
             "Vouvoie le destinataire, n'invente aucune information absente du contexte "
@@ -441,4 +444,4 @@ class ConversationAgent:
             "Réponds uniquement avec le texte du message."
         )
 
-        return self.complete([{"role": "user", "content": instruction}])
+        return self.completer([{"role": "user", "content": instruction}])

@@ -5,14 +5,14 @@ from metier.budget import Budget
 
 def budget_traiteur(tmp_path):
     budget = Budget(str(tmp_path / "budget.json"))
-    budget.add_poste("Traiteur", 5000)
+    budget.ajouter_poste("Traiteur", 5000)
     return budget
 
 
 def test_engage_additionne_les_factures_du_poste(tmp_path):
     budget = budget_traiteur(tmp_path)
-    budget.add_facture("Traiteur", "Acompte", 1500, "2026-12-01", True)
-    budget.add_facture("Traiteur", "Solde", 3500, "2026-12-20", False)
+    budget.ajouter_facture("Traiteur", "Acompte", 1500, "2026-12-01", True)
+    budget.ajouter_facture("Traiteur", "Solde", 3500, "2026-12-20", False)
 
     assert budget.engage_du_poste(budget.postes[0]) == 5000
     assert budget.depense_du_poste(budget.postes[0]) == 1500
@@ -23,9 +23,9 @@ def test_factures_a_payer_triees_par_echeance(tmp_path):
     budget = budget_traiteur(tmp_path)
     dans_dix_jours = (date.today() + timedelta(days=10)).isoformat()
     hier = (date.today() - timedelta(days=1)).isoformat()
-    budget.add_facture("Traiteur", "Solde", 3500, dans_dix_jours, False)
-    budget.add_facture("Traiteur", "Acompte", 1500, hier, False)
-    budget.add_facture("Traiteur", "Déjà payée", 100, hier, True)
+    budget.ajouter_facture("Traiteur", "Solde", 3500, dans_dix_jours, False)
+    budget.ajouter_facture("Traiteur", "Acompte", 1500, hier, False)
+    budget.ajouter_facture("Traiteur", "Déjà payée", 100, hier, True)
 
     a_payer = budget.factures_a_payer()
 
@@ -35,7 +35,7 @@ def test_factures_a_payer_triees_par_echeance(tmp_path):
 
 def test_marquer_payee(tmp_path):
     budget = budget_traiteur(tmp_path)
-    budget.add_facture("Traiteur", "Acompte", 1500, "2026-12-01", False)
+    budget.ajouter_facture("Traiteur", "Acompte", 1500, "2026-12-01", False)
 
     budget.marquer_payee("Traiteur", "Acompte")
 
@@ -58,9 +58,9 @@ def test_devis_accepte_cree_acompte_et_solde_sans_doublon(tmp_path):
 
 def test_budget_et_factures_d_un_prestataire(tmp_path):
     budget = budget_traiteur(tmp_path)
-    budget.add_poste("Organisation", 2000)
-    budget.add_facture("Traiteur", "Acompte", 1500, "2026-12-01", False)
-    budget.add_facture("Organisation", "Frais Saveurs d'Orient", 50, "2026-12-01", False)
+    budget.ajouter_poste("Organisation", 2000)
+    budget.ajouter_facture("Traiteur", "Acompte", 1500, "2026-12-01", False)
+    budget.ajouter_facture("Organisation", "Frais Saveurs d'Orient", 50, "2026-12-01", False)
     traiteur = {"nom": "Saveurs d'Orient", "categorie": "Traiteur", "poste_budget": None}
 
     assert budget.prevu_pour(traiteur) == 5000

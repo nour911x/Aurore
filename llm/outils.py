@@ -5,8 +5,7 @@ from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
 from llm import outlook
 from metier.devis import lignes_valides, totaux
 from metier.invites import GROUPES, REGIMES, STATUTS_INVITE, nouvel_invite
-from metier.messages import (EMETTEUR_AURORE, NOMS_CLIENTS, TYPES_MESSAGE, destinataire_clients,
-                             destinataire_prestataire, suggestion)
+from metier.messages import EMETTEUR_AURORE, NOMS_CLIENTS, TYPES_MESSAGE, destinataire_clients, destinataire_prestataire, suggestion
 from metier.prestataires import CATEGORIES, STATUTS, appliquer_statut, meme_nom
 from metier.rgpd import peut_recevoir_sante, recap_anonyme, recap_sans_sante
 from textes import noms_clients
@@ -167,9 +166,9 @@ def chercher_par_nom(elements, nom):
 
 
 class Outils:
-    def __init__(self, event_sheet, agenda, budget, carnet, liste_invites, messagerie, carnet_devis, jour_j):
+    def __init__(self, fiche_evenement, agenda, budget, carnet, liste_invites, messagerie, carnet_devis, jour_j):
         self.jour_j = jour_j
-        self.event_sheet = event_sheet
+        self.fiche_evenement = fiche_evenement
         self.agenda = agenda
         self.budget = budget
         self.carnet = carnet
@@ -220,7 +219,7 @@ class Outils:
 
     def creer_rdv(self, titre, date_heure, duree_minutes=60, lieu="", avec=""):
         debut = lire_date_heure(date_heure).isoformat()
-        conflit = self.agenda.add_rdv(titre, debut, duree_minutes, lieu, avec)
+        conflit = self.agenda.ajouter_rdv(titre, debut, duree_minutes, lieu, avec)
 
         if conflit and self.espace != ORGANISATEUR:
             return {"erreur": "ce créneau est déjà pris dans l'agenda de l'organisateur, propose un autre horaire"}
@@ -242,7 +241,7 @@ class Outils:
 
     def consulter_budget(self):
         return {
-            "budget_total": self.event_sheet.data["budget"],
+            "budget_total": self.fiche_evenement.donnees["budget"],
             "postes": [
                 {"nom": poste["nom"], "prevu": poste["montant_prevu"], "engage": self.budget.engage_du_poste(poste)}
                 for poste in self.budget.postes
@@ -252,25 +251,25 @@ class Outils:
 
     def ajouter_facture(self, poste, libelle, montant, echeance, payee=False):
         poste_trouve = chercher_par_nom(self.budget.postes, poste)
-        self.budget.add_facture(poste_trouve["nom"], libelle, montant, echeance, payee)
+        self.budget.ajouter_facture(poste_trouve["nom"], libelle, montant, echeance, payee)
 
         return {"statut": "facture ajoutée", "poste": poste_trouve["nom"]}
 
     def consulter_prestataires(self, categorie=None):
         return [
-            {key: prestataire[key] for key in ["nom", "categorie", "statut", "telephone", "email", "tarif_indicatif", "notes"]}
+            {cle: prestataire[cle] for cle in ["nom", "categorie", "statut", "telephone", "email", "tarif_indicatif", "notes"]}
             for prestataire in self.carnet.prestataires
             if categorie in (None, prestataire["categorie"])
         ]
 
     def ajouter_prestataire(self, nom, categorie, telephone="", email="", tarif_indicatif=0, notes=""):
-        self.carnet.add_prestataire(nom, categorie, "", telephone, email, "", tarif_indicatif, None, notes)
+        self.carnet.ajouter_prestataire(nom, categorie, "", telephone, email, "", tarif_indicatif, None, notes)
 
         return {"statut": "prestataire ajouté", "nom": nom}
 
     def changer_statut_prestataire(self, nom, statut):
         prestataire = chercher_par_nom(self.carnet.prestataires, nom)
-        appliquer_statut(self.carnet, self.event_sheet, prestataire, statut)
+        appliquer_statut(self.carnet, self.fiche_evenement, prestataire, statut)
 
         return {"statut": f"{prestataire['nom']} est maintenant « {statut} »"}
 
@@ -279,7 +278,7 @@ class Outils:
 
     def consulter_invites(self):
         recap = self.liste_invites.recap_traiteur()
-        sante = self.espace == ORGANISATEUR or peut_recevoir_sante(self.event_sheet.data, self.prestataire)
+        sante = self.espace == ORGANISATEUR or peut_recevoir_sante(self.fiche_evenement.donnees, self.prestataire)
         recap = recap_anonyme(recap) if sante else recap_sans_sante(recap)
 
         return {"par_statut": dict(self.liste_invites.compter_par_statut()), **recap}
@@ -294,13 +293,13 @@ class Outils:
         invite["statut"] = statut
         invite["regime"] = regime or invite["regime"]
         invite["allergies"] = allergies or invite["allergies"]
-        self.liste_invites.save()
+        self.liste_invites.sauvegarder()
 
         return {"statut": "réponse enregistrée", "invite": invite}
 
     def preparer_message(self, destinataire, contenu, type="libre"):
         if destinataire.strip().lower() in NOMS_CLIENTS:
-            contact = destinataire_clients(self.event_sheet.data)
+            contact = destinataire_clients(self.fiche_evenement.donnees)
         else:
             contact = destinataire_prestataire(chercher_par_nom(self.carnet.prestataires, destinataire))
 
@@ -320,10 +319,10 @@ class Outils:
         if not lignes:
             raise ValueError("Le devis doit contenir au moins une ligne avec une désignation.")
 
-        self.carnet_devis.add_devis(
+        self.carnet_devis.ajouter_devis(
             nom_emetteur,
             prestataire["id"] if prestataire else None,
-            noms_clients(self.event_sheet.data),
+            noms_clients(self.fiche_evenement.donnees),
             lignes, tva, acompte_pourcent, validite_jours, notes
         )
         devis = self.carnet_devis.devis[-1]
@@ -337,7 +336,7 @@ class Outils:
             outlook.creer_evenement(rdv["titre"], lire_date_heure(rdv["date_heure"]), rdv["duree_minutes"], rdv["lieu"])
             rdv["outlook"] = True
 
-        self.agenda.save()
+        self.agenda.sauvegarder()
 
         return len(a_envoyer)
 

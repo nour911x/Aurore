@@ -271,3 +271,32 @@ Branches proposées (en regroupant ce qui va ensemble) :
 - **Noms normalisés à un seul endroit** : à l'enregistrement (fiche, invités, consentements). La normalisation qui était répétée à chaque affichage (barre latérale, messages, PDF, devis, avis) est retirée.
 - **Vocabulaire** : `destinataire_maries` devient `destinataire_clients`.
 - **Conservé volontairement** : `show_achats` (écran « Achats & factures » du prestataire, retiré de sa vue en phase 4) et `Budget.depense_du_poste`, qui ne sont plus appelés par l'interface, parce que le brief demande de ne supprimer aucune fonctionnalité sans accord. Les classes `Vue…` de `ui/` restent des classes de méthodes assemblées par héritage dans `UserInterface` : les transformer en vrais objets serait un chantier trop risqué juste avant la review.
+
+---
+
+## Qualité du code (`feature/qualite`)
+
+Les sections précédentes gardent les noms de l'époque. Ce tableau donne leur équivalent actuel.
+
+- **Tout le code est en français.** Seuls restent en anglais les noms imposés par les bibliothèques (`set_font`, `add_page`, `key=`, `data=`…), les feature flags nommés dans le brief et le fichier `event_data.json`, gardé pour ne pas déplacer les données existantes. Le renommage a été fait sur les noms de code uniquement, jamais dans les chaînes, pour ne toucher à aucune clé JSON.
+
+  | Avant | Après |
+  |---|---|
+  | `donnees/storage.py`, `load_json`, `save_json` | `donnees/stockage.py`, `charger_json`, `sauvegarder_json` |
+  | `donnees/event_state.py`, `EventSheet`, `event_sheet`, `.data`, `.update()` | `donnees/fiche_evenement.py`, `FicheEvenement`, `fiche_evenement`, `.donnees`, `.mettre_a_jour()` |
+  | `llm/llm_agent.py`, `ConversationAgent`, `conversation_agent_object` | `llm/agent.py`, `AgentConversation`, `agent` |
+  | `UserInterface`, `run()` | `InterfaceUtilisateur`, `lancer()` |
+  | `load()`, `save()` dans toutes les classes | `charger()`, `sauvegarder()` |
+  | `show_…`, `add_…`, `set_…`, `get_…` | `afficher_…`, `ajouter_…`, `definir_…`, `obtenir_…` |
+  | `ask_llm`, `suggest_…`, `write_…`, `extract_event_info` | `demander`, `suggerer_…`, `rediger_…`, `extraire_infos_evenement` |
+  | `format_person_name`, `event_data`, `file_path` | `formater_nom`, `donnees_evenement`, `chemin_fichier` |
+
+- **Duplication supprimée** : les sept méthodes `trouver()` / `choix()` qui parcouraient une liste à la main utilisent maintenant `premier(elements, **criteres)` (`donnees/stockage.py`), par exemple `premier(self.photos, id=photo_id)`.
+- **Recherche introuvable** : `Messagerie.trouver` lève une `ValueError` au lieu de renvoyer `None` puis de planter plus loin. Même règle dans la démo pour un prestataire introuvable.
+- **Type hints** sur `config/`, `donnees/`, `metier/` et `textes.py`, vérifiés par mypy en mode strict sur les signatures (`disallow_untyped_defs`). Les types ont été relevés en exécutant les tests et les 23 onglets de l'app, puis complétés à la main. mypy a révélé des cas où une recherche pouvait renvoyer `None` sans vérification : ils sont tous traités.
+- **Linter** : ruff (`pyproject.toml`) avec les règles pycodestyle, pyflakes, isort, bugbear, pyupgrade et simplify, et des lignes de 160 caractères maximum. Les `zip()` déclarent `strict=`, les `if` imbriqués inutiles sont fusionnés. Outlook est détecté avec `importlib.util.find_spec` au lieu d'un import inutilisé. `SIM117` (fusionner les `with`) est désactivée, parce que les blocs Streamlit imbriqués sont plus lisibles tels quels.
+- **Dépendances figées** : `requirements.txt` donne les versions exactes de l'app ; `requirements-dev.txt` celles des outils (pytest, pytest-cov, ruff, mypy).
+- **Intégration continue** : `.github/workflows/qualite.yml` lance ruff, mypy et pytest avec la couverture à chaque push et à chaque pull request.
+- **Configuration centralisée** : `pytest.ini` est remplacé par `pyproject.toml`, qui regroupe pytest, ruff, mypy et coverage.
+- **Tests** : 69 (5 nouveaux pour `donnees/stockage.py`). Couverture de 70 % sur la logique métier. Les modules à moins de 50 % (devis, galerie, inspiration, invités, jour J) sont surtout des générateurs de PDF ; ils seront traités dans `feature/finalisation`.
+- **Conservé volontairement** : `afficher_achats` et `Budget.depense_du_poste` (voir la section précédente).

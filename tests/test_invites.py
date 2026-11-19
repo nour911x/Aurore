@@ -3,11 +3,11 @@ from metier.invites import ListeInvites
 
 def test_modifier_le_faire_part_annule_sa_validation(tmp_path):
     invites = ListeInvites(str(tmp_path / "invites.json"))
-    invites.set_faire_part("Nous avons la joie de vous annoncer…")
+    invites.definir_faire_part("Nous avons la joie de vous annoncer…")
     invites.valider_faire_part()
-    assert ListeInvites(invites.file_path).faire_part_valide
+    assert ListeInvites(invites.chemin_fichier).faire_part_valide
 
-    invites.set_faire_part("Nouveau texte")
+    invites.definir_faire_part("Nouveau texte")
 
     assert not invites.faire_part_valide
 
