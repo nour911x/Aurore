@@ -30,6 +30,7 @@ OUI_NON = {AUCUN: None, "Oui": True, "Non": False}
 SECTIONS = {
     "messages": ["discussion", "a_envoyer"],
     "planning": ["agenda", "deroule", "plan_salle", "salle_3d"],
+    "prestataires": ["prestataires", "documents"],
     "budget": ["budget", "devis"],
     "inspiration": ["moodboard", "adresses", "photos", "droit_image", "avis", "instagram"]
 }

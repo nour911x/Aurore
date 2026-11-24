@@ -21,6 +21,8 @@ FICHIER_SELECTION = "selection_prestataires.json"
 
 FICHIER_ETAT = "aurore_etat.json"
 
+DOSSIER_INDEX = "index_documents"
+
 
 
 def dossier_racine(racine: Path = RACINE) -> Path:
@@ -33,6 +35,10 @@ def chemin(dossier_id: str, fichier: str, racine: Path = RACINE) -> str:
 
 def chemin_agenda(racine: Path = RACINE) -> str:
     return str(Path(racine) / FICHIER_AGENDA)
+
+
+def chemin_index(racine: Path = RACINE) -> Path:
+    return Path(racine) / DOSSIER_INDEX
 
 
 def lire_etat(racine: Path = RACINE) -> dict:

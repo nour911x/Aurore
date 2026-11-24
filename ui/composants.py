@@ -21,6 +21,17 @@ class Composants:
 
 
     @staticmethod
+    def afficher_sources(sources):
+        if not sources:
+            return
+
+        with st.expander(f"Sources ({len(sources)})", icon=":material/menu_book:"):
+            for source in sources:
+                st.caption(f"{source['document']}, page {source['page']}")
+                st.text(source["texte"])
+
+
+    @staticmethod
     def afficher_boutons_contact(telephone, email, lien="", message="", sujet=""):
         liens = []
 

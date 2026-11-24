@@ -12,6 +12,7 @@ from llm.outils import Outils
 from metier.agenda import Agenda
 from metier.budget import Budget
 from metier.devis import CarnetDevis
+from metier.documents import Documents
 from metier.galerie import Galerie
 from metier.inspiration import Inspiration
 from metier.invites import ListeInvites
@@ -35,6 +36,7 @@ from ui.commun import (
     ouvrir_nouveau_dossier,
 )
 from ui.composants import Composants
+from ui.documents import VueDocuments
 from ui.fiche import VueFiche
 from ui.habillage import accueil_html, dossier_html, marque_html, particules_html, style_html, theme_html
 from ui.inspiration import VueInspiration
@@ -46,11 +48,14 @@ from ui.vues_partagees import VuesPartagees
 
 
 PREFIXES_DONNEES = (
-    "fiche_evenement_", "budget_", "carnet_", "messagerie_", "liste_invites_", "inspiration_", "jour_j_", "galerie_", "achats_"
+    "fiche_evenement_", "budget_", "carnet_", "messagerie_", "liste_invites_", "inspiration_", "jour_j_", "galerie_", "achats_", "documents_"
 )
 
 
-class InterfaceUtilisateur(Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, VuePrestataires, VueBudget, VueInvites, VueInspiration, VuesPartagees):
+class InterfaceUtilisateur(
+    Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, VuePrestataires, VueDocuments,
+    VueBudget, VueInvites, VueInspiration, VuesPartagees
+):
     def __init__(self):
         st.set_page_config(page_title="AURORE", page_icon=":material/wb_twilight:", layout="wide")
         st.html(style_html())
@@ -99,9 +104,13 @@ class InterfaceUtilisateur(Composants, VueAccueil, VueFiche, VuePlanning, VueMes
             f"galerie_{self.dossier_id}",
             lambda: Galerie(chemin(self.dossier_id, "galerie_data.json"), chemin(self.dossier_id, "galerie"))
         )
+        self.documents = self.obtenir_persistant(
+            f"documents_{self.dossier_id}",
+            lambda: Documents(chemin(self.dossier_id, "documents_data.json"), chemin(self.dossier_id, "documents"))
+        )
         self.outils = Outils(
             self.fiche_evenement, self.agenda, self.budget, self.carnet,
-            self.liste_invites, self.messagerie, self.carnet_devis, self.jour_j
+            self.liste_invites, self.messagerie, self.carnet_devis, self.jour_j, self.interroger_documents
         )
 
 
@@ -252,7 +261,7 @@ class InterfaceUtilisateur(Composants, VueAccueil, VueFiche, VuePlanning, VueMes
             with st.spinner("AURORE regarde ta photo…" if image else "AURORE réfléchit…"):
                 self.agent.demander(demande, profil, self.outils, image)
 
-                if profil == ORGANISATEUR:
+                if profil == ORGANISATEUR and not self.outils.documents_lus:
                     nouvelles_infos = self.agent.extraire_infos_evenement(self.fiche_evenement.infos_sans_historique())
                     self.fiche_evenement.mettre_a_jour(nouvelles_infos)
 
@@ -336,6 +345,7 @@ class InterfaceUtilisateur(Composants, VueAccueil, VueFiche, VuePlanning, VueMes
             "evenement": self.afficher_evenement,
             "invites": self.afficher_invites,
             "prestataires": self.afficher_prestataires,
+            "documents": self.afficher_documents,
             "budget": self.afficher_budget,
             "devis": lambda: self.afficher_devis(profil),
             "agenda": self.afficher_agenda,
