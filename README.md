@@ -65,6 +65,7 @@ Prérequis : Python 3.13 ou plus récent.
 python -m venv env
 .\env\Scripts\Activate.ps1
 pip install -r requirements.txt
+python definir_mot_de_passe.py
 streamlit run app.py
 ```
 
@@ -77,9 +78,15 @@ L'application s'ouvre sur http://localhost:8501. Au tout premier lancement, des 
 | Variable | Obligatoire | Rôle |
 |---|---|---|
 | `GROQ_KEY` | oui | Clé de l'API Groq (chat, vision, transcription audio) |
+| `MOT_DE_PASSE_HACHE` | oui | Mot de passe organisateur haché, écrit par `python definir_mot_de_passe.py` |
 | `OUTLOOK_ACCOUNT` | non | Compte Outlook à utiliser pour synchroniser l'agenda (Windows, Outlook installé) |
 
 Aucune clé n'est écrite dans le code.
+
+## Accès
+
+- **Organisateur** : mot de passe. Sans mot de passe défini, l'application reste fermée.
+- **Clients et prestataires** : lien privé créé dans **Fiche client › Liens privés**. Il ouvre une seule vue, sur un seul dossier, expire au bout de 90 jours et peut être révoqué. Il n'est affiché qu'une fois.
 
 ## Recherche dans les documents (RAG)
 

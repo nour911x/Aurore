@@ -250,4 +250,5 @@ class VueFiche:
         self.afficher_consentements_image()
 
         self.afficher_historique()
+        self.afficher_acces_prives()
         self.afficher_donnees_client()
