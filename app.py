@@ -26,6 +26,7 @@ from textes import (
     CHAMPS_DOSSIER_PRESTATAIRE,
     ERREUR_CLE_MANQUANTE,
     ERREUR_FICHE,
+    ERREUR_LIEN,
     LIBELLES_PROFIL,
     LIBELLES_SECTIONS,
     ONGLETS,
@@ -48,6 +49,7 @@ from ui.commun import (
     ouvrir_nouveau_dossier,
 )
 from ui.composants import Composants
+from ui.connexion import VueConnexion, identifier
 from ui.documents import VueDocuments
 from ui.fiche import VueFiche
 from ui.habillage import accueil_html, dossier_html, marque_html, particules_html, style_html, theme_html
@@ -66,11 +68,10 @@ PREFIXES_DONNEES = (
 
 class InterfaceUtilisateur(
     Composants, VueAccueil, VueFiche, VuePlanning, VueMessages, VuePrestataires, VueDocuments,
-    VueBudget, VueInvites, VueInspiration, VuesPartagees
+    VueConnexion, VueBudget, VueInvites, VueInspiration, VuesPartagees
 ):
-    def __init__(self):
-        st.set_page_config(page_title="AURORE", page_icon=":material/wb_twilight:", layout="wide")
-        st.html(style_html())
+    def __init__(self, acces):
+        self.acces = acces
         self.prestataire = None
         self.profil = None
         self.dossier_id = self.choisir_dossier()
@@ -90,6 +91,9 @@ class InterfaceUtilisateur(
         migrer_json()
         demo_au_premier_lancement()
         self.dossiers = {dossier["id"]: dossier for dossier in lister_dossiers()}
+
+        if self.acces.par_lien:
+            return self.acces.dossier_id if self.acces.dossier_id in self.dossiers else None
 
         if st.session_state.get("dossier_actif") not in self.dossiers:
             st.session_state.dossier_actif = next(iter(self.dossiers), None)
@@ -174,6 +178,9 @@ class InterfaceUtilisateur(
             if profil == ORGANISATEUR:
                 self.afficher_choix_dossier()
 
+            if not self.acces.par_lien:
+                self.afficher_deconnexion()
+
             if profil == PRESTATAIRE:
                 st.markdown(dossier_html(affichage, CHAMPS_DOSSIER_PRESTATAIRE, self.details_pour_prestataire(donnees)), unsafe_allow_html=True)
             else:
@@ -218,24 +225,40 @@ class InterfaceUtilisateur(
             )
 
 
+    def choisir_vue(self):
+        with st.container(horizontal=True, key="barre-actions"):
+            self.profil = st.segmented_control(
+                "Je suis…", [nom for nom in PROFILS if PROFILS_ACTIFS.get(nom, True)], default=ORGANISATEUR, key="profil", format_func=LIBELLES_PROFIL.get,
+                bind="query-params", required=True, label_visibility="collapsed"
+            )
+
+            if self.profil == PRESTATAIRE and self.carnet.prestataires:
+                nom = st.selectbox(
+                    "Prestataire", [prestataire["nom"] for prestataire in self.carnet.prestataires],
+                    key="prestataire_actif", label_visibility="collapsed", width=220
+                )
+                self.prestataire = self.carnet.trouver_par_nom(nom)
+
+
+    def appliquer_lien(self):
+        self.profil = self.acces.profil
+
+        if self.profil == PRESTATAIRE:
+            self.prestataire = self.carnet.trouver(self.acces.prestataire_id)
+
+
+    def lien_perime(self):
+        return not self.dossier_id or (self.acces.profil == PRESTATAIRE and not self.carnet.trouver(self.acces.prestataire_id))
+
+
     def afficher_barre_haut(self):
         with st.container(horizontal=True, key="barre-haut"):
             st.markdown(marque_html(self.fiche_evenement.donnees), unsafe_allow_html=True)
 
-            with st.container(horizontal=True, key="barre-actions"):
-                profil = st.segmented_control(
-                    "Je suis…", [nom for nom in PROFILS if PROFILS_ACTIFS.get(nom, True)], default=ORGANISATEUR, key="profil", format_func=LIBELLES_PROFIL.get,
-                    bind="query-params", required=True, label_visibility="collapsed"
-                )
-                self.profil = profil
+            if not self.acces.par_lien:
+                self.choisir_vue()
 
-                if profil == PRESTATAIRE and self.carnet.prestataires:
-                    nom = st.selectbox(
-                        "Prestataire", [prestataire["nom"] for prestataire in self.carnet.prestataires],
-                        key="prestataire_actif", label_visibility="collapsed", width=220
-                    )
-                    self.prestataire = self.carnet.trouver_par_nom(nom)
-
+        profil = self.profil
         self.outils.pour_espace(profil, self.prestataire)
         self.agent = self.obtenir_persistant(self.cle_conversation(profil), AgentConversation)
         st.html(theme_html(profil))
@@ -378,6 +401,13 @@ class InterfaceUtilisateur(
 
 
     def lancer(self):
+        if self.acces.par_lien:
+            if self.lien_perime():
+                st.error(ERREUR_LIEN, icon=":material/link_off:")
+                return
+
+            self.appliquer_lien()
+
         if not self.dossier_id:
             self.afficher_premier_dossier()
             self.ouvrir_dialogue_si_demande()
@@ -432,8 +462,13 @@ class InterfaceUtilisateur(
 
 
 if __name__ == "__main__":
+    st.set_page_config(page_title="AURORE", page_icon=":material/wb_twilight:", layout="wide")
+    st.html(style_html())
+    acces = identifier()
+
     try:
-        InterfaceUtilisateur().lancer()
+        if acces:
+            InterfaceUtilisateur(acces).lancer()
     except CleGroqManquante:
         st.error(ERREUR_CLE_MANQUANTE, icon=":material/key_off:")
     except APIError as erreur:

@@ -334,3 +334,16 @@ Les sections précédentes gardent les noms de l'époque. Ce tableau donne leur 
 - **Clé absente** : message clair au lieu d'une erreur Python.
 - **Limite connue** : deux fenêtres ouvertes sur le même dossier gardent chacune leur copie en mémoire ; la dernière sauvegarde l'emporte.
 - **Tests** : 99 (15 nouveaux : stockage, reprise, pannes Groq).
+
+---
+
+## Sécurité (`feature/securite`)
+
+- **Avant** : le choix « Organisateur / Clients / Prestataire » n'était qu'un sélecteur d'affichage. N'importe qui pouvait tout voir.
+- **Mot de passe organisateur** : haché avec scrypt et un sel aléatoire, dans `.env` (`MOT_DE_PASSE_HACHE`). 12 caractères minimum. Comparaison à temps constant. 5 échecs bloquent la connexion 60 secondes. Sans mot de passe défini, l'application est fermée.
+- **Liens privés** (`metier/acces.py`) : jeton aléatoire de 256 bits. Seule son empreinte SHA-256 est enregistrée, donc une copie de la base ne permet pas de reconstituer les liens. SHA-256 suffit ici, contrairement au mot de passe, parce qu'un jeton aléatoire ne peut pas être deviné.
+- **Le lien décide** : la vue, le dossier et le prestataire viennent du lien enregistré, jamais de l'adresse ni de la session. Il est revérifié à chaque action. Il est refusé s'il est expiré, révoqué, si le dossier est supprimé, si le prestataire est retiré ou si la vue est désactivée (feature flags).
+- **Aperçu** : l'organisateur connecté garde le sélecteur pour voir ce que voient ses clients et prestataires.
+- **Erreurs** : `.streamlit/config.toml` cache les détails techniques au visiteur (ils restent dans le terminal) et limite les fichiers à 20 Mo.
+- **Limites connues** : pas de durée de session, mais recharger la page (F5) déconnecte l'organisateur ; un lien partagé donne accès à qui le possède ; le blocage est commun à tous, donc quelqu'un peut retarder la connexion de l'organisateur ; les conversations des visiteurs consomment le quota Groq ; la base n'est pas chiffrée sur le disque.
+- **Tests** : 115 (16 nouveaux).

@@ -1,5 +1,9 @@
 [client]
 toolbarMode = "minimal"
+showErrorDetails = "none"
+
+[server]
+maxUploadSize = 20
 
 [theme]
 base = "light"

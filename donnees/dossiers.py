@@ -22,6 +22,8 @@ NOM_SELECTION = "selection_prestataires"
 
 NOM_ETAT = "aurore_etat"
 
+NOM_ACCES = "liens_acces"
+
 DOSSIER_INDEX = "index_documents"
 
 
@@ -44,6 +46,10 @@ def emplacement_agenda(racine: Path = RACINE) -> Emplacement:
 
 def emplacement_annuaire(racine: Path = RACINE) -> Emplacement:
     return emplacement(COMMUN, NOM_ANNUAIRE, racine)
+
+
+def emplacement_acces(racine: Path = RACINE) -> Emplacement:
+    return emplacement(COMMUN, NOM_ACCES, racine)
 
 
 def chemin_index(racine: Path = RACINE) -> Path:
@@ -80,8 +86,8 @@ def libelle_court(dossier: dict) -> str:
     return " · ".join(filter(None, [noms_courts(dossier.get("noms")) or "Sans nom", jour]))
 
 
-def sans_dossier(rdvs: list[dict], dossier_id: str) -> list[dict]:
-    return [rdv for rdv in rdvs if rdv.get("dossier_id") != dossier_id]
+def sans_dossier(elements: list[dict], dossier_id: str) -> list[dict]:
+    return [element for element in elements if element.get("dossier_id") != dossier_id]
 
 
 def effacer_ancien_agenda(dossier_id: str, racine: Path) -> None:
@@ -95,7 +101,9 @@ def effacer_ancien_agenda(dossier_id: str, racine: Path) -> None:
 def supprimer(dossier_id: str, racine: Path = RACINE) -> None:
     with transaction(racine) as connexion:
         connexion.execute("DELETE FROM contenus WHERE dossier_id = ?", (dossier_id,))
-        ecrire(connexion, COMMUN, NOM_AGENDA, sans_dossier(lire(connexion, COMMUN, NOM_AGENDA, []), dossier_id))
+
+        for nom in (NOM_AGENDA, NOM_ACCES):
+            ecrire(connexion, COMMUN, nom, sans_dossier(lire(connexion, COMMUN, nom, []), dossier_id))
 
     shutil.rmtree(dossier_racine(racine) / dossier_id, ignore_errors=True)
     effacer_ancien_agenda(dossier_id, racine)

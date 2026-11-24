@@ -38,6 +38,10 @@ ERREURS_IA = {
 
 ERREUR_CLE_MANQUANTE = "La clé GROQ_KEY est absente du fichier .env : AURORE ne peut pas démarrer (voir le README)."
 
+ERREUR_MOT_DE_PASSE_ABSENT = "Aucun mot de passe organisateur n'est défini. Lancez « python definir_mot_de_passe.py », puis relancez AURORE."
+
+ERREUR_LIEN = "Ce lien n'est pas ou plus valable. Demandez-en un nouveau à votre organisateur."
+
 ERREUR_FICHE = "AURORE a répondu, mais la fiche client n'a pas pu être mise à jour avec ce message."
 
 ERREUR_IA_PAR_DEFAUT = "AURORE n'a pas pu répondre. Réessayez dans un instant."
