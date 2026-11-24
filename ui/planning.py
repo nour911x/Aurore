@@ -21,7 +21,7 @@ from metier.jour_j import (
 from metier.messages import fiche_publique
 from metier.rgpd import CATEGORIE_DONNEES_SANTE, recap_anonyme, recap_sans_sante, sante_partageable
 from textes import CHOIX_TYPE_RDV, date_longue, pluriel
-from ui import composants
+from ui import composants, design
 from ui.commun import AUCUN, CONFIG_COLONNES_DEROULE, DELAI_BRIEFING_AUTOMATIQUE, FORMAT_DATE
 from ui.contexte import Vue
 from ui.habillage import disposition_salle, frise_html, plan_salle_html, salle_3d_html
@@ -86,7 +86,7 @@ class VuePlanning(Vue):
         rdvs = self.ctx.rdvs_visibles(self.ctx.agenda.rdvs_a_venir())
 
         if not rdvs:
-            st.info("Aucun rendez-vous à venir.")
+            design.vide("Aucun rendez-vous à venir.")
 
         for rdv in rdvs:
             debut = datetime.fromisoformat(rdv["date_heure"])
@@ -318,11 +318,11 @@ class VuePlanning(Vue):
 
         repartition = self.ctx.jour_j.par_table(self.ctx.liste_invites.invites)
         non_places = self.ctx.jour_j.non_places(self.ctx.liste_invites.invites)
-        composants.afficher_compteurs({
+        design.indicateurs({
             ":material/table_restaurant: Tables": len(self.ctx.jour_j.salle["tables"]),
             ":material/chair: Places": sum(table["places"] for table in self.ctx.jour_j.salle["tables"]),
             ":material/groups: Personnes": total,
-            "⏳ Non placés": len(non_places)
+            "Non placés": len(non_places)
         })
 
         if not a_placer:

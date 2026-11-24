@@ -358,3 +358,18 @@ Les sections précédentes gardent les noms de l'époque. Ce tableau donne leur 
 - **`AURORE_DONNEES`** : dossier des données configurable, utilisé par les tests.
 - **`DECISIONS.md`** : choix techniques, alternatives et limites.
 - **Reste à faire** : déploiement.
+
+---
+
+## Refonte visuelle (`feature/refonte-design`)
+
+- **Direction** : luxe éditorial, noir et doré. Supprimés : dégradés, pétales, ombres, fonds pastel, violet, thème différent par vue.
+- **Système de design** : `ui/theme.css` et `ui/design.py` (logo, grand titre, titre de section, en-tête de dossier, indicateurs, ligne de liste, état vide, lien d'action).
+- **Contraste** : le doré foncé du brief (`#8C6D3A`, 4,50) et le vert sauge (`#5E7A5A`, 4,46) sont trop justes sur l'ivoire. Le texte utilise `#80622F` et `#4F6A4B`.
+- **Menu latéral** à la place des onglets : dossier, pages, compteur de messages à valider, vue, déconnexion. Les sous-sections d'une page restent des onglets.
+- **En-tête de dossier** en haut des pages liées au dossier ; le récapitulatif complet est dans un volet dépliable.
+- **Saisie IA** : placée dans la page et collée en bas (CSS). La version épinglée de Streamlit ouvrait chaque page déroulée jusqu'en bas.
+- **Démo** : les rendez-vous de démonstration passés sont ramenés au jour du lancement (`actualiser_rdvs`). Les vrais rendez-vous ne bougent pas.
+- **Sécurité** : les textes du moodboard, écrits par l'IA, sont maintenant échappés avant affichage.
+- **Non modifié** : couleurs des PDF (devis, faire-part, moodboard) et de la salle 3D.
+- **Tests** : 232. Rendu vérifié par captures à 1280 et 1920 px.

@@ -58,3 +58,14 @@ Chaque décision : le problème, le choix, ce qu'il coûte. Le détail de chaque
 
 - **Choix** : les fonctions en attente (Instagram, Pinterest, recommandations) sont désactivées dans `config/features.py`, pas supprimées.
 - **Coût** : ce code reste à maintenir et il est moins testé.
+
+## 11. Un menu latéral maison plutôt que `st.navigation`
+
+- **Problème** : la navigation native de Streamlit efface les paramètres de l'adresse en changeant de page, donc le jeton `?acces=` des liens privés.
+- **Choix** : un menu de boutons dans la barre latérale ; la page ouverte est dans `st.session_state`.
+- **Coût** : pas d'adresse propre à chaque page.
+
+## 12. Un système de design
+
+- **Choix** : couleurs, échelle typographique et styles dans `ui/theme.css` ; composants dans `ui/design.py`. Un test vérifie le contraste WCAG AA des couleurs de texte et l'absence de style ailleurs.
+- **Coût** : `.streamlit/config.toml` répète les couleurs, Streamlit ne lisant pas les variables CSS (un test vérifie qu'elles concordent). Les sélecteurs CSS dépendent de la structure interne de Streamlit, d'où la version figée.

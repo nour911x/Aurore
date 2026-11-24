@@ -134,6 +134,8 @@ def pluriel(nombre: float, singulier: str, forme_plurielle: str | None = None) -
     return f"{nombre} {singulier if nombre <= 1 else forme_plurielle or singulier + 's'}"
 
 
+PAGES_SANS_DOSSIER = {"accueil"}
+
 LIBELLES_PROFIL = {ORGANISATEUR: "Organisateur", CLIENTS: "Clients", PRESTATAIRE: "Prestataire"}
 
 ONGLETS = {

@@ -1,10 +1,10 @@
 from datetime import date, datetime, time, timedelta
 
-from donnees.demo import creer_demo, demo_active, demo_au_premier_lancement, retirer_demo
+from donnees.demo import actualiser_rdvs, creer_demo, demo_active, demo_au_premier_lancement, retirer_demo
 from donnees.dossiers import NOM_SELECTION, creer, emplacement, emplacement_agenda, lister
 from donnees.stockage import charger_donnees
 from metier.accueil import champs_a_definir, confirmations_attendues, synthese
-from metier.agenda import conflits, deviner_type
+from metier.agenda import Agenda, conflits, deviner_type
 
 
 def rdv(titre, debut, duree=60, avec="", confirme=False):
@@ -113,3 +113,17 @@ def test_demo_creee_une_seule_fois_au_premier_lancement(tmp_path):
     demo_au_premier_lancement(tmp_path)
 
     assert lister(tmp_path) == []
+
+
+def test_les_rdvs_de_demo_passes_reviennent_au_jour_du_lancement(tmp_path):
+    veille = date(2026, 12, 1)
+    creer_demo(tmp_path, veille)
+    agenda = Agenda(emplacement_agenda(tmp_path), "client")
+    agenda.ajouter_rdv("Vrai rendez-vous", "2026-12-01T18:00:00", 60, "", "")
+
+    assert actualiser_rdvs(tmp_path, date(2026, 12, 5))
+    assert not actualiser_rdvs(tmp_path, date(2026, 12, 5))
+
+    dates = {rdv["titre"]: rdv["date_heure"] for rdv in charger_donnees(emplacement_agenda(tmp_path), [])}
+    assert dates["Dégustation du menu"] == "2026-12-05T10:00:00"
+    assert dates["Vrai rendez-vous"] == "2026-12-01T18:00:00"

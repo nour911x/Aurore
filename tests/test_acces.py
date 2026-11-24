@@ -166,4 +166,4 @@ def test_application_fermee_sans_connexion(monkeypatch):
     page = AppTest.from_file(str(Path(__file__).parent.parent / "app.py"), default_timeout=30).run()
 
     assert [champ.label for champ in page.text_input] == ["Mot de passe organisateur"]
-    assert not page.tabs
+    assert not page.sidebar.button

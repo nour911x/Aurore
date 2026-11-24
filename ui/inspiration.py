@@ -1,4 +1,5 @@
 import uuid
+from html import escape
 
 import streamlit as st
 from groq import RateLimitError
@@ -11,7 +12,7 @@ from metier.inspiration import CATEGORIES_BEAUTE, ELEMENTS_MOODBOARD, generer_mo
 from metier.messages import destinataire_clients, suggestion
 from metier.rgpd import USAGES_PHOTO, consentements_manquants
 from textes import noms_clients, pluriel
-from ui import composants
+from ui import composants, design
 from ui.contexte import Vue
 from ui.fiche import VueFiche
 from ui.messages import VueMessages
@@ -22,12 +23,10 @@ class VueInspiration(Vue):
     @staticmethod
     def afficher_palette(couleurs):
         pastilles = "".join(
-            f'<div style="text-align:center;font-size:0.8em">'
-            f'<div style="width:72px;height:72px;border-radius:14px;background:{couleur["hex"]};'
-            f'border:1px solid rgba(128,128,128,0.3)"></div>{couleur["nom"]}<br>{couleur["hex"]}</div>'
+            f'<div><span style="--teinte:{escape(couleur["hex"])}"></span>{escape(couleur["nom"])}<br>{escape(couleur["hex"])}</div>'
             for couleur in couleurs
         )
-        st.markdown(f'<div style="display:flex;flex-wrap:wrap;gap:12px">{pastilles}</div>', unsafe_allow_html=True)
+        design.afficher_html(f'<div class="palette">{pastilles}</div>')
 
 
     def afficher_moodboard(self):
@@ -43,7 +42,7 @@ class VueInspiration(Vue):
             st.info("Discute d'abord avec AURORE de vos goûts (style, couleurs, saison…), puis crée le moodboard.")
             return
 
-        st.subheader(moodboard["titre"])
+        design.grand_titre(moodboard["titre"], "Moodboard")
         st.markdown(moodboard["ambiance"])
         self.afficher_palette(moodboard["couleurs"])
         st.markdown(" ".join(f"`{mot}`" for mot in moodboard["mots_cles"]))
@@ -192,7 +191,7 @@ class VueInspiration(Vue):
         self.afficher_import_photos()
 
         if not self.ctx.galerie.photos:
-            st.info("Aucune photo pour l'instant. Ajoute les photos du jour J ci-dessus.")
+            design.vide("Aucune photo pour l'instant. Ajoute les photos du jour J ci-dessus.")
             return
 
         filtre = st.pills("Afficher", ["Toutes"] + CATEGORIES_PHOTO, default="Toutes")
@@ -265,7 +264,7 @@ class VueInspiration(Vue):
         st.caption("Seules les photos autorisées apparaissent ici. Copie la légende, télécharge la photo et publie-la depuis Instagram.")
 
         if not a_publier:
-            st.info("Aucune photo publiable en attente.")
+            design.vide("Aucune photo publiable en attente.")
 
         for photo in a_publier:
             self.afficher_publication(photo)
@@ -290,7 +289,7 @@ class VueInspiration(Vue):
             VueMessages(self.ctx).rediger(suggestion(cle, "demande_avis", destinataire, {"date_evenement": self.ctx.fiche_evenement.donnees["date"]}))
 
         if not self.ctx.galerie.avis:
-            st.caption("Aucun avis pour l'instant.")
+            design.vide("Aucun avis pour l'instant.")
 
         for avis in reversed(self.ctx.galerie.avis):
             with st.container(border=True):

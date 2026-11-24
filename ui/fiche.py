@@ -10,6 +10,7 @@ from metier.devis import date_lisible
 from metier.invites import entier
 from metier.rgpd import PERIMETRES_IMAGE, TEXTE_CONSENTEMENT_SANTE, consentement, exporter
 from textes import CHAMPS_LISTES, SOURCES_ECHANGE, formater_nom
+from ui import design
 from ui.commun import FORMAT_DATE, OUI_NON, lire_date, personnes_du_dossier, texte_vers_liste
 from ui.connexion import VueConnexion
 from ui.contexte import Vue
@@ -75,6 +76,15 @@ class VueFiche(Vue):
         return texte_vers_liste(conteneur.text_area(libelle, value=", ".join(valeur), height=68, help=aide))
 
 
+    @staticmethod
+    def sur_deux_colonnes(elements):
+        for index, element in enumerate(elements):
+            if index % 2 == 0:
+                colonnes = st.columns(2, vertical_alignment="bottom")
+
+            yield element, colonnes[index % 2]
+
+
     def afficher_fiche_form(self):
         donnees = self.ctx.fiche_evenement.donnees
         champs = type_du_dossier(donnees)["champs"]
@@ -85,26 +95,31 @@ class VueFiche(Vue):
             gauche, droite = st.columns(2)
             noms = gauche.text_input(type_du_dossier(donnees)["personnes"], value=donnees["noms"] or "")
             lieu = droite.text_input("Lieu", value=donnees["lieu"] or "")
+            gauche, droite = st.columns(2)
             telephone = gauche.text_input("Téléphone du client", value=donnees["telephone"] or "")
             email = droite.text_input("Email du client", value=donnees["email"] or "")
+            gauche, droite = st.columns(2)
             date_evenement = gauche.date_input("Date de l'événement", value=lire_date(donnees["date"]), format=FORMAT_DATE)
             theme = droite.text_input("Thème", value=donnees["theme"] or "")
+            gauche, droite = st.columns(2)
             budget = gauche.number_input("Budget (€)", min_value=0, step=500, value=int(donnees["budget"]) if donnees["budget"] else None)
             invites = droite.number_input("Nombre d'invités", min_value=0, step=5, value=int(donnees["nombre_invites"]) if donnees["nombre_invites"] else None)
-            colonnes = st.columns(2)
             specifiques = {
-                cle: self.champ_specifique(colonnes[index % 2], cle, donnees[cle])
-                for index, cle in enumerate(simples)
+                cle: self.champ_specifique(colonne, cle, donnees[cle])
+                for cle, colonne in self.sur_deux_colonnes(simples)
             }
 
-            st.caption("Pour les listes, sépare les éléments par des virgules.")
+            st.caption("Pour les listes, séparez les éléments par des virgules.")
             listes = {
-                cle: st.text_area(label, value=", ".join(donnees[cle]), height=68)
-                for cle, label in CHAMPS_LISTES.items()
+                cle: colonne.text_area(CHAMPS_LISTES[cle], value=", ".join(donnees[cle]), height=68)
+                for cle, colonne in self.sur_deux_colonnes(list(CHAMPS_LISTES))
             }
-            specifiques |= {cle: self.champ_specifique(st, cle, donnees[cle]) for cle in listes_du_type}
+            specifiques |= {
+                cle: self.champ_specifique(colonne, cle, donnees[cle])
+                for cle, colonne in self.sur_deux_colonnes(listes_du_type)
+            }
 
-            if st.form_submit_button("Enregistrer la fiche", icon=":material/save:"):
+            if st.form_submit_button("Enregistrer la fiche", type="primary"):
                 nouvelle_fiche = {
                     **specifiques,
                     "noms": noms or None,
@@ -125,7 +140,7 @@ class VueFiche(Vue):
 
 
     def afficher_historique(self):
-        st.subheader(":material/history: Historique des échanges")
+        design.titre_section(":material/history: Historique des échanges")
 
         if self.ctx.agent.lire_historique() and st.button("Ajouter un résumé de la discussion avec AURORE", icon=":material/summarize:"):
                 with st.spinner("AURORE résume la discussion…"):
@@ -146,7 +161,7 @@ class VueFiche(Vue):
         historique = self.ctx.fiche_evenement.donnees["historique"]
 
         if not historique:
-            st.caption("Aucun échange enregistré pour l'instant.")
+            design.vide("Aucun échange enregistré pour l'instant.")
 
         for echange in reversed(historique):
             with st.container(border=True):
@@ -186,7 +201,7 @@ class VueFiche(Vue):
                 st.rerun()
 
         if not consentements:
-            st.caption("Aucun consentement de droit à l'image enregistré : seules les photos de décor sont publiables.")
+            design.vide("Aucun consentement de droit à l'image enregistré : seules les photos de décor sont publiables.")
 
         if self.ctx.profil != ORGANISATEUR:
             return
@@ -245,7 +260,7 @@ class VueFiche(Vue):
         self.afficher_type_evenement()
         self.afficher_fiche_form()
 
-        st.subheader(":material/verified_user: Consentements")
+        design.titre_section(":material/verified_user: Consentements")
         st.markdown("**Données de santé**")
         self.afficher_consentement_sante()
         st.markdown("**Droit à l'image**")

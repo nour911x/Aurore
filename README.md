@@ -118,14 +118,14 @@ app.py                point d'entrée : connexion, puis interface
 DECISIONS.md          choix techniques et leurs limites
 textes.py             libellés de l'interface, noms propres, pluriels
 config/               evenements.py (types et champs par type), features.py (flags), profils.py (les trois vues)
-ui/                   contexte.py (état du dossier ouvert), interface.py (mise en page), une vue par onglet, composants, habillage
+ui/                   contexte.py (état du dossier ouvert), interface.py (mise en page), une vue par page, design.py (composants), theme.css (couleurs, typographie), habillage.py (frise, plan)
 metier/               agenda, budget, devis, messages, invités, galerie, jour J, accueil, RGPD
 donnees/              base SQLite, reprise des anciens JSON, dossiers clients, fiche, démonstration
 llm/                  agent Groq, outils de l'agent, Outlook, prompt système
 llm/rag/              recherche dans les documents : extraits, base vectorielle, reclassement, prompts
 exemples/             documents fictifs pour essayer la recherche (dont un piégé)
 index_documents/      base vectorielle ChromaDB (créée au premier import, ignorée par git)
-assets/               feuille de style, salle 3D
+assets/               salle 3D
 tests/                tests unitaires (pytest)
 .github/workflows/     intégration continue (ruff, mypy, pytest)
 dossiers/             photos et documents des clients, un sous-dossier par client (ignoré par git)

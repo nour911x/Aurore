@@ -7,17 +7,31 @@ maxUploadSize = 20
 
 [theme]
 base = "light"
-primaryColor = "#B9506F"
-backgroundColor = "#FFFBF8"
-secondaryBackgroundColor = "#F8EDEF"
-textColor = "#3A2731"
-linkColor = "#A3415F"
-borderColor = "#EFE1E5"
-showWidgetBorder = false
+primaryColor = "#141210"
+backgroundColor = "#FAF7F2"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#141210"
+linkColor = "#80622F"
+borderColor = "#E6DFD4"
+redTextColor = "#8B2E2E"
+orangeTextColor = "#80622F"
+yellowTextColor = "#80622F"
+greenTextColor = "#4F6A4B"
+grayTextColor = "#6B645C"
+blueTextColor = "#6B645C"
+showWidgetBorder = true
 showSidebarBorder = false
-baseRadius = "16px"
-buttonRadius = "999px"
-baseFontSize = 15
-font = "Jost:https://fonts.googleapis.com/css2?family=Jost:wght@300..600&display=swap"
-headingFont = "Cormorant Garamond:https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap"
-metricValueFontWeight = 500
+baseRadius = "3px"
+buttonRadius = "3px"
+baseFontSize = 16
+font = "Jost:https://fonts.googleapis.com/css2?family=Jost:wght@300..500&display=swap"
+headingFont = "Cormorant Garamond:https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&display=swap"
+headingFontWeights = 400
+
+[theme.sidebar]
+primaryColor = "#B8975A"
+backgroundColor = "#141210"
+secondaryBackgroundColor = "#1E1B18"
+textColor = "#FAF7F2"
+linkColor = "#B8975A"
+borderColor = "#37322C"

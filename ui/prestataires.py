@@ -5,7 +5,7 @@ from metier.accueil import doubles_reservations
 from metier.devis import date_lisible
 from metier.prestataires import CATEGORIES, STATUTS, meme_nom
 from textes import montant
-from ui import composants
+from ui import composants, design
 from ui.commun import AUCUN, FORMAT_DATE, ICONES_STATUT
 from ui.contexte import Vue
 
@@ -13,7 +13,7 @@ from ui.contexte import Vue
 class VuePrestataires(Vue):
     def afficher_resume_carnet(self):
         compteurs = self.ctx.carnet.compter_par_statut()
-        composants.afficher_compteurs({f"{ICONES_STATUT[statut]} {statut}": compteurs[statut] for statut in STATUTS})
+        design.indicateurs({f"{ICONES_STATUT[statut]} {statut}": compteurs[statut] for statut in STATUTS})
 
 
     def afficher_ajout_facture_prestataire(self, prestataire):
@@ -143,14 +143,14 @@ class VuePrestataires(Vue):
         st.caption("Le carnet est commun à tous vos dossiers ; le statut, le tarif et le poste de budget sont propres à ce dossier.")
 
         if not self.ctx.carnet.prestataires:
-            st.info("Aucun prestataire dans ce dossier. Choisissez-en dans le carnet commun ou ajoutez-en un nouveau.")
+            design.vide("Aucun prestataire dans ce dossier. Choisissez-en dans le carnet commun ou ajoutez-en un nouveau.")
         else:
             self.afficher_resume_carnet()
 
         doubles = [double for double in doubles_reservations() if double["date"] == self.ctx.fiche_evenement.donnees["date"]]
 
         for categorie, membres in self.ctx.carnet.par_categorie().items():
-            st.subheader(categorie)
+            design.titre_section(categorie)
 
             for prestataire in membres:
                 self.afficher_prestataire(prestataire, doubles)

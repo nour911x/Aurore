@@ -12,11 +12,6 @@ def obtenir_persistant(cle, classe):
     return st.session_state[cle]
 
 
-def afficher_compteurs(compteurs):
-    for colonne, (label, valeur) in zip(st.columns(len(compteurs)), compteurs.items(), strict=True):
-        colonne.metric(label, valeur)
-
-
 def afficher_sources(sources):
     if not sources:
         return

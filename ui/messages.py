@@ -4,7 +4,7 @@ import streamlit as st
 
 from metier.devis import date_lisible
 from metier.messages import MODIFIABLES, TYPES_MESSAGE, destinataire_clients, destinataire_prestataire, suggestion
-from ui import composants
+from ui import composants, design
 from ui.commun import resume_contexte
 from ui.contexte import Vue
 
@@ -52,10 +52,10 @@ class VueMessages(Vue):
 
 
     def afficher_suggestions(self, suggestions):
-        st.subheader(":material/notifications: À préparer")
+        design.titre_section(":material/notifications: À préparer")
 
         if not suggestions:
-            st.caption("Rien à préparer pour l'instant.")
+            design.vide("Rien à préparer pour l'instant.")
 
         for suggestion_message in suggestions:
             with st.container(border=True):
@@ -72,12 +72,12 @@ class VueMessages(Vue):
 
 
     def afficher_a_valider(self):
-        st.subheader(":material/rate_review: À relire et valider")
+        design.titre_section(":material/rate_review: À relire et valider")
         st.caption("Rien ne part sans votre validation : relisez, corrigez si besoin, puis validez.")
         messages = self.ctx.messagerie.par_statut(*MODIFIABLES)
 
         if not messages:
-            st.caption("Aucun message à relire.")
+            design.vide("Aucun message à relire.")
 
         for message in messages:
             with st.container(border=True):
@@ -107,11 +107,11 @@ class VueMessages(Vue):
 
 
     def afficher_valides(self):
-        st.subheader(":material/outbox: Validés, à envoyer")
+        design.titre_section(":material/outbox: Validés, à envoyer")
         messages = self.ctx.messagerie.par_statut("validé")
 
         if not messages:
-            st.caption("Aucun message validé en attente d'envoi.")
+            design.vide("Aucun message validé en attente d'envoi.")
 
         for message in messages:
             type_message = TYPES_MESSAGE[message["type"]]
