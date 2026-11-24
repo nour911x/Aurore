@@ -9,20 +9,25 @@ from metier.devis import date_lisible
 from metier.jour_j import personnes
 from metier.rgpd import CATEGORIE_DONNEES_SANTE, sante_partageable
 from textes import date_longue, montant
+from ui import composants
+from ui.budget import VueBudget
+from ui.contexte import Vue
 from ui.habillage import accueil_html, frise_html
+from ui.invites import VueInvites
+from ui.planning import VuePlanning
 
 
-class VuesPartagees:
+class VuesPartagees(Vue):
     def afficher_evenement(self):
-        infos = self.infos_pour_destinataire(self.prestataire["id"])
-        utiles = self.infos_utiles()
-        self.afficher_compteurs({
+        infos = self.ctx.infos_pour_destinataire(self.ctx.prestataire["id"])
+        utiles = self.ctx.infos_utiles()
+        composants.afficher_compteurs({
             ":material/event: Date": date_lisible(infos["date"]) or "À définir",
             ":material/location_on: Lieu": infos["lieu"] or "À définir",
             ":material/groups: Invités prévus": infos["nombre_invites"] or "À définir"
         })
 
-        if self.prestataire["categorie"] == CATEGORIE_DONNEES_SANTE and not sante_partageable(self.fiche_evenement.donnees):
+        if self.ctx.prestataire["categorie"] == CATEGORIE_DONNEES_SANTE and not sante_partageable(self.ctx.fiche_evenement.donnees):
             st.info("Les allergies et régimes ne vous sont pas transmis : le client n'a pas encore donné son accord.", icon=":material/lock:")
 
         for cle, titre, besoin in [
@@ -35,17 +40,17 @@ class VuesPartagees:
 
         if "invites" in utiles:
             st.subheader(":material/restaurant: Les invités")
-            self.afficher_recap_invites()
+            VueInvites(self.ctx).afficher_recap_invites()
         elif "couverts" in utiles:
-            recap = self.liste_invites.recap_traiteur()
-            self.afficher_compteurs({
+            recap = self.ctx.liste_invites.recap_traiteur()
+            composants.afficher_compteurs({
                 ":material/restaurant: Couverts confirmés": recap["couverts_confirmes"],
                 ":material/hourglass_top: Couverts attendus": recap["couverts_attendus"]
             })
 
-        if self.jour_j.salle["tables"] and "tables" in utiles:
+        if self.ctx.jour_j.salle["tables"] and "tables" in utiles:
             st.subheader(":material/chair: Couverts par table")
-            repartition = self.jour_j.par_table(self.liste_invites.invites)
+            repartition = self.ctx.jour_j.par_table(self.ctx.liste_invites.invites)
             st.dataframe(
                 pd.DataFrame([
                     {
@@ -59,14 +64,14 @@ class VuesPartagees:
                 width="stretch"
             )
 
-        if self.jour_j.deroule:
+        if self.ctx.jour_j.deroule:
             st.subheader(":material/schedule: Déroulé du jour J")
             st.caption("Vos créneaux sont mis en avant.")
-            st.markdown(frise_html(self.jour_j.deroule, self.prestataire["nom"]), unsafe_allow_html=True)
+            st.markdown(frise_html(self.ctx.jour_j.deroule, self.ctx.prestataire["nom"]), unsafe_allow_html=True)
 
 
     def afficher_prochains_rdvs(self):
-        rdvs = self.agenda.rdvs_a_venir()
+        rdvs = self.ctx.agenda.rdvs_a_venir()
 
         if not rdvs:
             st.caption("Aucun rendez-vous prévu pour l'instant.")
@@ -77,9 +82,9 @@ class VuesPartagees:
 
 
     def afficher_recap_client(self):
-        donnees = self.fiche_evenement.donnees
+        donnees = self.ctx.fiche_evenement.donnees
         st.markdown(accueil_html(CLIENTS), unsafe_allow_html=True)
-        self.afficher_compteurs({
+        composants.afficher_compteurs({
             ":material/event: Date": date_lisible(donnees["date"]) or "À définir",
             ":material/location_on: Lieu": donnees["lieu"] or "À définir",
             ":material/groups: Invités": donnees["nombre_invites"] or "À définir"
@@ -103,22 +108,22 @@ class VuesPartagees:
 
     def afficher_budget_client(self):
         st.caption("Suivi en lecture seule. Pour toute modification, écrivez à votre organisateur.")
-        self.afficher_alertes_factures(self.budget)
+        VueBudget.afficher_alertes_factures(self.ctx.budget)
 
-        if not self.budget.postes:
+        if not self.ctx.budget.postes:
             st.info("Le budget n'a pas encore été détaillé.")
 
-        self.afficher_budget_postes(self.budget, self.fiche_evenement.donnees["budget"], "budget_client", lecture_seule=True)
+        VueBudget.afficher_budget_postes(self.ctx.budget, self.ctx.fiche_evenement.donnees["budget"], "budget_client", lecture_seule=True)
 
 
     def afficher_invitations(self):
-        if not self.liste_invites.invites:
+        if not self.ctx.liste_invites.invites:
             st.info("La liste d'invités n'a pas encore été créée.")
             return
 
-        self.afficher_compteurs_invites()
+        VueInvites(self.ctx).afficher_compteurs_invites()
         st.dataframe(
-            pd.DataFrame(self.liste_invites.invites, columns=["nom", "groupe", "accompagnants", "statut"]),
+            pd.DataFrame(self.ctx.liste_invites.invites, columns=["nom", "groupe", "accompagnants", "statut"]),
             column_config={
                 "nom": "Nom", "groupe": "Groupe", "accompagnants": "+ Accomp.", "statut": "Statut"
             },
@@ -126,20 +131,20 @@ class VuesPartagees:
             width="stretch"
         )
 
-        if self.liste_invites.faire_part:
+        if self.ctx.liste_invites.faire_part:
             with st.expander("Texte du faire-part", icon=":material/mail:"):
-                st.markdown(self.liste_invites.faire_part)
+                st.markdown(self.ctx.liste_invites.faire_part)
 
 
     def afficher_agenda_prestataire(self):
-        self.afficher_rappels_rdv()
-        self.afficher_rdvs(lecture_seule=True)
+        VuePlanning(self.ctx).afficher_rappels_rdv()
+        VuePlanning(self.ctx).afficher_rdvs(lecture_seule=True)
 
 
     def afficher_devis_prestataire(self, profil):
-        self.afficher_devis(profil)
+        VueBudget(self.ctx).afficher_devis(profil)
         st.subheader(":material/receipt_long: Factures")
-        factures = self.budget.factures_de(self.prestataire)
+        factures = self.ctx.budget.factures_de(self.ctx.prestataire)
 
         if not factures:
             st.caption("Aucune facture enregistrée pour votre prestation.")

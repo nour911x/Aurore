@@ -7,7 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 import ui.connexion as connexion
 from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
-from donnees.dossiers import RACINE, creer, emplacement_acces, supprimer
+from donnees.dossiers import creer, emplacement_acces, supprimer
 from metier.acces import DUREE_BLOCAGE, DUREE_LIEN, ECHECS_AUTORISES, Acces, LiensAcces, Tentatives, hacher, verifier
 
 
@@ -163,7 +163,7 @@ def test_un_faux_lien_ne_donne_rien_meme_avec_profil_dans_l_adresse(page):
 
 def test_application_fermee_sans_connexion(monkeypatch):
     monkeypatch.setenv("MOT_DE_PASSE_HACHE", hacher(MOT_DE_PASSE))
-    page = AppTest.from_file(str(Path(RACINE) / "app.py"), default_timeout=30).run()
+    page = AppTest.from_file(str(Path(__file__).parent.parent / "app.py"), default_timeout=30).run()
 
     assert [champ.label for champ in page.text_input] == ["Mot de passe organisateur"]
     assert not page.tabs

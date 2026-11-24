@@ -83,10 +83,10 @@ class CarnetDevis:
         sauvegarder_donnees(self.emplacement, self.devis)
 
     def prochain_numero(self) -> str:
-        annee = date.today().year
-        nombre = sum(1 for devis in self.devis if devis["numero"].startswith(f"DEV-{annee}-"))
+        prefixe = f"DEV-{date.today().year}-"
+        numeros = [int(devis["numero"].removeprefix(prefixe)) for devis in self.devis if devis["numero"].startswith(prefixe)]
 
-        return f"DEV-{annee}-{nombre + 1:03d}"
+        return f"{prefixe}{max(numeros, default=0) + 1:03d}"
 
     def ajouter_devis(
         self, emetteur: str, prestataire_id: str | None, destinataire: str, lignes: list[dict],

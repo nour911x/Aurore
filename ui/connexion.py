@@ -1,3 +1,4 @@
+
 import os
 
 import streamlit as st
@@ -9,6 +10,7 @@ from metier.acces import Acces, LiensAcces, Tentatives, verifier
 from metier.devis import date_lisible
 from textes import ERREUR_LIEN, ERREUR_MOT_DE_PASSE_ABSENT
 from ui.commun import PROFILS_ACTIFS
+from ui.contexte import Vue
 from ui.habillage import marque_html
 
 
@@ -70,7 +72,7 @@ def adresse_du_lien(jeton):
     return f"{adresse}?{PARAMETRE_LIEN}={jeton}"
 
 
-class VueConnexion:
+class VueConnexion(Vue):
     def afficher_deconnexion(self):
         if st.button("Se déconnecter", icon=":material/logout:", width="stretch"):
             st.session_state.clear()
@@ -81,7 +83,7 @@ class VueConnexion:
         if lien["profil"] == CLIENTS:
             return "Clients"
 
-        prestataire = self.carnet.trouver(lien["prestataire_id"])
+        prestataire = self.ctx.carnet.trouver(lien["prestataire_id"])
         return prestataire["nom"] if prestataire else "Prestataire retiré du dossier"
 
 
@@ -89,7 +91,7 @@ class VueConnexion:
         destinataires = {"Clients": None} if PROFILS_ACTIFS[CLIENTS] else {}
 
         if PROFILS_ACTIFS[PRESTATAIRE]:
-            destinataires |= {f"{prestataire['nom']} (prestataire)": prestataire["id"] for prestataire in self.carnet.prestataires}
+            destinataires |= {f"{prestataire['nom']} (prestataire)": prestataire["id"] for prestataire in self.ctx.carnet.prestataires}
 
         if not destinataires:
             return
@@ -101,7 +103,7 @@ class VueConnexion:
                 return
 
         prestataire_id = destinataires[choix]
-        jeton = liens.creer(PRESTATAIRE if prestataire_id else CLIENTS, self.dossier_id, prestataire_id)
+        jeton = liens.creer(PRESTATAIRE if prestataire_id else CLIENTS, self.ctx.dossier_id, prestataire_id)
         st.warning("Copiez ce lien maintenant : il ne sera plus affiché. Toute personne qui l'a peut voir cet espace.", icon=":material/key:")
         st.code(adresse_du_lien(jeton), language=None)
 
@@ -112,7 +114,7 @@ class VueConnexion:
         with st.expander("Liens privés (clients et prestataires)", icon=":material/link:"):
             self.afficher_nouveau_lien(liens)
 
-            for lien in liens.du_dossier(self.dossier_id):
+            for lien in liens.du_dossier(self.ctx.dossier_id):
                 infos, bouton = st.columns([4, 1], vertical_alignment="center")
                 infos.markdown(f"**{self.nom_du_lien(lien)}** · :gray[valable jusqu'au {date_lisible(lien['expire_le'])}]")
 

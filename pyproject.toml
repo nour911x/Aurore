@@ -29,4 +29,7 @@ check_untyped_defs = true
 disallow_untyped_defs = true
 
 [tool.coverage.run]
-source = ["donnees", "metier", "config", "textes"]
+source = ["app", "config", "donnees", "llm", "metier", "textes", "ui"]
+
+[tool.coverage.report]
+fail_under = 80

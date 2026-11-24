@@ -11,17 +11,19 @@ from metier.invites import entier
 from metier.rgpd import PERIMETRES_IMAGE, TEXTE_CONSENTEMENT_SANTE, consentement, exporter
 from textes import CHAMPS_LISTES, SOURCES_ECHANGE, formater_nom
 from ui.commun import FORMAT_DATE, OUI_NON, lire_date, personnes_du_dossier, texte_vers_liste
-from ui.documents import nettoyer_index
+from ui.connexion import VueConnexion
+from ui.contexte import Vue
+from ui.index_documents import nettoyer_index
 
 
-class VueFiche:
+class VueFiche(Vue):
     def afficher_type_evenement(self):
-        donnees = self.fiche_evenement.donnees
+        donnees = self.ctx.fiche_evenement.donnees
         actuel = cle_type(donnees["type_evenement"])
         version = st.session_state.get("version_type", 0)
         choix = st.segmented_control(
             "Type d'événement", list(TYPES_EVENEMENT), default=actuel,
-            format_func=lambda cle: TYPES_EVENEMENT[cle]["libelle"], key=f"type_{self.dossier_id}_{actuel}_{version}"
+            format_func=lambda cle: TYPES_EVENEMENT[cle]["libelle"], key=f"type_{self.ctx.dossier_id}_{actuel}_{version}"
         )
 
         if not choix or choix == actuel:
@@ -44,7 +46,7 @@ class VueFiche:
             confirmer, annuler = st.columns(2)
 
             if confirmer.button("Confirmer le changement", icon=":material/check:", type="primary"):
-                self.fiche_evenement.changer_type(choix)
+                self.ctx.fiche_evenement.changer_type(choix)
                 st.rerun()
 
             if annuler.button("Annuler", icon=":material/close:"):
@@ -74,7 +76,7 @@ class VueFiche:
 
 
     def afficher_fiche_form(self):
-        donnees = self.fiche_evenement.donnees
+        donnees = self.ctx.fiche_evenement.donnees
         champs = type_du_dossier(donnees)["champs"]
         simples = [cle for cle in champs if CHAMPS_SPECIFIQUES[cle][1] != "liste"]
         listes_du_type = [cle for cle in champs if CHAMPS_SPECIFIQUES[cle][1] == "liste"]
@@ -118,18 +120,18 @@ class VueFiche:
                 for cle, texte in listes.items():
                     nouvelle_fiche[cle] = texte_vers_liste(texte)
 
-                self.fiche_evenement.remplacer(nouvelle_fiche)
+                self.ctx.fiche_evenement.remplacer(nouvelle_fiche)
                 st.rerun()
 
 
     def afficher_historique(self):
         st.subheader(":material/history: Historique des échanges")
 
-        if self.agent.lire_historique() and st.button("Ajouter un résumé de la discussion avec AURORE", icon=":material/summarize:"):
+        if self.ctx.agent.lire_historique() and st.button("Ajouter un résumé de la discussion avec AURORE", icon=":material/summarize:"):
                 with st.spinner("AURORE résume la discussion…"):
-                    resume = self.agent.resumer_conversation()
+                    resume = self.ctx.agent.resumer_conversation()
 
-                self.fiche_evenement.ajouter_echange("Discussion avec AURORE", resume)
+                self.ctx.fiche_evenement.ajouter_echange("Discussion avec AURORE", resume)
                 st.rerun()
 
         with st.expander("Noter un échange (rendez-vous, appel, message…)", icon=":material/add:"):
@@ -138,10 +140,10 @@ class VueFiche:
                 resume = st.text_area("Ce qui a été dit ou décidé")
 
                 if st.form_submit_button("Ajouter à l'historique") and resume:
-                    self.fiche_evenement.ajouter_echange(source, resume)
+                    self.ctx.fiche_evenement.ajouter_echange(source, resume)
                     st.rerun()
 
-        historique = self.fiche_evenement.donnees["historique"]
+        historique = self.ctx.fiche_evenement.donnees["historique"]
 
         if not historique:
             st.caption("Aucun échange enregistré pour l'instant.")
@@ -154,12 +156,12 @@ class VueFiche:
 
 
     def afficher_consentement_sante(self):
-        donnees = self.fiche_evenement.donnees
+        donnees = self.ctx.fiche_evenement.donnees
         accord = donnees["consentement_sante"] or {}
-        accorde = st.toggle(TEXTE_CONSENTEMENT_SANTE, value=bool(accord.get("accorde")), key=f"sante_{self.dossier_id}_{accord.get('accorde')}")
+        accorde = st.toggle(TEXTE_CONSENTEMENT_SANTE, value=bool(accord.get("accorde")), key=f"sante_{self.ctx.dossier_id}_{accord.get('accorde')}")
 
         if accorde != bool(accord.get("accorde")):
-            self.fiche_evenement.definir_consentement("consentement_sante", consentement(accorde))
+            self.ctx.fiche_evenement.definir_consentement("consentement_sante", consentement(accorde))
             st.rerun()
 
         if accord:
@@ -173,24 +175,24 @@ class VueFiche:
 
 
     def afficher_consentements_image(self):
-        consentements = self.fiche_evenement.donnees["droit_image"]
+        consentements = self.ctx.fiche_evenement.donnees["droit_image"]
 
         for index, element in enumerate(consentements):
             texte, retirer = st.columns([5, 1], vertical_alignment="center")
             texte.markdown(f"**{element['personne']}** · {element['perimetre']} · :gray[recueilli le {date_lisible(element['date'])}]")
 
-            if self.profil == ORGANISATEUR and retirer.button("Retirer", key=f"retirer_image_{index}", type="tertiary"):
-                self.fiche_evenement.definir_consentement("droit_image", consentements[:index] + consentements[index + 1:])
+            if self.ctx.profil == ORGANISATEUR and retirer.button("Retirer", key=f"retirer_image_{index}", type="tertiary"):
+                self.ctx.fiche_evenement.definir_consentement("droit_image", consentements[:index] + consentements[index + 1:])
                 st.rerun()
 
         if not consentements:
             st.caption("Aucun consentement de droit à l'image enregistré : seules les photos de décor sont publiables.")
 
-        if self.profil != ORGANISATEUR:
+        if self.ctx.profil != ORGANISATEUR:
             return
 
-        with st.form(f"form_droit_image_{self.dossier_id}", clear_on_submit=True):
-            personnes = personnes_du_dossier(self.fiche_evenement.donnees)
+        with st.form(f"form_droit_image_{self.ctx.dossier_id}", clear_on_submit=True):
+            personnes = personnes_du_dossier(self.ctx.fiche_evenement.donnees)
             gauche, milieu, droite = st.columns([2, 2, 1])
             personne = gauche.selectbox("Personne", personnes + ["Autre (préciser)"]) if personnes else "Autre (préciser)"
             autre = gauche.text_input("Nom") if not personnes else ""
@@ -203,28 +205,28 @@ class VueFiche:
 
                 if nom:
                     autres = [element for element in consentements if element["personne"] != nom]
-                    self.fiche_evenement.definir_consentement(
+                    self.ctx.fiche_evenement.definir_consentement(
                         "droit_image", autres + [{"personne": nom, "perimetre": perimetre, "date": str(jour)}]
                     )
                     st.rerun()
 
 
     def retirer_dossier(self):
-        supprimer_dossier(self.dossier_id)
+        supprimer_dossier(self.ctx.dossier_id)
         nettoyer_index()
 
-        for cle in [cle for cle in st.session_state if self.dossier_id in str(cle)]:
+        for cle in [cle for cle in st.session_state if self.ctx.dossier_id in str(cle)]:
             del st.session_state[cle]
 
         st.session_state.dossier_actif = None
-        self.agenda.charger()
+        self.ctx.agenda.charger()
 
 
     def afficher_donnees_client(self):
         with st.expander("Données personnelles du client (RGPD)", icon=":material/shield_person:"):
             st.download_button(
                 "Exporter toutes les données de ce client (JSON)", icon=":material/download:",
-                data=exporter(self.dossier_id), file_name=f"aurore-dossier-{self.dossier_id}.json", mime="application/json"
+                data=exporter(self.ctx.dossier_id), file_name=f"aurore-dossier-{self.ctx.dossier_id}.json", mime="application/json"
             )
             st.divider()
             st.markdown("**Supprimer ce dossier**")
@@ -232,7 +234,7 @@ class VueFiche:
                 "Supprime définitivement la fiche, l'historique, le budget, les devis, les invités, les messages, "
                 "les documents, les photos et les rendez-vous de ce client. Cette action est irréversible : exportez d'abord si besoin."
             )
-            confirme = st.checkbox(f"Je confirme la suppression définitive du dossier « {libelle_dossier(self.fiche_evenement.donnees)} »")
+            confirme = st.checkbox(f"Je confirme la suppression définitive du dossier « {libelle_dossier(self.ctx.fiche_evenement.donnees)} »")
             st.button(
                 "Supprimer définitivement", icon=":material/delete_forever:", type="primary",
                 disabled=not confirme, on_click=self.retirer_dossier
@@ -250,5 +252,5 @@ class VueFiche:
         self.afficher_consentements_image()
 
         self.afficher_historique()
-        self.afficher_acces_prives()
+        VueConnexion(self.ctx).afficher_acces_prives()
         self.afficher_donnees_client()

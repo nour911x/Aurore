@@ -7,20 +7,23 @@ from metier.invites import GROUPES, STATUTS_INVITE, generer_faire_part_pdf, lire
 from metier.messages import destinataire_prestataire, suggestion
 from metier.rgpd import CATEGORIE_DONNEES_SANTE, recap_sans_sante, sante_partageable
 from textes import pluriel
+from ui import composants
 from ui.commun import COLONNES_INVITES, CONFIG_COLONNES_INVITES, ICONES_INVITE
+from ui.contexte import Vue
+from ui.messages import VueMessages
 
 
-class VueInvites:
+class VueInvites(Vue):
     def apres_modif_invites(self):
         st.session_state.version_invites += 1
         st.rerun()
 
 
     def afficher_compteurs_invites(self):
-        compteurs = self.liste_invites.compter_par_statut()
-        self.afficher_compteurs(
+        compteurs = self.ctx.liste_invites.compter_par_statut()
+        composants.afficher_compteurs(
             {f"{ICONES_INVITE[statut]} {statut}": compteurs[statut] for statut in STATUTS_INVITE}
-            | {":material/groups: Personnes attendues": self.liste_invites.personnes(["Invité", "Confirmé"])}
+            | {":material/groups: Personnes attendues": self.ctx.liste_invites.personnes(["Invité", "Confirmé"])}
         )
 
 
@@ -36,7 +39,7 @@ class VueInvites:
                 return
 
             contacts = lire_contacts(fichier.name, fichier.getvalue())
-            nouveaux = self.liste_invites.a_importer(contacts)
+            nouveaux = self.ctx.liste_invites.a_importer(contacts)
             st.markdown(
                 f"**{pluriel(len(nouveaux), 'contact à importer', 'contacts à importer')}**"
                 + (f" · {pluriel(len(contacts) - len(nouveaux), 'doublon ignoré', 'doublons ignorés')}" if len(contacts) > len(nouveaux) else "")
@@ -49,7 +52,7 @@ class VueInvites:
             groupe = st.selectbox("Groupe à attribuer", GROUPES)
 
             if nouveaux and st.button(f"Importer {pluriel(len(nouveaux), 'contact')}", icon=":material/person_add:", type="primary"):
-                importes = self.liste_invites.importer(contacts, groupe)
+                importes = self.ctx.liste_invites.importer(contacts, groupe)
                 st.session_state.message_import = f"{pluriel(importes, 'contact importé', 'contacts importés')} dans le groupe {groupe}."
                 self.apres_modif_invites()
 
@@ -59,35 +62,35 @@ class VueInvites:
 
     def afficher_table_invites(self):
         st.caption("Modifie directement le tableau. Ajoute une ligne tout en bas, supprime en cochant à gauche.")
-        self.editer_tableau(
-            "invites", self.liste_invites.invites, COLONNES_INVITES, CONFIG_COLONNES_INVITES,
-            nettoyer, self.liste_invites.remplacer
+        composants.editer_tableau(
+            "invites", self.ctx.liste_invites.invites, COLONNES_INVITES, CONFIG_COLONNES_INVITES,
+            nettoyer, self.ctx.liste_invites.remplacer
         )
 
 
     def afficher_redaction_faire_part(self):
         if st.button("Rédiger le faire-part avec AURORE", icon=":material/auto_awesome:"):
             with st.spinner("AURORE écrit votre faire-part…"):
-                self.liste_invites.definir_faire_part(
-                    self.agent.rediger_faire_part(self.fiche_evenement.infos_sans_historique())
+                self.ctx.liste_invites.definir_faire_part(
+                    self.ctx.agent.rediger_faire_part(self.ctx.fiche_evenement.infos_sans_historique())
                 )
 
-        valide = self.liste_invites.faire_part_valide
-        faire_part = st.text_area("Texte du faire-part", value=self.liste_invites.faire_part, height=200, disabled=valide)
+        valide = self.ctx.liste_invites.faire_part_valide
+        faire_part = st.text_area("Texte du faire-part", value=self.ctx.liste_invites.faire_part, height=200, disabled=valide)
 
-        if faire_part != self.liste_invites.faire_part:
-            self.liste_invites.definir_faire_part(faire_part)
+        if faire_part != self.ctx.liste_invites.faire_part:
+            self.ctx.liste_invites.definir_faire_part(faire_part)
 
         if faire_part and valide:
             st.markdown(":green[:material/task_alt: Texte validé, prêt à être envoyé]")
-            st.button("Modifier le texte", icon=":material/edit:", on_click=self.liste_invites.valider_faire_part, args=(False,))
+            st.button("Modifier le texte", icon=":material/edit:", on_click=self.ctx.liste_invites.valider_faire_part, args=(False,))
         elif faire_part:
-            st.button("Valider le texte", icon=":material/task_alt:", type="primary", on_click=self.liste_invites.valider_faire_part)
+            st.button("Valider le texte", icon=":material/task_alt:", type="primary", on_click=self.ctx.liste_invites.valider_faire_part)
 
         if faire_part:
             st.download_button(
                 "Télécharger le faire-part (PDF)", icon=":material/download:",
-                data=generer_faire_part_pdf(faire_part, self.fiche_evenement.donnees),
+                data=generer_faire_part_pdf(faire_part, self.ctx.fiche_evenement.donnees),
                 file_name="faire-part.pdf",
                 mime="application/pdf"
             )
@@ -96,13 +99,13 @@ class VueInvites:
     def afficher_envoi_faire_parts(self):
         st.subheader(":material/send: Envoyer les faire-parts")
 
-        if not self.liste_invites.faire_part_valide:
+        if not self.ctx.liste_invites.faire_part_valide:
             st.info("Rédigez puis validez le texte du faire-part ci-dessus avant de l'envoyer.")
             return
 
         groupes = st.multiselect("Envoyer à", GROUPES, default=GROUPES)
         selection = [
-            invite for invite in self.liste_invites.invites
+            invite for invite in self.ctx.liste_invites.invites
             if invite["statut"] == "À inviter" and invite["groupe"] in groupes
         ]
         st.caption(f"{pluriel(len(selection), "invité n'a", "invités n'ont")} pas encore reçu le faire-part.")
@@ -112,23 +115,23 @@ class VueInvites:
                 st.markdown(f"**{invite['nom']}** · {invite['groupe']}")
 
                 if invite["telephone"] or invite["email"]:
-                    self.afficher_boutons_contact(
+                    composants.afficher_boutons_contact(
                         invite["telephone"], invite["email"],
-                        message=message_personnel(invite, self.liste_invites.faire_part), sujet="Faire-part"
+                        message=message_personnel(invite, self.ctx.liste_invites.faire_part), sujet="Faire-part"
                     )
                 else:
                     st.caption("Pas de téléphone ni d'email : ajoute-les dans la liste.")
 
                 if st.button("Marquer comme invité", icon=":material/check_circle:", key=f"invite_{invite['id']}"):
-                    self.liste_invites.changer_statut(invite["id"], "Invité")
+                    self.ctx.liste_invites.changer_statut(invite["id"], "Invité")
                     self.apres_modif_invites()
 
 
     def afficher_recap_traiteur(self):
         recap = self.afficher_recap_invites()
-        traiteurs = {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires if prestataire["categorie"] == CATEGORIE_DONNEES_SANTE}
+        traiteurs = {prestataire["nom"]: prestataire for prestataire in self.ctx.carnet.prestataires if prestataire["categorie"] == CATEGORIE_DONNEES_SANTE}
 
-        if not sante_partageable(self.fiche_evenement.donnees):
+        if not sante_partageable(self.ctx.fiche_evenement.donnees):
             st.warning(
                 "Le client n'a pas donné son accord pour partager les allergies et les régimes : "
                 "le message au traiteur ne contiendra que le nombre de couverts. Recueillez son accord dans la fiche client.",
@@ -144,12 +147,12 @@ class VueInvites:
 
         if st.button("Préparer le message pour le traiteur", icon=":material/mail:"):
             cle = f"recap_traiteur_{uuid.uuid4().hex[:8]}"
-            self.rediger(suggestion(cle, "recap_traiteur", destinataire_prestataire(traiteur), recap))
+            VueMessages(self.ctx).rediger(suggestion(cle, "recap_traiteur", destinataire_prestataire(traiteur), recap))
 
 
     def afficher_recap_invites(self):
-        recap = self.liste_invites.recap_traiteur()
-        self.afficher_compteurs({
+        recap = self.ctx.liste_invites.recap_traiteur()
+        composants.afficher_compteurs({
             ":material/restaurant: Couverts confirmés": recap["couverts_confirmes"],
             "⏳ Couverts attendus": recap["couverts_attendus"]
         })
@@ -175,7 +178,7 @@ class VueInvites:
         )
 
         with panneau_liste:
-            if self.liste_invites.invites:
+            if self.ctx.liste_invites.invites:
                 self.afficher_compteurs_invites()
 
             self.afficher_import_contacts()

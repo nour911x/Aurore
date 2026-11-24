@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import uuid
 from datetime import date
@@ -10,7 +11,7 @@ from metier.devis import date_lisible
 from textes import noms_courts
 
 
-RACINE = Path(__file__).parent.parent
+RACINE = Path(os.environ.get("AURORE_DONNEES") or Path(__file__).parent.parent)
 
 NOM_FICHE = "event_data"
 

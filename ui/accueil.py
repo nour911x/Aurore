@@ -1,19 +1,20 @@
-import base64
 from datetime import datetime
 
 import streamlit as st
 
-from config.profils import ORGANISATEUR
 from donnees.demo import creer_demo, demo_active, retirer_demo
 from metier.accueil import JOURS_SURVEILLANCE, synthese
 from metier.devis import date_lisible
-from textes import RACCOURCIS, RACCOURCIS_CLIENTS, RACCOURCIS_PRESTATAIRE, montant, pluriel
+from textes import RACCOURCIS, montant, pluriel
+from ui import composants
 from ui.commun import echeance_lisible, heure_rdv, ouvrir_dossier
-from ui.documents import nettoyer_index
-from ui.habillage import AVERTISSEMENT_HTML, accueil_html, aujourdhui_html
+from ui.contexte import Vue
+from ui.discussion import VueDiscussion
+from ui.habillage import aujourdhui_html
+from ui.index_documents import nettoyer_index
 
 
-class VueAccueil:
+class VueAccueil(Vue):
     @staticmethod
     def bouton_ouvrir(cle, dossier_id, onglet, section=None, libelle="Ouvrir le dossier"):
         st.button(
@@ -63,7 +64,7 @@ class VueAccueil:
 
 
     def confirmer_rdv(self, rdv):
-        self.agenda.confirmer(rdv["titre"], rdv["date_heure"], rdv["dossier_id"])
+        self.ctx.agenda.confirmer(rdv["titre"], rdv["date_heure"], rdv["dossier_id"])
 
 
     def afficher_a_faire(self, elements):
@@ -131,14 +132,14 @@ class VueAccueil:
                 if st.button("Retirer les données de démonstration", icon=":material/delete:"):
                     retirer_demo()
                     nettoyer_index()
-                    self.recharger_donnees()
+                    self.ctx.recharger_donnees()
                     st.rerun()
             else:
                 st.caption("Ajoute un anniversaire, une baby shower et des éléments au mariage de Léa & Liam, datés à partir d'aujourd'hui.")
 
                 if st.button("Ajouter les données de démonstration", icon=":material/add:"):
                     creer_demo()
-                    self.recharger_donnees()
+                    self.ctx.recharger_donnees()
                     st.rerun()
 
 
@@ -146,7 +147,7 @@ class VueAccueil:
         maintenant = datetime.now()
         donnees = synthese(maintenant=maintenant)
         st.markdown(aujourdhui_html(maintenant), unsafe_allow_html=True)
-        self.afficher_compteurs({
+        composants.afficher_compteurs({
             ":material/today: Rendez-vous aujourd'hui": len(donnees["rdvs_du_jour"]),
             ":material/task_alt: Dossiers à traiter": len(donnees["a_faire"]),
             ":material/payments: Paiements à suivre": len(donnees["paiements"]),
@@ -167,47 +168,11 @@ class VueAccueil:
 
 
     def afficher_tableau_de_bord(self):
-        historique = self.agent.lire_historique()
+        historique = self.ctx.agent.lire_historique()
         self.afficher_aujourd_hui()
         st.caption("Demander à AURORE")
-        self.afficher_boutons_messages("raccourcis", RACCOURCIS)
+        composants.afficher_boutons_messages("raccourcis", RACCOURCIS)
 
         if historique:
             st.caption("Dernier échange avec AURORE. Toute la discussion est dans l'onglet Messages.")
-            self.afficher_conversation(historique[-2:])
-
-
-    def afficher_accueil(self, profil):
-        st.markdown(accueil_html(profil), unsafe_allow_html=True)
-
-
-    def afficher_conversation(self, messages):
-        for message in messages:
-            with st.chat_message(message["role"]):
-                if message.get("image"):
-                    st.image(base64.b64decode(message["image"]), width=280)
-
-                st.markdown(message["content"])
-                self.afficher_sources(message.get("sources"))
-
-        st.markdown(AVERTISSEMENT_HTML, unsafe_allow_html=True)
-
-
-    def afficher_discussion(self, profil):
-        historique = self.agent.lire_historique()
-
-        if historique:
-            st.button(
-                "Nouvelle conversation", icon=":material/add_comment:", key="nouvelle_conversation",
-                on_click=self.nouvelle_conversation, args=(profil,)
-            )
-
-        if profil != ORGANISATEUR:
-            if not historique:
-                self.afficher_accueil(profil)
-
-            self.afficher_boutons_messages("raccourcis", RACCOURCIS_PRESTATAIRE if self.prestataire else RACCOURCIS_CLIENTS)
-        elif not historique:
-            st.caption("Aucune discussion pour l'instant : écrivez à AURORE dans la zone de saisie en bas de page.")
-
-        self.afficher_conversation(historique)
+            VueDiscussion(self.ctx).afficher_conversation(historique[-2:])
