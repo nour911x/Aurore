@@ -51,7 +51,7 @@ Dans `config/features.py`. Un module désactivé n'apparaît pas dans l'interfac
 |---|---|---|
 | `INSTAGRAM_FEEDBACK` | `False` | Publication Instagram et avis transformés en posts |
 | `PINTEREST_MOODBOARD_AUTO` | `False` | Liens Pinterest générés pour le moodboard |
-| `DIGITAL_EVENT_REPRESENTATION` | `False` | Salle en 3D |
+| `DIGITAL_EVENT_REPRESENTATION` | `True` | Salle en 3D |
 | `WHATSAPP_AUTO_SEND` | `False` | Réservé : aucun envoi automatique n'existe et ce flag doit rester à `False` |
 | `VENDOR_RECOMMENDATIONS` | `False` | Recommandations de boutiques et de maquilleurs |
 | `CLIENT_PORTAL` | `True` | Vue Clients (lecture seule) |

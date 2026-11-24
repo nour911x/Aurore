@@ -1,0 +1,72 @@
+.salle {
+    position: relative;
+    height: 560px;
+    overflow: hidden;
+    border: 1px solid var(--filet, #E6DFD4);
+    border-radius: 3px;
+    background: #FAF7F2;
+    font-family: 'Jost', sans-serif;
+    font-size: 14px;
+    color: #141210;
+}
+
+.salle canvas {
+    display: block;
+    touch-action: none;
+}
+
+.salle .commandes {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.salle button {
+    padding: 6px 12px;
+    border: 1px solid #141210;
+    border-radius: 3px;
+    background: #FFFFFF;
+    color: #141210;
+    font: inherit;
+    cursor: pointer;
+}
+
+.salle button:hover { border-color: #80622F; color: #80622F; }
+
+.salle button[aria-pressed="true"] { background: #141210; color: #FAF7F2; }
+
+.salle button:focus-visible { outline: 2px solid #B8975A; outline-offset: 2px; }
+
+.salle .bulle {
+    position: absolute;
+    display: none;
+    max-width: 260px;
+    padding: 10px 14px;
+    border: 1px solid #E6DFD4;
+    border-radius: 3px;
+    background: #FFFFFF;
+    pointer-events: none;
+}
+
+.salle .bulle strong {
+    display: block;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 20px;
+    font-weight: 400;
+}
+
+.salle .aide {
+    position: absolute;
+    bottom: 10px;
+    left: 14px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+    color: #6B645C;
+    pointer-events: none;
+}

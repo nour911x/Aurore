@@ -373,3 +373,15 @@ Les sections précédentes gardent les noms de l'époque. Ce tableau donne leur 
 - **Sécurité** : les textes du moodboard, écrits par l'IA, sont maintenant échappés avant affichage.
 - **Non modifié** : couleurs des PDF (devis, faire-part, moodboard) et de la salle 3D.
 - **Tests** : 232. Rendu vérifié par captures à 1280 et 1920 px.
+
+---
+
+## Salle en 3D (`feature/salle-3d`)
+
+- `DIGITAL_EVENT_REPRESENTATION` passe à `True` (Planning › Salle en 3D).
+- **Réglages** : nombre d'invités, nombre de tables (0 = calculé), forme, places, table d'honneur, éléments (piste, DJ, buffet, bar, photobooth, arche, gâteau), couleurs (moodboard par défaut).
+- **Placement** : glisser-déposer dans la 3D, ou choix d'un emplacement dans une liste (accessible au clavier). Positions enregistrées dans la salle et partagées avec le plan 2D.
+- **Contrôles** : places manquantes, éléments qui se chevauchent, impossibilité de sortir de la salle, déplacement invalide refusé.
+- **Vues** : ensemble, dessus, invité, soirée ; image téléchargeable.
+- **Limites** : salle de 25 m de large, profondeur calculée ; éléments non orientables ; les chevauchements ne comptent pas les chaises.
+- **Tests** : 280. Le glisser-déposer, les vues et le téléchargement ont été vérifiés dans Edge par script, hors de la suite de tests.

@@ -5,12 +5,14 @@ from groq import APIError
 
 from config.profils import ORGANISATEUR
 from donnees.dossiers import libelle_dossier
+from donnees.stockage import premier
 from metier.agenda import AUTRE_TYPE, TYPES_RDV, bornes, type_rdv
 from metier.jour_j import (
     AUCUNE_TABLE,
     COLONNES_DEROULE,
     ELEMENTS_SALLE,
     FORMES_TABLE,
+    TABLE_HONNEUR,
     creer_tables,
     generer_deroule_pdf,
     generer_plan_table_pdf,
@@ -20,11 +22,14 @@ from metier.jour_j import (
 )
 from metier.messages import fiche_publique
 from metier.rgpd import CATEGORIE_DONNEES_SANTE, recap_anonyme, recap_sans_sante, sante_partageable
+from metier.salle import EMPLACEMENTS, MARGE, chevauchements, couleurs_salle, disposer, tables_necessaires
+from metier.salle import emplacement as emplacement_dans_la_salle
 from textes import CHOIX_TYPE_RDV, date_longue, pluriel
 from ui import composants, design
 from ui.commun import AUCUN, CONFIG_COLONNES_DEROULE, DELAI_BRIEFING_AUTOMATIQUE, FORMAT_DATE
 from ui.contexte import Vue
-from ui.habillage import disposition_salle, frise_html, plan_salle_html, salle_3d_html
+from ui.habillage import frise_html, plan_salle_html
+from ui.salle_3d import salle_3d
 
 
 class VuePlanning(Vue):
@@ -228,18 +233,35 @@ class VuePlanning(Vue):
             )
 
 
-    def afficher_amenagement(self, total_personnes):
-        with st.expander("Aménager la salle", icon=":material/construction:", expanded=not self.ctx.jour_j.salle["tables"]):
-            with st.form("form_salle"):
-                gauche, milieu, droite = st.columns(3)
-                forme = gauche.selectbox("Forme des tables", FORMES_TABLE)
-                places = milieu.number_input("Places par table", min_value=2, max_value=20, value=8)
-                places_honneur = droite.number_input("Table d'honneur (places, 0 = aucune)", min_value=0, max_value=30, value=10)
-                suggestion_tables = max(1, -(-max(total_personnes - places_honneur, 0) // places))
-                nombre = st.number_input("Nombre de tables", min_value=1, max_value=60, value=suggestion_tables)
-                elements = st.multiselect("Dans la salle", ELEMENTS_SALLE, default=self.ctx.jour_j.salle["elements"] or ELEMENTS_SALLE[:3])
+    def invites_prevus(self, total_personnes):
+        return max(total_personnes, int(self.ctx.fiche_evenement.donnees["nombre_invites"] or 0))
 
-                if st.form_submit_button("Créer le plan de la salle"):
+
+    def afficher_amenagement(self, total_personnes):
+        salle = self.ctx.jour_j.salle
+
+        with st.expander("Aménager la salle", icon=":material/construction:", expanded=not salle["tables"]):
+            with st.form("form_salle"):
+                honneur = premier(salle["tables"], nom=TABLE_HONNEUR)
+                ordinaires = [table for table in salle["tables"] if table["nom"] != TABLE_HONNEUR]
+                modele = ordinaires[0] if ordinaires else {"forme": FORMES_TABLE[0], "places": 8}
+                gauche, droite = st.columns(2)
+                invites = gauche.number_input("Nombre d'invités", min_value=0, max_value=1000, value=self.invites_prevus(total_personnes))
+                nombre = droite.number_input(
+                    "Nombre de tables", min_value=0, max_value=60, value=len(ordinaires), help="0 : calculé d'après le nombre d'invités."
+                )
+                gauche, droite = st.columns(2)
+                forme = gauche.selectbox("Forme des tables", FORMES_TABLE, index=FORMES_TABLE.index(modele["forme"]))
+                places = droite.number_input("Places par table", min_value=2, max_value=20, value=modele["places"])
+                gauche, droite = st.columns(2)
+                places_honneur = gauche.number_input(
+                    "Places à la table d'honneur", min_value=0, max_value=30,
+                    value=honneur["places"] if honneur else 0 if salle["tables"] else 10, help="0 : pas de table d'honneur."
+                )
+                elements = droite.multiselect("Dans la salle", ELEMENTS_SALLE, default=salle["elements"] or ELEMENTS_SALLE[:3])
+
+                if st.form_submit_button("Créer le plan de la salle", type="primary"):
+                    nombre = nombre or min(60, tables_necessaires(invites, places, places_honneur))
                     self.ctx.jour_j.amenager(creer_tables(nombre, places, forme, places_honneur), elements)
                     st.session_state["version_placement"] = st.session_state.get("version_placement", 0) + 1
                     st.rerun()
@@ -348,18 +370,80 @@ class VuePlanning(Vue):
 
 
     def disposition_salle(self, repartition):
-        return disposition_salle(self.ctx.jour_j.salle["tables"], repartition, self.ctx.jour_j.salle["elements"])
+        return disposer(self.ctx.jour_j.salle, repartition)
+
+
+    def deplacer_element(self):
+        deplacement = st.session_state["salle_3d"].deplacement
+
+        try:
+            self.ctx.jour_j.placer_element(deplacement["nom"], deplacement["x"], deplacement["y"])
+        except (KeyError, TypeError, ValueError):
+            st.session_state.deplacement_refuse = True
+
+
+    def afficher_emplacements(self, disposition):
+        with st.expander("Placer un élément sans la souris", icon=":material/place:"):
+            with st.form("form_emplacement"):
+                gauche, droite = st.columns(2)
+                nom = gauche.selectbox("Élément", [objet["nom"] for objet in disposition["objets"]])
+                choix = droite.selectbox("Emplacement", list(EMPLACEMENTS))
+
+                if st.form_submit_button("Placer"):
+                    self.ctx.jour_j.placer_element(nom, *emplacement_dans_la_salle(disposition, nom, choix))
+                    st.rerun()
+
+
+    def afficher_couleurs_salle(self, couleurs):
+        with st.expander("Couleurs de la décoration", icon=":material/palette:"):
+            with st.form("form_couleurs_salle"):
+                gauche, droite = st.columns(2)
+                nappe = gauche.color_picker("Nappes", couleurs["nappe"])
+                accent = droite.color_picker("Fleurs et détails", couleurs["accent"])
+
+                if st.form_submit_button("Appliquer"):
+                    self.ctx.jour_j.definir_couleurs({"nappe": nappe, "accent": accent})
+                    st.rerun()
+
+
+    def afficher_controle_salle(self, disposition):
+        salle = self.ctx.jour_j.salle
+        places = sum(table["places"] for table in salle["tables"])
+        a_placer = invites_a_placer(self.ctx.liste_invites.invites)
+        attendus = self.invites_prevus(sum(personnes(invite) for invite in a_placer))
+        design.indicateurs({"Tables": len(salle["tables"]), "Places": places, "Invités prévus": attendus}, {"Places"} if places < attendus else ())
+
+        if places < attendus:
+            st.warning(f"Il manque {pluriel(attendus - places, 'place')} pour asseoir tout le monde.", icon=":material/chair:")
+
+        conflits = [f"{premier_nom} et {second_nom}" for premier_nom, second_nom in chevauchements(disposition)]
+
+        if conflits:
+            st.warning(f"Ces éléments se chevauchent : {', '.join(conflits)}.", icon=":material/warning:")
+
+        if st.session_state.pop("deplacement_refuse", False):
+            st.error("Ce déplacement n'a pas pu être enregistré.", icon=":material/error:")
 
 
     def afficher_salle_3d(self):
-        if not self.ctx.jour_j.salle["tables"]:
-            st.info("Aménagez d'abord la salle dans Plan de salle : la 3D est construite à partir du plan.")
+        jour_j = self.ctx.jour_j
+        self.afficher_amenagement(sum(personnes(invite) for invite in invites_a_placer(self.ctx.liste_invites.invites)))
+
+        if not jour_j.salle["tables"]:
+            design.vide("Aménagez la salle pour la voir en 3D.")
             return
 
-        palette = [couleur["hex"] for couleur in self.ctx.inspiration.moodboard.get("couleurs", [])]
-        st.caption(
-            "La salle est construite à partir de ton plan de salle, aux couleurs du moodboard."
-            if palette else "Créez le moodboard dans Inspiration & galerie pour habiller la salle à vos couleurs."
+        disposition = self.disposition_salle(jour_j.par_table(self.ctx.liste_invites.invites))
+        couleurs = couleurs_salle(jour_j.salle, self.ctx.inspiration.moodboard)
+        self.afficher_controle_salle(disposition)
+        salle_3d(
+            key="salle_3d", data={**disposition, "couleurs": couleurs, "marge": MARGE},
+            on_deplacement_change=self.deplacer_element
         )
-        disposition = self.disposition_salle(self.ctx.jour_j.par_table(self.ctx.liste_invites.invites))
-        st.iframe(salle_3d_html(disposition, palette), height=620)
+        st.caption("Chaise dorée : place occupée d'après le plan de table. Les positions sont aussi celles du Plan de salle.")
+        self.afficher_couleurs_salle(couleurs)
+        self.afficher_emplacements(disposition)
+
+        if jour_j.salle["positions"] and st.button("Revenir à la disposition automatique", icon=":material/restart_alt:"):
+            jour_j.reinitialiser_positions()
+            st.rerun()
