@@ -4,15 +4,14 @@ import pandas as pd
 import streamlit as st
 
 from config.evenements import champs_du_type
-from config.profils import CLIENTS
 from metier.devis import date_lisible
 from metier.jour_j import personnes
 from metier.rgpd import CATEGORIE_DONNEES_SANTE, sante_partageable
 from textes import date_longue, montant
-from ui import composants
+from ui import design
 from ui.budget import VueBudget
 from ui.contexte import Vue
-from ui.habillage import accueil_html, frise_html
+from ui.habillage import frise_html
 from ui.invites import VueInvites
 from ui.planning import VuePlanning
 
@@ -21,7 +20,7 @@ class VuesPartagees(Vue):
     def afficher_evenement(self):
         infos = self.ctx.infos_pour_destinataire(self.ctx.prestataire["id"])
         utiles = self.ctx.infos_utiles()
-        composants.afficher_compteurs({
+        design.indicateurs({
             ":material/event: Date": date_lisible(infos["date"]) or "À définir",
             ":material/location_on: Lieu": infos["lieu"] or "À définir",
             ":material/groups: Invités prévus": infos["nombre_invites"] or "À définir"
@@ -39,17 +38,17 @@ class VuesPartagees(Vue):
                 st.markdown(f"**{titre}** : {', '.join(infos[cle])}")
 
         if "invites" in utiles:
-            st.subheader(":material/restaurant: Les invités")
+            design.titre_section(":material/restaurant: Les invités")
             VueInvites(self.ctx).afficher_recap_invites()
         elif "couverts" in utiles:
             recap = self.ctx.liste_invites.recap_traiteur()
-            composants.afficher_compteurs({
+            design.indicateurs({
                 ":material/restaurant: Couverts confirmés": recap["couverts_confirmes"],
                 ":material/hourglass_top: Couverts attendus": recap["couverts_attendus"]
             })
 
         if self.ctx.jour_j.salle["tables"] and "tables" in utiles:
-            st.subheader(":material/chair: Couverts par table")
+            design.titre_section(":material/chair: Couverts par table")
             repartition = self.ctx.jour_j.par_table(self.ctx.liste_invites.invites)
             st.dataframe(
                 pd.DataFrame([
@@ -65,7 +64,7 @@ class VuesPartagees(Vue):
             )
 
         if self.ctx.jour_j.deroule:
-            st.subheader(":material/schedule: Déroulé du jour J")
+            design.titre_section(":material/schedule: Déroulé du jour J")
             st.caption("Vos créneaux sont mis en avant.")
             st.markdown(frise_html(self.ctx.jour_j.deroule, self.ctx.prestataire["nom"]), unsafe_allow_html=True)
 
@@ -74,7 +73,7 @@ class VuesPartagees(Vue):
         rdvs = self.ctx.agenda.rdvs_a_venir()
 
         if not rdvs:
-            st.caption("Aucun rendez-vous prévu pour l'instant.")
+            design.vide("Aucun rendez-vous prévu pour l'instant.")
 
         for rdv in rdvs:
             debut = datetime.fromisoformat(rdv["date_heure"])
@@ -83,8 +82,7 @@ class VuesPartagees(Vue):
 
     def afficher_recap_client(self):
         donnees = self.ctx.fiche_evenement.donnees
-        st.markdown(accueil_html(CLIENTS), unsafe_allow_html=True)
-        composants.afficher_compteurs({
+        design.indicateurs({
             ":material/event: Date": date_lisible(donnees["date"]) or "À définir",
             ":material/location_on: Lieu": donnees["lieu"] or "À définir",
             ":material/groups: Invités": donnees["nombre_invites"] or "À définir"
@@ -102,7 +100,7 @@ class VuesPartagees(Vue):
             if valeur:
                 st.markdown(f"**{libelle}** : {date_lisible(valeur) if cle.startswith('date') else valeur}")
 
-        st.subheader(":material/event: Prochains rendez-vous")
+        design.titre_section(":material/event: Prochains rendez-vous")
         self.afficher_prochains_rdvs()
 
 
@@ -143,11 +141,11 @@ class VuesPartagees(Vue):
 
     def afficher_devis_prestataire(self, profil):
         VueBudget(self.ctx).afficher_devis(profil)
-        st.subheader(":material/receipt_long: Factures")
+        design.titre_section(":material/receipt_long: Factures")
         factures = self.ctx.budget.factures_de(self.ctx.prestataire)
 
         if not factures:
-            st.caption("Aucune facture enregistrée pour votre prestation.")
+            design.vide("Aucune facture enregistrée pour votre prestation.")
 
         for facture in factures:
             statut = ":green[payée]" if facture["payee"] else f":orange[à régler avant le {date_lisible(facture['echeance'])}]"

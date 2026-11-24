@@ -2,7 +2,7 @@ import streamlit as st
 
 from metier.devis import date_lisible
 from textes import pluriel
-from ui import composants
+from ui import composants, design
 from ui.contexte import Vue
 from ui.index_documents import ouvrir_vector_db
 
@@ -44,7 +44,7 @@ class VueDocuments(Vue):
 
     def afficher_liste_documents(self):
         if not self.ctx.documents.documents:
-            st.caption("Aucun document pour l'instant.")
+            design.vide("Aucun document pour l'instant.")
 
         for document in self.ctx.documents.documents:
             infos, bouton = st.columns([5, 1], vertical_alignment="center")
@@ -80,5 +80,5 @@ class VueDocuments(Vue):
         self.afficher_liste_documents()
 
         if self.ctx.documents.documents:
-            st.subheader(":material/search: Interroger les documents")
+            design.titre_section(":material/search: Interroger les documents")
             self.afficher_question_documents()

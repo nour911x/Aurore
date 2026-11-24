@@ -7,7 +7,7 @@ from metier.invites import GROUPES, STATUTS_INVITE, generer_faire_part_pdf, lire
 from metier.messages import destinataire_prestataire, suggestion
 from metier.rgpd import CATEGORIE_DONNEES_SANTE, recap_sans_sante, sante_partageable
 from textes import pluriel
-from ui import composants
+from ui import composants, design
 from ui.commun import COLONNES_INVITES, CONFIG_COLONNES_INVITES, ICONES_INVITE
 from ui.contexte import Vue
 from ui.messages import VueMessages
@@ -21,7 +21,7 @@ class VueInvites(Vue):
 
     def afficher_compteurs_invites(self):
         compteurs = self.ctx.liste_invites.compter_par_statut()
-        composants.afficher_compteurs(
+        design.indicateurs(
             {f"{ICONES_INVITE[statut]} {statut}": compteurs[statut] for statut in STATUTS_INVITE}
             | {":material/groups: Personnes attendues": self.ctx.liste_invites.personnes(["Invité", "Confirmé"])}
         )
@@ -97,7 +97,7 @@ class VueInvites(Vue):
 
 
     def afficher_envoi_faire_parts(self):
-        st.subheader(":material/send: Envoyer les faire-parts")
+        design.titre_section(":material/send: Envoyer les faire-parts")
 
         if not self.ctx.liste_invites.faire_part_valide:
             st.info("Rédigez puis validez le texte du faire-part ci-dessus avant de l'envoyer.")
@@ -152,7 +152,7 @@ class VueInvites(Vue):
 
     def afficher_recap_invites(self):
         recap = self.ctx.liste_invites.recap_traiteur()
-        composants.afficher_compteurs({
+        design.indicateurs({
             ":material/restaurant: Couverts confirmés": recap["couverts_confirmes"],
             "⏳ Couverts attendus": recap["couverts_attendus"]
         })
@@ -174,7 +174,7 @@ class VueInvites(Vue):
 
     def afficher_invites(self):
         panneau_liste, panneau_faire_part, panneau_traiteur = st.tabs(
-            [":material/assignment: Liste", ":material/mail: Faire-parts", ":material/restaurant: Pour le traiteur"]
+            ["Liste", "Faire-parts", "Pour le traiteur"]
         )
 
         with panneau_liste:

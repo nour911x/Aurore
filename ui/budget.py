@@ -10,7 +10,7 @@ from metier.devis import STATUTS_DEVIS, date_lisible, date_validite, generer_pdf
 from metier.messages import EMETTEUR_AURORE, destinataire_clients, suggestion
 from metier.prestataires import meme_nom
 from textes import NOTES_DEVIS, echeance_texte, montant, noms_clients
-from ui import composants
+from ui import composants, design
 from ui.commun import COLONNES_DEVIS, CONFIG_COLONNES_DEVIS, FORMAT_DATE, lire_date
 from ui.contexte import Vue
 from ui.messages import VueMessages
@@ -98,7 +98,7 @@ class VueBudget(Vue):
         self.afficher_alertes_factures(self.ctx.budget)
 
         if not self.ctx.budget.postes:
-            st.info("Aucun poste de budget pour l'instant.")
+            design.vide("Aucun poste de budget pour l'instant.")
 
             if self.ctx.fiche_evenement.donnees["budget"] and st.button("Proposer une répartition adaptée à mon événement", icon=":material/lightbulb:"):
                     postes = self.ctx.agent.suggerer_budget_postes(self.ctx.fiche_evenement.donnees)
@@ -240,7 +240,7 @@ class VueBudget(Vue):
         ]
 
         if not devis_visibles:
-            st.info("Aucun devis pour l'instant.")
+            design.vide("Aucun devis pour l'instant.")
 
         for devis in reversed(devis_visibles):
             self.afficher_devis_carte(devis, profil)
