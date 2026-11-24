@@ -3,57 +3,17 @@ from datetime import date, datetime
 from html import escape
 from pathlib import Path
 
-from config.profils import CLIENTS
 from donnees.fiche_evenement import renseigne
 from metier.devis import date_lisible
 from metier.jour_j import TABLE_HONNEUR
-from textes import ACCUEILS, AVERTISSEMENT, BASELINE, date_longue, montant, noms_courts
+from textes import montant
 
 
 DOSSIER_ASSETS = Path(__file__).parent.parent / "assets"
 
-FICHIER_STYLE = DOSSIER_ASSETS / "style.css"
-
 FICHIER_SALLE_3D = DOSSIER_ASSETS / "salle_3d.html"
 
-PALETTE_PAR_DEFAUT = ["#B9506F", "#9CAF88", "#F8EDEF", "#E9C46A", "#FFFFFF"]
-
-FORMES = {"mariage": "petale", "baby": "feuille", "naissance": "feuille", "anniversaire": "confetti"}
-
-TEINTES_CONFETTI = ["#F0A273", "#E9C46A", "#F4C7CF", "#B9D3E8"]
-
-PLACEMENTS = [
-    (-3, 44, 40, -6, 6, 300),
-    (12, 28, 47, -24, -4, -260),
-    (31, 36, 53, -37, 5, 330),
-    (52, 24, 42, -14, -6, -290),
-    (70, 40, 50, -31, 4, 270),
-    (88, 30, 45, -9, -5, -310),
-    (97, 46, 56, -45, -3, 250)
-]
-
-THEME_PRO = """<style>
-:root {
-    --accent: #6E52A6;
-    --accent-fonce: #573F8C;
-    --lueur-1: #E4D5F5;
-    --lueur-2: #D8C7EF;
-    --lueur-3: #F1D7E6;
-}
-.particule.petale { background: linear-gradient(140deg, #EFE7FB, #D3C3EF 60%, #B39CDD); }
-button[role="tab"][aria-selected="true"] { background: var(--accent); }
-</style>"""
-
-AVERTISSEMENT_HTML = f'<div class="aurore-avertissement">{AVERTISSEMENT}</div>'
-
-
-def style_html():
-    return f"<style>{FICHIER_STYLE.read_text(encoding='utf-8')}</style>"
-
-
-def theme_html(profil):
-    return THEME_PRO if profil != CLIENTS else "<style></style>"
-
+PALETTE_PAR_DEFAUT = ["#B8975A", "#141210", "#E6DFD4", "#8C6D3A", "#FFFFFF"]
 
 def salutation():
     heure = datetime.now().hour
@@ -80,57 +40,6 @@ def compte_a_rebours(jours):
     return f"J-{jours}"
 
 
-def forme_particules(type_evenement):
-    texte = (type_evenement or "mariage").lower()
-
-    for mot, forme in FORMES.items():
-        if mot in texte:
-            return forme
-
-    return "lueur"
-
-
-def particules_html(type_evenement):
-    forme = forme_particules(type_evenement)
-    spans = []
-
-    for index, (gauche, taille, duree, delai, derive, rotation) in enumerate(PLACEMENTS):
-        teinte = f"--teinte:{TEINTES_CONFETTI[index % len(TEINTES_CONFETTI)]};" if forme == "confetti" else ""
-        spans.append(
-            f'<span class="particule {forme}" style="left:{gauche}%;--taille:{taille}px;'
-            f'--duree:{duree}s;--delai:{delai}s;--derive:{derive}vw;--rotation:{rotation}deg;{teinte}"></span>'
-        )
-
-    return f'<div class="particules" aria-hidden="true">{"".join(spans)}</div>'
-
-
-def marque_html(donnees_evenement):
-    compte = compte_a_rebours(jours_restants(donnees_evenement.get("date")))
-    noms = noms_courts(donnees_evenement.get("noms"))
-    pastille = " · ".join(filter(None, [compte, escape(noms)]))
-    pastille_html = f'<span class="aurore-compte">{pastille}</span>' if pastille else ""
-
-    return (
-        '<div class="aurore-marque"><span class="aurore-sceau">A</span>'
-        '<div><div class="aurore-nom">AURORE</div>'
-        f'<div class="aurore-sous-titre">{BASELINE}</div></div>'
-        f"{pastille_html}</div>"
-    )
-
-
-def accueil_html(profil):
-    titre, intro = ACCUEILS[profil]
-
-    return f'<div class="aurore-accueil"><h1>{salutation()}. {titre}</h1><p>{intro}</p></div>'
-
-
-def aujourdhui_html(maintenant):
-    return (
-        f'<div class="aurore-accueil aurore-jour"><h1>{salutation()}.</h1>'
-        f"<p>Voici votre journée du {date_longue(maintenant)}.</p></div>"
-    )
-
-
 def frise_html(deroule, mis_en_avant=None):
     etapes = []
 
@@ -145,7 +54,7 @@ def frise_html(deroule, mis_en_avant=None):
             f'<div><strong>{escape(ligne["moment"])}</strong>{infos_html}{details_html}</div></li>'
         )
 
-    return f'<ol class="aurore-frise">{"".join(etapes)}</ol>'
+    return f'<ol class="frise">{"".join(etapes)}</ol>'
 
 
 LARGEUR_PLAN = 880
@@ -221,7 +130,7 @@ def zone_svg(element):
     x, y, largeur, hauteur = element["x"], element["y"], element["largeur"], element["hauteur"]
 
     return (
-        f'<rect class="plan-zone" x="{x}" y="{y}" width="{largeur}" height="{hauteur}" rx="14"/>'
+        f'<rect class="plan-zone" x="{x}" y="{y}" width="{largeur}" height="{hauteur}" rx="3"/>'
         f'<text class="plan-texte" x="{x + largeur / 2}" y="{y + hauteur / 2 + 5}">{escape(element["libelle"])}</text>'
     )
 
@@ -235,7 +144,7 @@ def table_svg(table):
         forme = f'<circle class="{classe}" cx="{x}" cy="{y}" r="{table["largeur"] / 2}"/>'
     else:
         largeur, profondeur = table["largeur"], table["profondeur"]
-        forme = f'<rect class="{classe}" x="{x - largeur / 2}" y="{y - profondeur / 2}" width="{largeur}" height="{profondeur}" rx="8"/>'
+        forme = f'<rect class="{classe}" x="{x - largeur / 2}" y="{y - profondeur / 2}" width="{largeur}" height="{profondeur}" rx="3"/>'
 
     return (
         f"<g><title>{noms}</title>{forme}"
@@ -249,8 +158,8 @@ def plan_salle_html(disposition):
     morceaux = [zone_svg(element) for element in disposition["zones"]] + [table_svg(table) for table in disposition["tables"]]
 
     return (
-        f'<svg class="aurore-plan" viewBox="0 0 {largeur} {hauteur}" role="img" aria-label="Plan de salle">'
-        f'<rect class="plan-fond" x="2" y="2" width="{largeur - 4}" height="{hauteur - 4}" rx="24"/>'
+        f'<svg class="plan" viewBox="0 0 {largeur} {hauteur}" role="img" aria-label="Plan de salle">'
+        f'<rect class="plan-fond" x="2" y="2" width="{largeur - 4}" height="{hauteur - 4}" rx="3"/>'
         f'{"".join(morceaux)}</svg>'
     )
 
@@ -261,35 +170,30 @@ def salle_3d_html(disposition, palette):
     return FICHIER_SALLE_3D.read_text(encoding="utf-8").replace("__DONNEES__", donnees.replace("</", "<\\/"))
 
 
-def dossier_html(donnees_evenement, champs_essentiels, champs_details):
-    compte = compte_a_rebours(jours_restants(donnees_evenement["date"]))
-    badge = f'<span class="aurore-compte">{compte}</span>' if compte else ""
+def valeur_lisible(cle, contenu):
+    if isinstance(contenu, bool):
+        return "Oui" if contenu else "Non"
 
-    def valeur(cle):
-        contenu = donnees_evenement[cle]
+    if isinstance(contenu, list):
+        return ", ".join(contenu)
 
-        if isinstance(contenu, bool):
-            return "Oui" if contenu else "Non"
+    if cle.startswith("date"):
+        return date_lisible(contenu)
 
-        if isinstance(contenu, list):
-            return ", ".join(contenu)
+    if cle == "budget" and contenu:
+        return montant(contenu)
 
-        if cle.startswith("date"):
-            return date_lisible(contenu)
+    return contenu
 
-        if cle == "budget" and contenu:
-            return montant(contenu)
 
-        return contenu
-
-    connus = [(label, valeur(cle)) for cle, label in {**champs_essentiels, **champs_details}.items() if renseigne(donnees_evenement[cle])]
-    manquants = [label.lower() for cle, label in champs_essentiels.items() if not renseigne(donnees_evenement[cle])]
-
-    lignes = "".join(f"<div><dt>{escape(label)}</dt><dd>{escape(str(contenu))}</dd></div>" for label, contenu in connus)
-    corps = f"<dl>{lignes}</dl>" if connus else '<p class="a-definir">AURORE remplit ce dossier au fil de la discussion.</p>'
+def details_dossier_html(donnees_evenement, champs_essentiels, champs_details):
+    connus = [
+        (libelle, valeur_lisible(cle, donnees_evenement[cle]))
+        for cle, libelle in {**champs_essentiels, **champs_details}.items() if renseigne(donnees_evenement[cle])
+    ]
+    manquants = [libelle.lower() for cle, libelle in champs_essentiels.items() if not renseigne(donnees_evenement[cle])]
+    lignes = "".join(f"<div><dt>{escape(libelle)}</dt><dd>{escape(str(contenu))}</dd></div>" for libelle, contenu in connus)
+    corps = f'<dl class="details-dossier">{lignes}</dl>' if connus else '<p class="a-definir">AURORE remplit ce dossier au fil de la discussion.</p>'
     a_definir = f'<p class="a-definir">À définir : {", ".join(manquants)}</p>' if manquants else ""
 
-    return (
-        '<section class="aurore-dossier"><header>'
-        f'<span class="titre-dossier">Dossier</span>{badge}</header>{corps}{a_definir}</section>'
-    )
+    return corps + a_definir
