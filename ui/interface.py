@@ -40,7 +40,7 @@ from ui.design import icone, sans_icone
 from ui.discussion import VueDiscussion
 from ui.documents import VueDocuments
 from ui.fiche import VueFiche
-from ui.habillage import compte_a_rebours, details_dossier_html, jours_restants, salutation
+from ui.habillage import compte_a_rebours, details_dossier_html, jours_restants, nom_organisateur, salutation
 from ui.inspiration import VueInspiration
 from ui.invites import VueInvites
 from ui.messages import VueMessages
@@ -66,7 +66,6 @@ class InterfaceUtilisateur(Vue):
                 "Dossier", identifiants, index=identifiants.index(self.ctx.dossier_id), label_visibility="collapsed",
                 format_func=lambda dossier_id: libelle_court(self.ctx.dossiers[dossier_id])
             )
-            st.button("Nouveau dossier", icon=":material/add:", type="tertiary", on_click=ouvrir_nouveau_dossier)
 
         if choix != self.ctx.dossier_id:
             st.session_state.dossier_actif = choix
@@ -117,14 +116,21 @@ class InterfaceUtilisateur(Vue):
             dossier = st.container()
             navigation = st.container(key="menu-navigation")
 
+            nouveau = st.container(key="menu-nouveau")
+
             if not self.ctx.acces.par_lien:
                 with st.container(key="menu-bas"):
+                    if nom_organisateur():
+                        design.profil(nom_organisateur(), LIBELLES_PROFIL[ORGANISATEUR])
+
                     self.choisir_vue()
                     VueConnexion(self.ctx).afficher_deconnexion()
 
             if self.ctx.profil == ORGANISATEUR:
                 with dossier:
                     self.afficher_choix_dossier()
+
+                nouveau.button("Nouveau dossier", icon=":material/add:", width="stretch", on_click=ouvrir_nouveau_dossier)
 
             with navigation:
                 self.afficher_navigation()

@@ -1,3 +1,4 @@
+import os
 from datetime import date, datetime
 from html import escape
 
@@ -9,6 +10,10 @@ from textes import montant
 def salutation():
     heure = datetime.now().hour
     return "Bonsoir" if heure < 5 or heure >= 18 else "Bonjour"
+
+
+def nom_organisateur():
+    return os.environ.get("NOM_ORGANISATEUR", "").strip()
 
 
 def jours_restants(texte_date):

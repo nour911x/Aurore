@@ -385,3 +385,16 @@ Les sections précédentes gardent les noms de l'époque. Ce tableau donne leur 
 - **Vues** : ensemble, dessus, invité, soirée ; image téléchargeable.
 - **Limites** : salle de 25 m de large, profondeur calculée ; éléments non orientables ; les chevauchements ne comptent pas les chaises.
 - **Tests** : 280. Le glisser-déposer, les vues et le téléchargement ont été vérifiés dans Edge par script, hors de la suite de tests.
+
+---
+
+## Nouvelle direction visuelle : prune, poudré et or
+
+Remplace la palette noir et doré de `feature/refonte-design`, d'après une maquette. Le système de design ne change pas de principe : les couleurs sont dans `ui/theme.css`, les composants dans `ui/design.py`.
+
+- **Accueil** : bannière avec photo, quatre cartes cliquables, rendez-vous du jour avec leur état calculé (à venir, en cours, passé), prochains événements.
+- **Recherche** de dossier et **cloche** des dossiers à traiter, toutes deux fonctionnelles.
+- **`NOM_ORGANISATEUR`** (`.env`, facultatif) : nom affiché à l'accueil et dans le menu.
+- **Photos** : `static/`, servies par Streamlit sans mot de passe. Uniquement des images de décoration, jamais celles des clients.
+- **Non repris de la maquette** : « Paramètres » et le thème clair/sombre, qui n'existent pas dans l'application.
+- **Tests** : 283. Contraste WCAG AA toujours vérifié. Rendu contrôlé à 1280, 1440 et 1920 px.

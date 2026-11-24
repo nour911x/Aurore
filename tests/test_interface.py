@@ -243,6 +243,31 @@ def test_choisir_la_salle_puis_placer_le_dj():
     assert "Table d'honneur" in charger_donnees(emplacement(dossier_id, "jour_j_data"), {})["salle"]["positions"]
 
 
+def test_rechercher_un_dossier_l_ouvre():
+    page = nouvelle_page(onglet="accueil").run()
+    dossier = next(dossier for dossier in lister() if dossier["noms"] == "Tom")
+    page.selectbox(key="recherche").set_value(dossier["id"]).run()
+
+    assert not page.exception
+    assert page.session_state["dossier_actif"] == dossier["id"]
+    assert page.session_state["onglets_organisateur"] == ONGLETS["fiche"]
+
+
+def test_une_carte_de_l_accueil_ouvre_la_bonne_page():
+    page = nouvelle_page(onglet="accueil").run()
+    page.button(key="ouvrir_paiements").click().run()
+
+    assert not page.exception
+    assert page.session_state["onglets_organisateur"] == ONGLETS["budget"]
+
+
+def test_le_nom_de_l_organisateur_est_affiche(monkeypatch):
+    monkeypatch.setenv("NOM_ORGANISATEUR", "<b>Alix</b> Martin")
+    page = nouvelle_page(onglet="accueil").run()
+
+    assert any("&lt;b&gt;Alix&lt;/b&gt; !" in texte.value for texte in page.markdown)
+
+
 def test_se_deconnecter():
     page = nouvelle_page().run()
     bouton(page, "Se déconnecter").click().run()
