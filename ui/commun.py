@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime, timedelta
 
 import streamlit as st
@@ -8,6 +9,7 @@ from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
 from donnees.dossiers import creer as creer_dossier
 from metier.invites import GROUPES, REGIMES, STATUTS_INVITE
 from textes import LIBELLES_SECTIONS, ONGLETS, pluriel
+from ui.design import sans_icone
 
 
 ICONES_STATUT = {
@@ -136,7 +138,7 @@ def ouvrir_onglet(profil, onglet, section=None):
     st.session_state[f"onglets_{profil}"] = ONGLETS[onglet]
 
     if section:
-        st.session_state[f"sections_{profil}_{onglet}"] = LIBELLES_SECTIONS[section]
+        st.session_state[f"sections_{profil}_{onglet}"] = sans_icone(LIBELLES_SECTIONS[section])
 
 
 def ouvrir_messages(profil):
@@ -161,6 +163,10 @@ def echeance_lisible(jours):
         return ":orange[Aujourd'hui]"
 
     return f":orange[Dans {pluriel(jours, 'jour')}]"
+
+
+def sans_couleur(texte):
+    return re.sub(r":\w+\[(.*)\]", r"\1", texte)
 
 
 def personnes_du_dossier(donnees):

@@ -21,6 +21,7 @@ from metier.jour_j import JourJ, creer_tables
 from metier.prestataires import Annuaire, Carnet
 from textes import LIBELLES_PROFIL, LIBELLES_SECTIONS, ONGLETS
 from ui.commun import ESPACES
+from ui.design import sans_icone
 from ui.interface import InterfaceUtilisateur
 
 
@@ -45,13 +46,17 @@ def nouvelle_page(profil=ORGANISATEUR, onglet=None, section=None):
         page.session_state[f"onglets_{profil}"] = ONGLETS[onglet]
 
     if section and section != onglet:
-        page.session_state[f"sections_{profil}_{onglet}"] = LIBELLES_SECTIONS[section]
+        page.session_state[f"sections_{profil}_{onglet}"] = sans_icone(LIBELLES_SECTIONS[section])
 
     return page
 
 
 def bouton(page, libelle):
     return next(bouton for bouton in page.button if bouton.label == libelle)
+
+
+def pages_du_menu(page):
+    return [bouton.key.removeprefix("menu_") for bouton in page.sidebar.button if (bouton.key or "").startswith("menu_")]
 
 
 def champ(page, libelle):
@@ -79,7 +84,8 @@ def test_chaque_ecran_s_affiche(profil, onglet, section):
     page.run()
 
     assert not page.exception
-    assert {ONGLETS[nom] for nom in ESPACES[profil]} <= {panneau.label for panneau in page.tabs}
+    assert pages_du_menu(page) == ESPACES[profil]
+    assert page.button(key=f"menu_{onglet}").proto.type == "primary"
 
 
 def remplir(dossier_id):
@@ -131,7 +137,7 @@ def test_un_lien_impose_sa_vue_et_son_dossier(profil):
     page.run()
 
     assert not page.exception
-    assert [panneau.label for panneau in page.tabs] == [ONGLETS[nom] for nom in ESPACES[profil]]
+    assert pages_du_menu(page) == ESPACES[profil]
     assert "Nouveau dossier" not in [bouton.label for bouton in page.button]
     assert "Tom" not in " ".join(texte.value for texte in page.markdown)
 
@@ -171,7 +177,7 @@ def test_message_conserve_pendant_une_panne_puis_renvoye(monkeypatch):
 
     assert not page.exception
     assert any("Bonjour AURORE" in texte.value for texte in page.markdown)
-    assert page.tabs
+    assert pages_du_menu(page)
 
     monkeypatch.setattr(AgentConversation, "appel", lambda *arguments, **options: SimpleNamespace(content="Me revoilà", tool_calls=None))
     bouton(page, "Réessayer").click().run()
@@ -220,4 +226,4 @@ def test_se_deconnecter():
     page = nouvelle_page().run()
     bouton(page, "Se déconnecter").click().run()
 
-    assert not page.tabs
+    assert not pages_du_menu(page)

@@ -5,15 +5,17 @@ from groq import APIError
 
 from config.profils import ORGANISATEUR
 from textes import (
+    ACCUEILS,
+    AVERTISSEMENT,
     ERREUR_FICHE,
     RACCOURCIS_CLIENTS,
     RACCOURCIS_PRESTATAIRE,
     TEXTES_INDICATIFS,
     message_erreur,
 )
-from ui import composants
+from ui import composants, design
 from ui.contexte import Vue
-from ui.habillage import AVERTISSEMENT_HTML, accueil_html
+from ui.habillage import salutation
 
 
 class VueDiscussion(Vue):
@@ -100,7 +102,8 @@ class VueDiscussion(Vue):
 
 
     def afficher_accueil(self, profil):
-        st.markdown(accueil_html(profil), unsafe_allow_html=True)
+        titre, intro = ACCUEILS[profil]
+        design.grand_titre(titre, salutation(), intro)
 
 
     def afficher_conversation(self, messages):
@@ -112,7 +115,8 @@ class VueDiscussion(Vue):
                 st.markdown(message["content"])
                 composants.afficher_sources(message.get("sources"))
 
-        st.markdown(AVERTISSEMENT_HTML, unsafe_allow_html=True)
+        if messages:
+            design.afficher_html(f'<p class="avertissement">{AVERTISSEMENT}</p>')
 
 
     def afficher_discussion(self, profil):
@@ -130,6 +134,6 @@ class VueDiscussion(Vue):
 
             composants.afficher_boutons_messages("raccourcis", RACCOURCIS_PRESTATAIRE if self.ctx.prestataire else RACCOURCIS_CLIENTS)
         elif not historique:
-            st.caption("Aucune discussion pour l'instant : écrivez à AURORE dans la zone de saisie en bas de page.")
+            design.vide("Aucune discussion pour l'instant. Écrivez à AURORE en bas de page.")
 
         self.afficher_conversation(historique)

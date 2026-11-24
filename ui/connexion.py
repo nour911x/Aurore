@@ -9,9 +9,9 @@ from donnees.dossiers import emplacement_acces
 from metier.acces import Acces, LiensAcces, Tentatives, verifier
 from metier.devis import date_lisible
 from textes import ERREUR_LIEN, ERREUR_MOT_DE_PASSE_ABSENT
+from ui import design
 from ui.commun import PROFILS_ACTIFS
 from ui.contexte import Vue
-from ui.habillage import marque_html
 
 
 PARAMETRE_LIEN = "acces"
@@ -25,13 +25,13 @@ def tentatives():
 def afficher_connexion():
     load_dotenv()
     hache = os.environ.get("MOT_DE_PASSE_HACHE")
-    st.markdown(marque_html({}), unsafe_allow_html=True)
+    design.afficher_html(design.logo_html())
 
     if not hache:
         st.error(ERREUR_MOT_DE_PASSE_ABSENT, icon=":material/lock:")
         return
 
-    with st.form("connexion", width=420):
+    with st.form("connexion"):
         mot_de_passe = st.text_input("Mot de passe organisateur", type="password")
 
         if not st.form_submit_button("Se connecter", icon=":material/login:", type="primary"):
@@ -63,7 +63,9 @@ def identifier():
     if st.session_state.get("organisateur"):
         return Acces(ORGANISATEUR)
 
-    afficher_connexion()
+    with st.container(key="connexion-page"):
+        afficher_connexion()
+
     return None
 
 
@@ -74,7 +76,7 @@ def adresse_du_lien(jeton):
 
 class VueConnexion(Vue):
     def afficher_deconnexion(self):
-        if st.button("Se déconnecter", icon=":material/logout:", width="stretch"):
+        if st.button("Se déconnecter", icon=":material/logout:", type="tertiary"):
             st.session_state.clear()
             st.rerun()
 

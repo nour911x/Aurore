@@ -5,16 +5,21 @@ from config.evenements import CHAMPS_ESSENTIELS, libelle_evenement
 from config.profils import ORGANISATEUR, PRESTATAIRE
 from donnees.dossiers import libelle_court
 from llm.agent import PROFILS
+from metier.devis import date_lisible
 from metier.messages import MODIFIABLES, detecter_messages
 from textes import (
+    ACCUEILS,
     CHAMPS_DOSSIER_PRESTATAIRE,
     ERREUR_LIEN,
     LIBELLES_PROFIL,
     LIBELLES_SECTIONS,
     ONGLETS,
+    PAGES_SANS_DOSSIER,
     message_erreur,
+    noms_courts,
     pluriel,
 )
+from ui import design
 from ui.accueil import VueAccueil
 from ui.budget import VueBudget
 from ui.commun import (
@@ -27,13 +32,15 @@ from ui.commun import (
     nouveau_dossier,
     ouvrir_messages,
     ouvrir_nouveau_dossier,
+    ouvrir_onglet,
 )
 from ui.connexion import VueConnexion
 from ui.contexte import Vue
+from ui.design import icone, sans_icone
 from ui.discussion import VueDiscussion
 from ui.documents import VueDocuments
 from ui.fiche import VueFiche
-from ui.habillage import accueil_html, dossier_html, marque_html, particules_html, theme_html
+from ui.habillage import compte_a_rebours, details_dossier_html, jours_restants, salutation
 from ui.inspiration import VueInspiration
 from ui.invites import VueInvites
 from ui.messages import VueMessages
@@ -53,40 +60,99 @@ class InterfaceUtilisateur(Vue):
 
     def afficher_choix_dossier(self):
         identifiants = list(self.ctx.dossiers)
-        choix = st.selectbox(
-            "Dossier", identifiants, index=identifiants.index(self.ctx.dossier_id), label_visibility="collapsed",
-            format_func=lambda dossier_id: libelle_court(self.ctx.dossiers[dossier_id])
-        )
+
+        with st.container(key="menu-dossier"):
+            choix = st.selectbox(
+                "Dossier", identifiants, index=identifiants.index(self.ctx.dossier_id), label_visibility="collapsed",
+                format_func=lambda dossier_id: libelle_court(self.ctx.dossiers[dossier_id])
+            )
+            st.button("Nouveau dossier", icon=":material/add:", type="tertiary", on_click=ouvrir_nouveau_dossier)
 
         if choix != self.ctx.dossier_id:
             st.session_state.dossier_actif = choix
             st.rerun()
 
-        st.button("Nouveau dossier", icon=":material/create_new_folder:", width="stretch", on_click=ouvrir_nouveau_dossier)
+
+    def choisir_vue(self):
+        self.ctx.profil = st.segmented_control(
+            "Vue", [nom for nom in PROFILS if PROFILS_ACTIFS.get(nom, True)], default=ORGANISATEUR, key="profil", format_func=LIBELLES_PROFIL.get,
+            bind="query-params", required=True, label_visibility="collapsed"
+        )
+
+        if self.ctx.profil == PRESTATAIRE and self.ctx.carnet.prestataires:
+            nom = st.selectbox(
+                "Prestataire", [prestataire["nom"] for prestataire in self.ctx.carnet.prestataires],
+                key="prestataire_actif", label_visibility="collapsed"
+            )
+            self.ctx.prestataire = self.ctx.carnet.trouver_par_nom(nom)
 
 
-    def afficher_fiche_evenement(self, profil):
-        donnees = self.ctx.fiche_evenement.donnees
-        affichage = {**donnees, "type_evenement": libelle_evenement(donnees)}
+    def page_ouverte(self):
+        libelles = {ONGLETS[onglet]: onglet for onglet in ESPACES[self.ctx.profil]}
+        return libelles.get(st.session_state.get(f"onglets_{self.ctx.profil}"), ESPACES[self.ctx.profil][0])
 
+
+    def compteur_menu(self, onglet):
+        if onglet != "messages":
+            return ""
+
+        a_valider = len(self.ctx.messagerie.par_statut(*MODIFIABLES))
+        return f" `{a_valider}`" if a_valider else ""
+
+
+    def afficher_navigation(self):
+        ouverte = self.page_ouverte()
+
+        for onglet in ESPACES[self.ctx.profil]:
+            st.button(
+                sans_icone(ONGLETS[onglet]) + self.compteur_menu(onglet), icon=icone(ONGLETS[onglet]), key=f"menu_{onglet}", width="stretch",
+                type="primary" if onglet == ouverte else "secondary",
+                on_click=ouvrir_onglet, args=(self.ctx.profil, onglet)
+            )
+
+
+    def afficher_menu(self):
         with st.sidebar:
-            if profil == ORGANISATEUR:
-                self.afficher_choix_dossier()
+            design.afficher_html(design.logo_html())
+            dossier = st.container()
+            navigation = st.container(key="menu-navigation")
 
             if not self.ctx.acces.par_lien:
-                VueConnexion(self.ctx).afficher_deconnexion()
+                with st.container(key="menu-bas"):
+                    self.choisir_vue()
+                    VueConnexion(self.ctx).afficher_deconnexion()
 
+            if self.ctx.profil == ORGANISATEUR:
+                with dossier:
+                    self.afficher_choix_dossier()
+
+            with navigation:
+                self.afficher_navigation()
+
+
+    def afficher_entete_dossier(self):
+        donnees = self.ctx.fiche_evenement.donnees
+        profil = self.ctx.profil
+        invites = donnees["nombre_invites"]
+        design.entete_dossier(
+            noms_courts(donnees["noms"]) or "Dossier sans nom",
+            [date_lisible(donnees["date"]), libelle_evenement(donnees), donnees["lieu"], pluriel(invites, "invité") if invites else ""],
+            compte_a_rebours(jours_restants(donnees["date"]))
+        )
+        affichage = {**donnees, "type_evenement": libelle_evenement(donnees)}
+
+        with st.expander("Récapitulatif du dossier"):
             if profil == PRESTATAIRE:
-                st.markdown(dossier_html(affichage, CHAMPS_DOSSIER_PRESTATAIRE, self.details_pour_prestataire(donnees)), unsafe_allow_html=True)
+                design.afficher_html(details_dossier_html(affichage, CHAMPS_DOSSIER_PRESTATAIRE, self.details_pour_prestataire(donnees)))
             else:
-                st.markdown(dossier_html(affichage, CHAMPS_ESSENTIELS, details_dossier(donnees)), unsafe_allow_html=True)
-                nombre_echanges = len(self.ctx.fiche_evenement.donnees["historique"])
+                design.afficher_html(details_dossier_html(affichage, CHAMPS_ESSENTIELS, details_dossier(donnees)))
+                nombre_echanges = len(donnees["historique"])
 
                 if nombre_echanges:
-                    st.caption(f":material/history: {pluriel(nombre_echanges, 'échange')} dans l'historique")
+                    st.caption(f"{pluriel(nombre_echanges, 'échange')} dans l'historique")
 
 
-    def afficher_notification(self, profil, suggestions):
+    def afficher_notification(self, suggestions):
         a_preparer = len(suggestions)
         a_valider = len(self.ctx.messagerie.par_statut(*MODIFIABLES))
         a_envoyer = len(self.ctx.messagerie.par_statut("validé"))
@@ -100,41 +166,8 @@ class InterfaceUtilisateur(Vue):
             return
 
         with st.container(horizontal=True, vertical_alignment="center", key="notification"):
-            st.markdown(f":material/notifications: **{', '.join(filter(None, morceaux))}**")
-            st.button(
-                "Voir dans Messages", icon=":material/arrow_forward:", key="voir-messages",
-                on_click=ouvrir_messages, args=(profil,)
-            )
-
-
-    def choisir_vue(self):
-        with st.container(horizontal=True, key="barre-actions"):
-            self.ctx.profil = st.segmented_control(
-                "Je suis…", [nom for nom in PROFILS if PROFILS_ACTIFS.get(nom, True)], default=ORGANISATEUR, key="profil", format_func=LIBELLES_PROFIL.get,
-                bind="query-params", required=True, label_visibility="collapsed"
-            )
-
-            if self.ctx.profil == PRESTATAIRE and self.ctx.carnet.prestataires:
-                nom = st.selectbox(
-                    "Prestataire", [prestataire["nom"] for prestataire in self.ctx.carnet.prestataires],
-                    key="prestataire_actif", label_visibility="collapsed", width=220
-                )
-                self.ctx.prestataire = self.ctx.carnet.trouver_par_nom(nom)
-
-
-    def afficher_barre_haut(self):
-        with st.container(horizontal=True, key="barre-haut"):
-            st.markdown(marque_html(self.ctx.fiche_evenement.donnees), unsafe_allow_html=True)
-
-            if not self.ctx.acces.par_lien:
-                self.choisir_vue()
-
-        profil = self.ctx.profil
-        self.ctx.preparer_conversation()
-        st.html(theme_html(profil))
-        st.markdown(particules_html(self.ctx.fiche_evenement.donnees["type_evenement"]), unsafe_allow_html=True)
-
-        return profil
+            st.markdown(", ".join(filter(None, morceaux)))
+            design.lien_action("Voir dans Messages", "voir-messages", ouvrir_messages, (self.ctx.profil,))
 
 
     @staticmethod
@@ -150,30 +183,23 @@ class InterfaceUtilisateur(Vue):
         return [section for section in SECTIONS.get(onglet, [onglet]) if SECTIONS_ACTIVES.get(section, True)]
 
 
-    def afficher_onglets(self, profil, afficheurs):
-        onglets = ESPACES[profil]
-        panneaux = st.tabs([ONGLETS[onglet] for onglet in onglets], key=f"onglets_{profil}", on_change="rerun")
+    def afficher_page(self, afficheurs):
+        profil, onglet = self.ctx.profil, self.page_ouverte()
+        sections = self.sections(onglet)
 
-        for onglet, panneau in zip(onglets, panneaux, strict=True):
-            if not panneau.open:
-                continue
+        if len(sections) == 1:
+            self.afficher_section(afficheurs[sections[0]])
+            return
 
-            with panneau:
-                sections = self.sections(onglet)
+        panneaux = st.tabs(
+            [sans_icone(LIBELLES_SECTIONS[section]) for section in sections],
+            key=f"sections_{profil}_{onglet}", on_change="rerun"
+        )
 
-                if len(sections) == 1:
-                    self.afficher_section(afficheurs[sections[0]])
-                    continue
-
-                sous_panneaux = st.tabs(
-                    [LIBELLES_SECTIONS[section] for section in sections],
-                    key=f"sections_{profil}_{onglet}", on_change="rerun"
-                )
-
-                for section, sous_panneau in zip(sections, sous_panneaux, strict=True):
-                    if sous_panneau.open:
-                        with sous_panneau:
-                            self.afficher_section(afficheurs[section])
+        for section, panneau in zip(sections, panneaux, strict=True):
+            if panneau.open:
+                with panneau:
+                    self.afficher_section(afficheurs[section])
 
 
     @staticmethod
@@ -183,8 +209,9 @@ class InterfaceUtilisateur(Vue):
 
 
     def afficher_premier_dossier(self):
-        st.markdown(marque_html({}), unsafe_allow_html=True)
-        st.markdown(accueil_html(ORGANISATEUR), unsafe_allow_html=True)
+        titre, intro = ACCUEILS[ORGANISATEUR]
+        design.afficher_html(design.logo_html())
+        design.grand_titre(titre, salutation(), intro)
         afficher_tuiles("tuiles", ouvrir_nouveau_dossier)
 
 
@@ -201,49 +228,58 @@ class InterfaceUtilisateur(Vue):
             self.ouvrir_dialogue_si_demande()
             return
 
-        profil = self.afficher_barre_haut()
+        self.afficher_menu()
+        profil = self.ctx.profil
 
         if profil == PRESTATAIRE and not self.ctx.prestataire:
-            st.info("Aucun prestataire dans le carnet : ajoutez-en depuis l'espace Organisateur (onglet Prestataires).")
-            self.afficher_fiche_evenement(profil)
+            design.vide("Aucun prestataire dans le carnet : ajoutez-en depuis l'espace Organisateur (onglet Prestataires).")
             return
 
-        VueDiscussion(self.ctx).traiter_message(profil)
-        VueDiscussion(self.ctx).afficher_message_echoue(profil)
-        suggestions = self.ctx.messagerie.a_preparer(
-            detecter_messages(self.ctx.fiche_evenement.donnees, self.ctx.carnet, self.ctx.agenda, self.ctx.budget)
-        )
+        self.ctx.preparer_conversation()
 
-        if profil == ORGANISATEUR and st.session_state.get(f"onglets_{profil}", ONGLETS["accueil"]) != ONGLETS["accueil"]:
-            self.afficher_notification(profil, suggestions)
+        page = st.container(key="page")
 
-        self.afficher_onglets(profil, {
-            "accueil": VueAccueil(self.ctx).afficher_tableau_de_bord,
-            "recap": VuesPartagees(self.ctx).afficher_recap_client,
-            "budget_client": VuesPartagees(self.ctx).afficher_budget_client,
-            "invitations": VuesPartagees(self.ctx).afficher_invitations,
-            "agenda_prestataire": VuesPartagees(self.ctx).afficher_agenda_prestataire,
-            "devis_prestataire": lambda: VuesPartagees(self.ctx).afficher_devis_prestataire(profil),
-            "discussion": lambda: VueDiscussion(self.ctx).afficher_discussion(profil),
-            "a_envoyer": lambda: VueMessages(self.ctx).afficher_messages(suggestions),
-            "fiche": VueFiche(self.ctx).afficher_fiche_client,
-            "evenement": VuesPartagees(self.ctx).afficher_evenement,
-            "invites": VueInvites(self.ctx).afficher_invites,
-            "prestataires": VuePrestataires(self.ctx).afficher_prestataires,
-            "documents": VueDocuments(self.ctx).afficher_documents,
-            "budget": VueBudget(self.ctx).afficher_budget,
-            "devis": lambda: VueBudget(self.ctx).afficher_devis(profil),
-            "agenda": VuePlanning(self.ctx).afficher_agenda,
-            "deroule": VuePlanning(self.ctx).afficher_deroule,
-            "plan_salle": VuePlanning(self.ctx).afficher_plan_salle,
-            "salle_3d": VuePlanning(self.ctx).afficher_salle_3d,
-            "moodboard": VueInspiration(self.ctx).afficher_moodboard,
-            "adresses": VueInspiration(self.ctx).afficher_adresses,
-            "photos": VueInspiration(self.ctx).afficher_photos,
-            "droit_image": lambda: VueInspiration(self.ctx).afficher_droit_image(profil),
-            "avis": lambda: VueInspiration(self.ctx).afficher_avis(profil),
-            "instagram": VueInspiration(self.ctx).afficher_instagram
-        })
+        with st.container(key="saisie"):
+            VueDiscussion(self.ctx).traiter_message(profil)
 
-        self.afficher_fiche_evenement(profil)
+        with page:
+            VueDiscussion(self.ctx).afficher_message_echoue(profil)
+            suggestions = self.ctx.messagerie.a_preparer(
+                detecter_messages(self.ctx.fiche_evenement.donnees, self.ctx.carnet, self.ctx.agenda, self.ctx.budget)
+            )
+
+            if self.page_ouverte() not in PAGES_SANS_DOSSIER:
+                self.afficher_entete_dossier()
+
+                if profil == ORGANISATEUR and self.page_ouverte() != "messages":
+                    self.afficher_notification(suggestions)
+
+            self.afficher_page({
+                "accueil": VueAccueil(self.ctx).afficher_tableau_de_bord,
+                "recap": VuesPartagees(self.ctx).afficher_recap_client,
+                "budget_client": VuesPartagees(self.ctx).afficher_budget_client,
+                "invitations": VuesPartagees(self.ctx).afficher_invitations,
+                "agenda_prestataire": VuesPartagees(self.ctx).afficher_agenda_prestataire,
+                "devis_prestataire": lambda: VuesPartagees(self.ctx).afficher_devis_prestataire(profil),
+                "discussion": lambda: VueDiscussion(self.ctx).afficher_discussion(profil),
+                "a_envoyer": lambda: VueMessages(self.ctx).afficher_messages(suggestions),
+                "fiche": VueFiche(self.ctx).afficher_fiche_client,
+                "evenement": VuesPartagees(self.ctx).afficher_evenement,
+                "invites": VueInvites(self.ctx).afficher_invites,
+                "prestataires": VuePrestataires(self.ctx).afficher_prestataires,
+                "documents": VueDocuments(self.ctx).afficher_documents,
+                "budget": VueBudget(self.ctx).afficher_budget,
+                "devis": lambda: VueBudget(self.ctx).afficher_devis(profil),
+                "agenda": VuePlanning(self.ctx).afficher_agenda,
+                "deroule": VuePlanning(self.ctx).afficher_deroule,
+                "plan_salle": VuePlanning(self.ctx).afficher_plan_salle,
+                "salle_3d": VuePlanning(self.ctx).afficher_salle_3d,
+                "moodboard": VueInspiration(self.ctx).afficher_moodboard,
+                "adresses": VueInspiration(self.ctx).afficher_adresses,
+                "photos": VueInspiration(self.ctx).afficher_photos,
+                "droit_image": lambda: VueInspiration(self.ctx).afficher_droit_image(profil),
+                "avis": lambda: VueInspiration(self.ctx).afficher_avis(profil),
+                "instagram": VueInspiration(self.ctx).afficher_instagram
+            })
+
         self.ouvrir_dialogue_si_demande()
