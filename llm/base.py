@@ -7,12 +7,23 @@ from groq import Groq
 
 
 MODELE = "openai/gpt-oss-120b"
+DELAI_REPONSE = 30
+NOMBRE_ESSAIS = 3
+
+
+class CleGroqManquante(RuntimeError):
+    pass
 
 
 class Agent:
     def __init__(self):
         load_dotenv()
-        self.client_groq = Groq(api_key=os.environ["GROQ_KEY"])
+        cle = os.environ.get("GROQ_KEY")
+
+        if not cle:
+            raise CleGroqManquante
+
+        self.client_groq = Groq(api_key=cle, timeout=DELAI_REPONSE, max_retries=NOMBRE_ESSAIS)
 
 
     @staticmethod
@@ -47,4 +58,4 @@ class Agent:
 
 
     def completer(self, messages, **options):
-        return self.appel(messages, **options).content
+        return self.appel(messages, **options).content or ""

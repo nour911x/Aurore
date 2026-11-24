@@ -1,10 +1,11 @@
 from datetime import date, timedelta
 
+from donnees.stockage import Emplacement
 from metier.budget import Budget
 
 
 def budget_traiteur(tmp_path):
-    budget = Budget(str(tmp_path / "budget.json"))
+    budget = Budget(Emplacement(tmp_path, "test", "budget"))
     budget.ajouter_poste("Traiteur", 5000)
     return budget
 

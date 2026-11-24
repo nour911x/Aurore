@@ -3,7 +3,7 @@ from typing import Any
 
 from fpdf import FPDF
 
-from donnees.stockage import charger_json, premier, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, premier, sauvegarder_donnees
 
 
 STATUTS_DEVIS = ["Brouillon", "Envoyé", "Accepté", "Refusé"]
@@ -71,16 +71,16 @@ def date_validite(devis: dict) -> date:
 
 
 class CarnetDevis:
-    def __init__(self, chemin_fichier: str) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement) -> None:
+        self.emplacement = emplacement
         self.devis: list[dict] = []
         self.charger()
 
     def charger(self) -> None:
-        self.devis = charger_json(self.chemin_fichier, [])
+        self.devis = charger_donnees(self.emplacement, [])
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, self.devis)
+        sauvegarder_donnees(self.emplacement, self.devis)
 
     def prochain_numero(self) -> str:
         annee = date.today().year

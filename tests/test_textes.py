@@ -1,6 +1,6 @@
 import pytest
 
-from donnees.dossiers import FICHIER_FICHE, chemin, creer
+from donnees.dossiers import NOM_FICHE, creer, emplacement
 from donnees.fiche_evenement import FicheEvenement
 from metier.invites import nouvel_invite
 from textes import formater_nom, noms_clients, noms_courts, pluriel
@@ -37,9 +37,9 @@ def test_pluriel():
 
 
 def test_noms_normalises_a_l_enregistrement(tmp_path):
-    fiche = FicheEvenement(chemin(creer({}, tmp_path), FICHIER_FICHE, tmp_path))
+    fiche = FicheEvenement(emplacement(creer({}, tmp_path), NOM_FICHE, tmp_path))
     fiche.remplacer({"noms": "léa et liam"})
     fiche.mettre_a_jour({"noms": "JEAN-PIERRE et marie de la tour"})
 
-    assert FicheEvenement(fiche.chemin_fichier).donnees["noms"] == "Jean-Pierre et Marie de la Tour"
+    assert FicheEvenement(fiche.emplacement).donnees["noms"] == "Jean-Pierre et Marie de la Tour"
     assert nouvel_invite("paul o'neil")["nom"] == "Paul O'Neil"

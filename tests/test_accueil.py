@@ -1,8 +1,8 @@
-import json
 from datetime import date, datetime, time, timedelta
 
 from donnees.demo import creer_demo, demo_active, demo_au_premier_lancement, retirer_demo
-from donnees.dossiers import creer, lister
+from donnees.dossiers import NOM_SELECTION, creer, emplacement, emplacement_agenda, lister
+from donnees.stockage import charger_donnees
 from metier.accueil import champs_a_definir, confirmations_attendues, synthese
 from metier.agenda import conflits, deviner_type
 
@@ -96,13 +96,13 @@ def test_la_demo_complete_le_mariage_existant_puis_se_retire_proprement(tmp_path
     creer_demo(tmp_path)
 
     assert len(lister(tmp_path)) == 3
-    assert any(rdv["dossier_id"] == existant for rdv in json.loads((tmp_path / "agenda_data.json").read_text(encoding="utf-8")))
+    assert any(rdv["dossier_id"] == existant for rdv in charger_donnees(emplacement_agenda(tmp_path), []))
 
     retirer_demo(tmp_path)
 
     assert [dossier["id"] for dossier in lister(tmp_path)] == [existant]
-    assert json.loads((tmp_path / "agenda_data.json").read_text(encoding="utf-8")) == []
-    assert json.loads((tmp_path / "dossiers" / existant / "selection_prestataires.json").read_text(encoding="utf-8")) == []
+    assert charger_donnees(emplacement_agenda(tmp_path), None) == []
+    assert charger_donnees(emplacement(existant, NOM_SELECTION, tmp_path), None) == []
     assert not demo_active(tmp_path)
 
 

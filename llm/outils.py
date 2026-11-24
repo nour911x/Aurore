@@ -192,6 +192,7 @@ class Outils:
     def nouveau_tour(self):
         self.documents_lus = False
         self.sources = []
+        self.actions = []
 
     def pour_espace(self, espace, prestataire=None):
         self.espace = espace
@@ -224,6 +225,9 @@ class Outils:
             resultat = getattr(self, nom)(**arguments)
         except Exception as erreur:
             resultat = {"erreur": str(erreur)}
+
+        if not nom.startswith(OUTILS_LECTURE) and "erreur" not in resultat:
+            self.actions.append(nom.replace("_", " "))
 
         return json.dumps(resultat, ensure_ascii=False, default=str)
 

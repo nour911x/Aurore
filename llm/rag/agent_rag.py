@@ -16,7 +16,7 @@ class AgentRag(Agent):
             {"role": "user", "content": contenu}
         ]
 
-        return self.completer(messages, temperature=0, **options) or ""
+        return self.completer(messages, temperature=0, **options)
 
 
     def repondre_en_json(self, contenu):

@@ -1,7 +1,7 @@
 from datetime import date
 
 from config.evenements import CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, champs_par_defaut
-from donnees.stockage import charger_json, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, sauvegarder_donnees
 from metier.rgpd import CHAMPS_CONSENTEMENT, CHAMPS_SANTE, sans_sante
 from textes import formater_nom
 
@@ -20,8 +20,8 @@ def renseigne(valeur: int | list[str] | str | None) -> bool:
 
 
 class FicheEvenement:
-    def __init__(self, chemin_fichier: str) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement) -> None:
+        self.emplacement = emplacement
         self.donnees = {
             "type_evenement": None,
             "noms": None,
@@ -43,7 +43,7 @@ class FicheEvenement:
         self.charger()
 
     def charger(self) -> None:
-        self.donnees.update(charger_json(self.chemin_fichier, {}))
+        self.donnees.update(charger_donnees(self.emplacement, {}))
         self.normaliser_noms()
 
     def normaliser_noms(self) -> None:
@@ -53,7 +53,7 @@ class FicheEvenement:
         self.donnees["noms"] = formater_nom(self.donnees["noms"]) or None
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, self.donnees)
+        sauvegarder_donnees(self.emplacement, self.donnees)
 
     def infos_pour_prestataire(self, avec_sante: bool = False) -> dict:
         infos = {cle: self.donnees[cle] for cle in CHAMPS_POUR_PRESTATAIRE}

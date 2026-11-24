@@ -234,6 +234,7 @@ galerie/
 jour_j_data.json
 dossiers/
 index_documents/
+aurore.db*
 
 annuaire_prestataires.json
 aurore_etat.json

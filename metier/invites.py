@@ -6,7 +6,7 @@ from typing import Any
 
 from fpdf import FPDF
 
-from donnees.stockage import charger_json, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, sauvegarder_donnees
 from metier.devis import date_lisible, texte_pdf
 from textes import formater_nom, noms_courts
 
@@ -129,21 +129,21 @@ def lire_contacts(nom_fichier: str, contenu_brut: bytes) -> list[dict]:
 
 
 class ListeInvites:
-    def __init__(self, chemin_fichier: str) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement) -> None:
+        self.emplacement = emplacement
         self.invites: list[dict] = []
         self.faire_part = ""
         self.faire_part_valide = False
         self.charger()
 
     def charger(self) -> None:
-        donnees = charger_json(self.chemin_fichier, {"invites": [], "faire_part": ""})
+        donnees = charger_donnees(self.emplacement, {"invites": [], "faire_part": ""})
         self.invites = donnees["invites"]
         self.faire_part = donnees["faire_part"]
         self.faire_part_valide = donnees.get("faire_part_valide", False)
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, {"invites": self.invites, "faire_part": self.faire_part, "faire_part_valide": self.faire_part_valide})
+        sauvegarder_donnees(self.emplacement, {"invites": self.invites, "faire_part": self.faire_part, "faire_part_valide": self.faire_part_valide})
 
     def remplacer(self, invites: list[dict]) -> None:
         self.invites = invites

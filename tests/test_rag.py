@@ -6,6 +6,7 @@ import pytest
 from fpdf import FPDF
 
 from config.profils import CLIENTS, PRESTATAIRE
+from donnees.stockage import Emplacement
 from llm.outils import OUTILS, OUTILS_PAR_ESPACE, Outils
 from llm.rag.atomic_question_agent import MAX_QUESTIONS, AtomicQuestionAgent
 from llm.rag.extraits import TAILLE_EXTRAIT, baliser, decouper, extraire
@@ -196,11 +197,11 @@ def test_documents_reserves_a_l_organisateur():
 
 
 def test_documents_ajout_doublon_suppression(tmp_path):
-    documents = Documents(str(tmp_path / "documents_data.json"), tmp_path / "documents")
+    documents = Documents(Emplacement(tmp_path, "test", "documents_data"), tmp_path / "documents")
     documents.ajouter("abc", "../../contrat.PDF", b"contenu", 3)
 
     assert (tmp_path / "documents" / "abc.pdf").read_bytes() == b"contenu"
-    assert Documents(documents.chemin_fichier, documents.dossier).documents == documents.documents
+    assert Documents(documents.emplacement, documents.dossier).documents == documents.documents
 
     with pytest.raises(ValueError):
         documents.ajouter("def", "../../contrat.PDF", b"", 1)

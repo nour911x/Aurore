@@ -1,25 +1,26 @@
+import json
 import shutil
 import uuid
 from datetime import date
 from pathlib import Path
 
 from config.evenements import libelle_evenement
-from donnees.stockage import charger_json, sauvegarder_json
+from donnees.stockage import COMMUN, Emplacement, charger_donnees, charger_par_nom, ecrire, lire, sauvegarder_donnees, transaction
 from metier.devis import date_lisible
 from textes import noms_courts
 
 
 RACINE = Path(__file__).parent.parent
 
-FICHIER_FICHE = "event_data.json"
+NOM_FICHE = "event_data"
 
-FICHIER_AGENDA = "agenda_data.json"
+NOM_AGENDA = "agenda_data"
 
-FICHIER_ANNUAIRE = "annuaire_prestataires.json"
+NOM_ANNUAIRE = "annuaire_prestataires"
 
-FICHIER_SELECTION = "selection_prestataires.json"
+NOM_SELECTION = "selection_prestataires"
 
-FICHIER_ETAT = "aurore_etat.json"
+NOM_ETAT = "aurore_etat"
 
 DOSSIER_INDEX = "index_documents"
 
@@ -33,8 +34,16 @@ def chemin(dossier_id: str, fichier: str, racine: Path = RACINE) -> str:
     return str(dossier_racine(racine) / dossier_id / fichier)
 
 
-def chemin_agenda(racine: Path = RACINE) -> str:
-    return str(Path(racine) / FICHIER_AGENDA)
+def emplacement(dossier_id: str, nom: str, racine: Path = RACINE) -> Emplacement:
+    return Emplacement(Path(racine), dossier_id, nom)
+
+
+def emplacement_agenda(racine: Path = RACINE) -> Emplacement:
+    return emplacement(COMMUN, NOM_AGENDA, racine)
+
+
+def emplacement_annuaire(racine: Path = RACINE) -> Emplacement:
+    return emplacement(COMMUN, NOM_ANNUAIRE, racine)
 
 
 def chemin_index(racine: Path = RACINE) -> Path:
@@ -42,35 +51,21 @@ def chemin_index(racine: Path = RACINE) -> Path:
 
 
 def lire_etat(racine: Path = RACINE) -> dict:
-    return charger_json(Path(racine) / FICHIER_ETAT, {})
+    return charger_donnees(emplacement(COMMUN, NOM_ETAT, racine), {})
 
 
 def ecrire_etat(cle: str, valeur: bool, racine: Path = RACINE) -> None:
-    sauvegarder_json(Path(racine) / FICHIER_ETAT, {**lire_etat(racine), cle: valeur})
-
-
-def chemin_annuaire(racine: Path = RACINE) -> str:
-    return str(Path(racine) / FICHIER_ANNUAIRE)
+    sauvegarder_donnees(emplacement(COMMUN, NOM_ETAT, racine), {**lire_etat(racine), cle: valeur})
 
 
 def lister(racine: Path = RACINE) -> list[dict]:
-    if not dossier_racine(racine).exists():
-        return []
-
-    dossiers = [
-        {"id": dossier.name, **charger_json(dossier / FICHIER_FICHE, {})}
-        for dossier in dossier_racine(racine).iterdir()
-        if (dossier / FICHIER_FICHE).exists()
-    ]
-
+    dossiers = [{"id": dossier_id, **fiche} for dossier_id, fiche in charger_par_nom(racine, NOM_FICHE).items()]
     return sorted(dossiers, key=lambda dossier: dossier.get("date") or "9999")
 
 
 def creer(fiche: dict, racine: Path = RACINE) -> str:
     dossier_id = uuid.uuid4().hex[:8]
-    dossier = dossier_racine(racine) / dossier_id
-    dossier.mkdir(parents=True)
-    sauvegarder_json(dossier / FICHIER_FICHE, fiche)
+    sauvegarder_donnees(emplacement(dossier_id, NOM_FICHE, racine), fiche)
 
     return dossier_id
 
@@ -85,7 +80,22 @@ def libelle_court(dossier: dict) -> str:
     return " · ".join(filter(None, [noms_courts(dossier.get("noms")) or "Sans nom", jour]))
 
 
+def sans_dossier(rdvs: list[dict], dossier_id: str) -> list[dict]:
+    return [rdv for rdv in rdvs if rdv.get("dossier_id") != dossier_id]
+
+
+def effacer_ancien_agenda(dossier_id: str, racine: Path) -> None:
+    fichier = Path(racine) / f"{NOM_AGENDA}.json"
+
+    if fichier.exists():
+        rdvs = json.loads(fichier.read_text(encoding="utf-8"))
+        fichier.write_text(json.dumps(sans_dossier(rdvs, dossier_id), ensure_ascii=False, indent=4), encoding="utf-8")
+
+
 def supprimer(dossier_id: str, racine: Path = RACINE) -> None:
+    with transaction(racine) as connexion:
+        connexion.execute("DELETE FROM contenus WHERE dossier_id = ?", (dossier_id,))
+        ecrire(connexion, COMMUN, NOM_AGENDA, sans_dossier(lire(connexion, COMMUN, NOM_AGENDA, []), dossier_id))
+
     shutil.rmtree(dossier_racine(racine) / dossier_id, ignore_errors=True)
-    rdvs = charger_json(chemin_agenda(racine), [])
-    sauvegarder_json(chemin_agenda(racine), [rdv for rdv in rdvs if rdv.get("dossier_id") != dossier_id])
+    effacer_ancien_agenda(dossier_id, racine)

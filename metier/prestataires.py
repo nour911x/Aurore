@@ -4,7 +4,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-from donnees.stockage import charger_json, premier, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, premier, sauvegarder_donnees
 
 
 if TYPE_CHECKING:
@@ -101,16 +101,16 @@ def reservations_en_double(reservations: list[dict]) -> list[dict]:
 
 
 class Annuaire:
-    def __init__(self, chemin_fichier: str) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement) -> None:
+        self.emplacement = emplacement
         self.prestataires: list[dict] = []
         self.charger()
 
     def charger(self) -> None:
-        self.prestataires = charger_json(self.chemin_fichier, [])
+        self.prestataires = charger_donnees(self.emplacement, [])
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, self.prestataires)
+        sauvegarder_donnees(self.emplacement, self.prestataires)
 
     def trouver(self, prestataire_id: str) -> dict | None:
         return premier(self.prestataires, id=prestataire_id)
@@ -134,17 +134,17 @@ class Annuaire:
 
 
 class Carnet:
-    def __init__(self, annuaire: "Annuaire", chemin_fichier: str) -> None:
+    def __init__(self, annuaire: "Annuaire", emplacement: Emplacement) -> None:
         self.annuaire = annuaire
-        self.chemin_fichier = chemin_fichier
+        self.emplacement = emplacement
         self.selection: list[dict] = []
         self.charger()
 
     def charger(self) -> None:
-        self.selection = charger_json(self.chemin_fichier, [])
+        self.selection = charger_donnees(self.emplacement, [])
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, self.selection)
+        sauvegarder_donnees(self.emplacement, self.selection)
 
     @property
     def prestataires(self) -> list[dict]:

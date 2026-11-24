@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from fpdf import FPDF
 
-from donnees.stockage import charger_json, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, sauvegarder_donnees
 from metier.devis import texte_pdf
 
 
@@ -55,19 +55,19 @@ def nettoyer_moodboard(moodboard: dict) -> dict:
 
 
 class Inspiration:
-    def __init__(self, chemin_fichier: str) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement) -> None:
+        self.emplacement = emplacement
         self.moodboard: dict = {}
         self.recommandations: dict = {}
         self.charger()
 
     def charger(self) -> None:
-        donnees = charger_json(self.chemin_fichier, {"moodboard": {}, "recommandations": {}})
+        donnees = charger_donnees(self.emplacement, {"moodboard": {}, "recommandations": {}})
         self.moodboard = donnees["moodboard"]
         self.recommandations = donnees["recommandations"]
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, {"moodboard": self.moodboard, "recommandations": self.recommandations})
+        sauvegarder_donnees(self.emplacement, {"moodboard": self.moodboard, "recommandations": self.recommandations})
 
     def definir_moodboard(self, moodboard: dict) -> None:
         self.moodboard = nettoyer_moodboard(moodboard)

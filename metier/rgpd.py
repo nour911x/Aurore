@@ -2,8 +2,8 @@ import json
 from datetime import date
 from pathlib import Path
 
-from donnees.dossiers import RACINE, chemin_agenda, dossier_racine
-from donnees.stockage import charger_json
+from donnees.dossiers import RACINE, dossier_racine, emplacement_agenda
+from donnees.stockage import charger_donnees, charger_dossier
 
 
 CHAMPS_SANTE = ["allergies_interdits"]
@@ -59,8 +59,8 @@ def consentements_manquants(droit_image: list[dict], usage: str) -> list[str]:
 
 def exporter(dossier_id: str, racine: Path = RACINE) -> str:
     dossier = dossier_racine(racine) / dossier_id
-    contenu = {fichier.stem: charger_json(fichier, None) for fichier in sorted(dossier.glob("*.json"))}
-    contenu["rendez_vous"] = [rdv for rdv in charger_json(chemin_agenda(racine), []) if rdv.get("dossier_id") == dossier_id]
+    contenu = charger_dossier(racine, dossier_id)
+    contenu["rendez_vous"] = [rdv for rdv in charger_donnees(emplacement_agenda(racine), []) if rdv.get("dossier_id") == dossier_id]
     contenu["photos"] = sorted(photo.name for photo in (dossier / "galerie").glob("*")) if (dossier / "galerie").exists() else []
 
     return json.dumps({"dossier": dossier_id, "export": date.today().isoformat(), **contenu}, ensure_ascii=False, indent=2)

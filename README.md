@@ -111,7 +111,7 @@ textes.py             libellés de l'interface, noms propres, pluriels
 config/               evenements.py (types et champs par type), features.py (flags), profils.py (les trois vues)
 ui/                   un module par onglet, composants partagés, habillage HTML/CSS
 metier/               agenda, budget, devis, messages, invités, galerie, jour J, accueil, RGPD
-donnees/              stockage JSON, dossiers clients, fiche, données de démonstration
+donnees/              base SQLite, reprise des anciens JSON, dossiers clients, fiche, démonstration
 llm/                  agent Groq, outils de l'agent, Outlook, prompt système
 llm/rag/              recherche dans les documents : extraits, base vectorielle, reclassement, prompts
 exemples/             documents fictifs pour essayer la recherche (dont un piégé)
@@ -119,7 +119,7 @@ index_documents/      base vectorielle ChromaDB (créée au premier import, igno
 assets/               feuille de style, salle 3D
 tests/                tests unitaires (pytest)
 .github/workflows/     intégration continue (ruff, mypy, pytest)
-dossiers/             données des clients, un sous-dossier par client (créé au lancement, ignoré par git)
+dossiers/             photos et documents des clients, un sous-dossier par client (ignoré par git)
 ```
 
-À la racine, `agenda_data.json` (agenda commun), `annuaire_prestataires.json` (carnet commun) et `aurore_etat.json` (état de la démonstration) sont créés au lancement et ignorés par git.
+À la racine, `aurore.db` (base SQLite, ignorée par git) contient toutes les données, sauf les photos et les documents importés. Si la base est vide et que d'anciens fichiers JSON existent, leur contenu est repris au lancement ; ces fichiers sont conservés et ne servent plus ensuite.

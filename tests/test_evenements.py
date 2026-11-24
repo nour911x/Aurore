@@ -1,5 +1,5 @@
 from config.evenements import CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, champs_du_type, champs_masques, cle_type, libelle_evenement
-from donnees.dossiers import FICHIER_FICHE, chemin, creer
+from donnees.dossiers import NOM_FICHE, creer, emplacement
 from donnees.fiche_evenement import FicheEvenement
 
 
@@ -29,12 +29,12 @@ def test_libelle_d_un_evenement_autre():
 
 def test_changer_de_type_masque_les_champs_sans_les_supprimer(tmp_path):
     dossier_id = creer({"type_evenement": "Mariage", "ceremonie": "Laïque à 15h", "preferences_musicales": ["soul"]}, tmp_path)
-    fiche = FicheEvenement(chemin(dossier_id, FICHIER_FICHE, tmp_path))
+    fiche = FicheEvenement(emplacement(dossier_id, NOM_FICHE, tmp_path))
 
     assert champs_masques(fiche.donnees, "anniversaire") == ["Cérémonie", "Musique"]
 
     fiche.changer_type("anniversaire")
-    relue = FicheEvenement(fiche.chemin_fichier).donnees
+    relue = FicheEvenement(fiche.emplacement).donnees
 
     assert "ceremonie" not in champs_du_type(relue)
     assert relue["ceremonie"] == "Laïque à 15h"

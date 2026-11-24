@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from config.profils import ORGANISATEUR, PRESTATAIRE
-from donnees.dossiers import chemin
+from donnees.dossiers import emplacement
 from metier.budget import POSTE_ORGANISATION, Budget
 from metier.devis import STATUTS_DEVIS, date_lisible, date_validite, generer_pdf, lignes_valides, totaux
 from metier.messages import EMETTEUR_AURORE, destinataire_clients, suggestion
@@ -83,7 +83,7 @@ class VueBudget:
     def afficher_achats(self):
         identifiant = self.prestataire["id"]
         achats = self.obtenir_persistant(
-            f"achats_{self.dossier_id}_{identifiant}", lambda: Budget(chemin(self.dossier_id, f"achats_{identifiant}.json"))
+            f"achats_{self.dossier_id}_{identifiant}", lambda: Budget(emplacement(self.dossier_id, f"achats_{identifiant}"))
         )
         st.caption("Vos achats pour cet événement (denrées, boissons, location…) et les factures de vos fournisseurs, avec leurs échéances.")
         self.afficher_alertes_factures(achats)

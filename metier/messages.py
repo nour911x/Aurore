@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from donnees.stockage import charger_json, premier, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, premier, sauvegarder_donnees
 from textes import noms_clients
 
 
@@ -144,16 +144,16 @@ def detecter_messages(donnees_evenement: dict, carnet: "Carnet", agenda: "Agenda
 
 
 class Messagerie:
-    def __init__(self, chemin_fichier: str) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement) -> None:
+        self.emplacement = emplacement
         self.messages: list[dict] = []
         self.charger()
 
     def charger(self) -> None:
-        self.messages = charger_json(self.chemin_fichier, [])
+        self.messages = charger_donnees(self.emplacement, [])
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, self.messages)
+        sauvegarder_donnees(self.emplacement, self.messages)
 
     def cles_traitees(self) -> set[str]:
         return {message["cle"] for message in self.messages}

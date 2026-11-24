@@ -3,21 +3,21 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from donnees.stockage import charger_json, premier, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, premier, sauvegarder_donnees
 
 
 class Documents:
-    def __init__(self, chemin_fichier: str, dossier: str | Path) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement, dossier: str | Path) -> None:
+        self.emplacement = emplacement
         self.dossier = Path(dossier)
         self.documents: list[dict] = []
         self.charger()
 
     def charger(self) -> None:
-        self.documents = charger_json(self.chemin_fichier, [])
+        self.documents = charger_donnees(self.emplacement, [])
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, self.documents)
+        sauvegarder_donnees(self.emplacement, self.documents)
 
     @staticmethod
     def nouvel_id() -> str:
