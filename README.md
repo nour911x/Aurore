@@ -79,6 +79,7 @@ L'application s'ouvre sur http://localhost:8501. Au tout premier lancement, des 
 |---|---|---|
 | `GROQ_KEY` | oui | Clé de l'API Groq (chat, vision, transcription audio) |
 | `MOT_DE_PASSE_HACHE` | oui | Mot de passe organisateur haché, écrit par `python definir_mot_de_passe.py` |
+| `NOM_ORGANISATEUR` | non | Nom affiché dans le menu et l'accueil |
 | `AURORE_DONNEES` | non | Dossier où enregistrer les données (par défaut, celui du projet) |
 | `OUTLOOK_ACCOUNT` | non | Compte Outlook à utiliser pour synchroniser l'agenda (Windows, Outlook installé) |
 
@@ -126,6 +127,7 @@ llm/rag/              recherche dans les documents : extraits, base vectorielle,
 exemples/             documents fictifs pour essayer la recherche (dont un piégé)
 index_documents/      base vectorielle ChromaDB (créée au premier import, ignorée par git)
 assets/               salle 3D
+static/               photos de l'accueil
 tests/                tests unitaires (pytest)
 .github/workflows/     intégration continue (ruff, mypy, pytest)
 dossiers/             photos et documents des clients, un sous-dossier par client (ignoré par git)

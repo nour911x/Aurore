@@ -47,7 +47,7 @@ def test_config_streamlit_utilise_la_palette():
     valeurs = [*theme.values(), *theme["sidebar"].values()]
     couleurs = {valeur for valeur in valeurs if isinstance(valeur, str) and valeur.startswith("#")}
 
-    assert couleurs - set(COULEURS.values()) == {"#1E1B18"}
+    assert couleurs - set(COULEURS.values()) == {"#3A172B"}
 
 
 def test_tout_le_style_est_dans_le_theme():

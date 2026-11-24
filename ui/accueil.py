@@ -2,16 +2,24 @@ from datetime import datetime
 
 import streamlit as st
 
+from config.evenements import cle_type, libelle_evenement
 from donnees.demo import creer_demo, demo_active, retirer_demo
+from donnees.dossiers import libelle_dossier
 from metier.accueil import JOURS_SURVEILLANCE, synthese
+from metier.agenda import bornes
 from metier.devis import date_lisible
-from textes import RACCOURCIS, date_longue, montant, pluriel
+from textes import RACCOURCIS, date_longue, montant, noms_courts, pluriel
 from ui import composants, design
-from ui.commun import echeance_lisible, heure_rdv, ouvrir_dossier, sans_couleur
+from ui.commun import echeance_lisible, heure_rdv, ouvrir_dossier, ouvrir_nouveau_dossier, sans_couleur
 from ui.contexte import Vue
 from ui.discussion import VueDiscussion
-from ui.habillage import salutation
+from ui.habillage import nom_organisateur, salutation
 from ui.index_documents import nettoyer_index
+
+
+SYMBOLES_RDV = {"Essayage": "checkroom", "Visite": "apartment", "Dégustation": "restaurant", "Réunion": "groups", "Appel": "call"}
+
+TEINTES_RDV = ["#C79A5B", "#8B2340", "#6F8F6A"]
 
 
 class VueAccueil(Vue):
@@ -20,16 +28,30 @@ class VueAccueil(Vue):
         design.lien_action(libelle, cle, ouvrir_dossier, (dossier_id, onglet, section))
 
 
-    def afficher_rdvs_du_jour(self, rdvs):
-        design.titre_section("Aujourd'hui")
+    @staticmethod
+    def etat_rdv(rdv, maintenant):
+        debut, fin = bornes(rdv)
+
+        if fin <= maintenant:
+            return "Passé", "neutre"
+
+        return ("En cours", "ok") if debut <= maintenant else ("À venir", "")
+
+
+    def afficher_rdvs_du_jour(self, rdvs, maintenant):
+        design.titre_section(":material/today: Aujourd'hui")
 
         if not rdvs:
             design.vide("Aucun rendez-vous aujourd'hui.")
 
         for index, rdv in enumerate(rdvs):
+            badge, classe = self.etat_rdv(rdv, maintenant)
+
             with design.ligne(f"rdv-{index}"):
-                design.texte_ligne(
-                    rdv["titre"], f"{rdv['dossier']} · avec {rdv['avec'] or '—'} · {rdv['lieu'] or 'lieu à préciser'}", heure_rdv(rdv)
+                design.evenement(
+                    rdv["titre"], f"{rdv['dossier']} · avec {rdv['avec'] or '—'} · {rdv['lieu'] or 'lieu à préciser'}",
+                    SYMBOLES_RDV.get(rdv["type"], "event"), heure=heure_rdv(rdv), teinte=TEINTES_RDV[index % len(TEINTES_RDV)],
+                    badge=badge, classe_badge=classe
                 )
                 self.lien_ouvrir(f"jour_{index}", rdv["dossier_id"], "planning", "agenda")
 
@@ -39,7 +61,7 @@ class VueAccueil(Vue):
 
 
     def afficher_conflits(self, paires, doubles):
-        design.titre_section("Conflits")
+        design.titre_section(":material/warning: Conflits")
 
         if not paires and not doubles:
             design.vide("Aucun conflit.")
@@ -72,7 +94,7 @@ class VueAccueil(Vue):
 
 
     def afficher_a_faire(self, elements):
-        design.titre_section("À faire")
+        design.titre_section(":material/task_alt: À faire")
 
         if not elements:
             design.vide("Rien en attente.")
@@ -100,7 +122,7 @@ class VueAccueil(Vue):
 
 
     def afficher_paiements(self, factures):
-        design.titre_section("Paiements")
+        design.titre_section(":material/payments: Paiements")
 
         if not factures:
             design.vide("Aucun paiement à suivre.")
@@ -118,19 +140,78 @@ class VueAccueil(Vue):
 
 
     def afficher_a_surveiller(self, dossiers):
-        design.titre_section(f"Dossiers à surveiller (J-{JOURS_SURVEILLANCE} et moins)")
+        design.titre_section(":material/auto_awesome: Prochains événements")
 
         if not dossiers:
             design.vide(f"Aucun événement dans les {JOURS_SURVEILLANCE} prochains jours.")
 
         for dossier in dossiers:
-            etat = f"à définir : {', '.join(dossier['manquants'])}" if dossier["manquants"] else "dossier complet"
+            fiche = self.ctx.dossiers.get(dossier["dossier_id"], {})
+            manquants = f" · à définir : {', '.join(dossier['manquants'])}" if dossier["manquants"] else " · dossier complet"
+            vignette = "mariage" if cle_type(fiche.get("type_evenement")) == "mariage" else "fete"
 
             with design.ligne(f"surveiller-{dossier['dossier_id']}"):
-                design.texte_ligne(
-                    dossier["dossier"], heure=f"J-{dossier['jours']}", etat=etat, classe_etat="attention" if dossier["manquants"] else "ok"
+                design.evenement(
+                    f"{noms_courts(fiche.get('noms')) or 'Sans nom'} · {libelle_evenement(fiche)}",
+                    f"{date_lisible(fiche.get('date'))}{manquants}", vignette=vignette,
+                    badge=f"J-{dossier['jours']}", classe_badge="" if dossier["manquants"] else "ok"
                 )
                 self.lien_ouvrir(f"surveiller_{dossier['dossier_id']}", dossier["dossier_id"], "fiche")
+
+
+    @staticmethod
+    def ouvrir_recherche():
+        dossier_id = st.session_state.recherche
+
+        if dossier_id:
+            ouvrir_dossier(dossier_id)
+
+        st.session_state.recherche = None
+
+
+    def afficher_barre_recherche(self, a_faire):
+        recherche, cloche = st.columns([6, 1], vertical_alignment="center")
+
+        with recherche.container(key="recherche-globale"):
+            st.selectbox(
+                "Rechercher", list(self.ctx.dossiers), index=None, key="recherche", placeholder="Rechercher un événement, un client…",
+                format_func=lambda dossier_id: libelle_dossier(self.ctx.dossiers[dossier_id]),
+                label_visibility="collapsed", on_change=self.ouvrir_recherche
+            )
+
+        with cloche.popover(str(len(a_faire)) if a_faire else "", icon=":material/notifications:", help="Dossiers à traiter", width="stretch"):
+            if not a_faire:
+                design.vide("Rien en attente.")
+
+            for element in a_faire:
+                st.button(
+                    element["dossier"], key=f"cloche_{element['dossier_id']}", type="tertiary",
+                    on_click=ouvrir_dossier, args=(element["dossier_id"], "fiche" if element["a_definir"] else "messages")
+                )
+
+
+    @staticmethod
+    def destination(elements, onglet, section=None):
+        return {"au_clic": ouvrir_dossier, "arguments": (elements[0]["dossier_id"], onglet, section)} if elements else {}
+
+
+    def afficher_cartes(self, donnees):
+        conflits = [premier for premier, _ in donnees["conflits"]]
+        nombre_conflits = len(conflits) + len(donnees["doubles_reservations"])
+        retards = any(facture["jours_restants"] < 0 for facture in donnees["paiements"])
+        a_traiter = donnees["a_faire"]
+        cartes = [
+            ("rdv", "calendar_today", "", "Rendez-vous aujourd'hui", len(donnees["rdvs_du_jour"]), False,
+             self.destination(donnees["rdvs_du_jour"], "planning", "agenda")),
+            ("dossiers", "folder", "", "Dossiers à traiter", len(a_traiter), False, self.destination(a_traiter, "messages", "a_envoyer")),
+            ("paiements", "euro", "rose", "Paiements à suivre", len(donnees["paiements"]), retards, self.destination(donnees["paiements"], "budget", "budget")),
+            ("conflits", "warning" if nombre_conflits else "check", "rose" if nombre_conflits else "menthe", "Conflits", nombre_conflits,
+             bool(nombre_conflits), self.destination(conflits, "planning", "agenda"))
+        ]
+
+        for colonne, (cle, symbole, teinte, libelle, valeur, alerte, destination) in zip(st.columns(4), cartes, strict=True):
+            with colonne:
+                design.carte(cle, symbole, teinte, libelle, valeur, alerte, **destination)
 
 
     def afficher_demo(self):
@@ -158,22 +239,33 @@ class VueAccueil(Vue):
     def afficher_aujourd_hui(self):
         maintenant = datetime.now()
         donnees = synthese(maintenant=maintenant)
-        retards = any(facture["jours_restants"] < 0 for facture in donnees["paiements"])
-        design.grand_titre(f"{salutation()}.", date_longue(maintenant))
-        design.indicateurs(
-            {
-                "Rendez-vous aujourd'hui": len(donnees["rdvs_du_jour"]),
-                "Dossiers à traiter": len(donnees["a_faire"]),
-                "Paiements à suivre": len(donnees["paiements"]),
-                "Conflits": len(donnees["conflits"]) + len(donnees["doubles_reservations"])
-            },
-            alertes={"Conflits"} | ({"Paiements à suivre"} if retards else set())
+        nom = nom_organisateur()
+        self.afficher_barre_recherche(donnees["a_faire"])
+        design.banniere(
+            f"{salutation()}, {nom.split()[0]} !" if nom else f"{salutation()} !",
+            f"{date_longue(maintenant)} {maintenant.year}", "Créons des moments inoubliables."
         )
-        self.afficher_rdvs_du_jour(donnees["rdvs_du_jour"])
-        self.afficher_a_faire(donnees["a_faire"])
-        self.afficher_conflits(donnees["conflits"], donnees["doubles_reservations"])
-        self.afficher_paiements(donnees["paiements"])
-        self.afficher_a_surveiller(donnees["a_surveiller"])
+        self.afficher_cartes(donnees)
+        gauche, droite = st.columns([2, 1])
+
+        with gauche:
+            with design.bloc("jour"):
+                self.afficher_rdvs_du_jour(donnees["rdvs_du_jour"], maintenant)
+
+            with design.bloc("faire"):
+                self.afficher_a_faire(donnees["a_faire"])
+
+        with droite:
+            st.button("Nouveau dossier", icon=":material/add:", key="nouveau_dossier_accueil", type="primary", width="stretch", on_click=ouvrir_nouveau_dossier)
+
+            with design.bloc("evenements"):
+                self.afficher_a_surveiller(donnees["a_surveiller"])
+
+            with design.bloc("conflits"):
+                self.afficher_conflits(donnees["conflits"], donnees["doubles_reservations"])
+
+            with design.bloc("paiements"):
+                self.afficher_paiements(donnees["paiements"])
 
 
     def afficher_tableau_de_bord(self):
