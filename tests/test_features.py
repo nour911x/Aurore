@@ -1,8 +1,8 @@
-from app import InterfaceUtilisateur
 from config import features
 from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
 from llm.outils import OUTILS_PAR_ESPACE
 from ui.commun import ESPACES
+from ui.interface import InterfaceUtilisateur
 
 
 def test_sections_masquees_selon_les_flags():

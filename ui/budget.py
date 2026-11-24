@@ -10,10 +10,13 @@ from metier.devis import STATUTS_DEVIS, date_lisible, date_validite, generer_pdf
 from metier.messages import EMETTEUR_AURORE, destinataire_clients, suggestion
 from metier.prestataires import meme_nom
 from textes import NOTES_DEVIS, echeance_texte, montant, noms_clients
+from ui import composants
 from ui.commun import COLONNES_DEVIS, CONFIG_COLONNES_DEVIS, FORMAT_DATE, lire_date
+from ui.contexte import Vue
+from ui.messages import VueMessages
 
 
-class VueBudget:
+class VueBudget(Vue):
     @staticmethod
     def afficher_alertes_factures(budget):
         for facture in budget.factures_a_payer():
@@ -81,9 +84,9 @@ class VueBudget:
 
 
     def afficher_achats(self):
-        identifiant = self.prestataire["id"]
-        achats = self.obtenir_persistant(
-            f"achats_{self.dossier_id}_{identifiant}", lambda: Budget(emplacement(self.dossier_id, f"achats_{identifiant}"))
+        identifiant = self.ctx.prestataire["id"]
+        achats = composants.obtenir_persistant(
+            f"achats_{self.ctx.dossier_id}_{identifiant}", lambda: Budget(emplacement(self.ctx.dossier_id, f"achats_{identifiant}"))
         )
         st.caption("Vos achats pour cet événement (denrées, boissons, location…) et les factures de vos fournisseurs, avec leurs échéances.")
         self.afficher_alertes_factures(achats)
@@ -92,22 +95,22 @@ class VueBudget:
 
 
     def afficher_budget(self):
-        self.afficher_alertes_factures(self.budget)
+        self.afficher_alertes_factures(self.ctx.budget)
 
-        if not self.budget.postes:
+        if not self.ctx.budget.postes:
             st.info("Aucun poste de budget pour l'instant.")
 
-            if self.fiche_evenement.donnees["budget"] and st.button("Proposer une répartition adaptée à mon événement", icon=":material/lightbulb:"):
-                    postes = self.agent.suggerer_budget_postes(self.fiche_evenement.donnees)
+            if self.ctx.fiche_evenement.donnees["budget"] and st.button("Proposer une répartition adaptée à mon événement", icon=":material/lightbulb:"):
+                    postes = self.ctx.agent.suggerer_budget_postes(self.ctx.fiche_evenement.donnees)
 
                     for poste in postes:
-                        self.budget.ajouter_poste(poste["nom"], poste["montant_prevu"])
+                        self.ctx.budget.ajouter_poste(poste["nom"], poste["montant_prevu"])
 
                     st.rerun()
         else:
-            self.afficher_budget_postes(self.budget, self.fiche_evenement.donnees["budget"], "budget")
+            self.afficher_budget_postes(self.ctx.budget, self.ctx.fiche_evenement.donnees["budget"], "budget")
 
-        self.afficher_budget_forms(self.budget, "budget")
+        self.afficher_budget_forms(self.ctx.budget, "budget")
 
 
     def nouvelles_lignes_devis(self, lignes):
@@ -116,31 +119,32 @@ class VueBudget:
 
 
     def accepter_devis(self, devis, montants):
-        prestataire = self.carnet.trouver(devis["prestataire_id"])
+        prestataire = self.ctx.carnet.trouver(devis["prestataire_id"])
         poste = (prestataire["poste_budget"] or prestataire["categorie"]) if prestataire else POSTE_ORGANISATION
-        echeance_solde = lire_date(self.fiche_evenement.donnees["date"]) or date.today() + timedelta(days=30)
-        self.budget.enregistrer_devis(devis["numero"], montants, poste, echeance_solde)
+        echeance_solde = lire_date(self.ctx.fiche_evenement.donnees["date"]) or date.today() + timedelta(days=30)
+        self.ctx.budget.enregistrer_devis(devis["numero"], montants, poste, echeance_solde)
 
         if prestataire:
-            self.changer_statut_prestataire(prestataire, "Réservé")
+            self.ctx.changer_statut_prestataire(prestataire, "Réservé")
 
 
     def afficher_devis_form(self, deja_des_devis):
-        if self.prestataire:
-            emetteurs = {self.prestataire["nom"]: self.prestataire}
+        if self.ctx.prestataire:
+            emetteurs = {self.ctx.prestataire["nom"]: self.ctx.prestataire}
         else:
-            emetteurs = {EMETTEUR_AURORE: None} | {prestataire["nom"]: prestataire for prestataire in self.carnet.prestataires}
+            emetteurs = {EMETTEUR_AURORE: None} | {prestataire["nom"]: prestataire for prestataire in self.ctx.carnet.prestataires}
 
         with st.expander("Nouveau devis", icon=":material/add:", expanded=not deja_des_devis):
-            emetteur = st.selectbox("Émis par", list(emetteurs), disabled=bool(self.prestataire))
+            emetteur = st.selectbox("Émis par", list(emetteurs), disabled=bool(self.ctx.prestataire))
             prestataire = emetteurs[emetteur]
 
             if st.button("Proposer les lignes avec AURORE", icon=":material/auto_awesome:"):
                 categorie = prestataire["categorie"] if prestataire else "Organisation d'événements"
-                infos = self.infos_pour_destinataire(self.prestataire["id"]) if self.prestataire else self.fiche_evenement.infos_sans_historique()
+                fiche = self.ctx.fiche_evenement
+                infos = self.ctx.infos_pour_destinataire(self.ctx.prestataire["id"]) if self.ctx.prestataire else fiche.infos_sans_historique()
 
                 with st.spinner("AURORE prépare les lignes du devis…"):
-                    suggestions = self.agent.suggerer_devis_lignes(emetteur, categorie, infos)
+                    suggestions = self.ctx.agent.suggerer_devis_lignes(emetteur, categorie, infos)
 
                 self.nouvelles_lignes_devis(lignes_valides(suggestions))
 
@@ -164,10 +168,10 @@ class VueBudget:
                 if not lignes:
                     st.warning("Ajoute au moins une ligne avec une désignation.")
                 else:
-                    self.carnet_devis.ajouter_devis(
+                    self.ctx.carnet_devis.ajouter_devis(
                         emetteur,
                         prestataire["id"] if prestataire else None,
-                        noms_clients(self.fiche_evenement.donnees),
+                        noms_clients(self.ctx.fiche_evenement.donnees),
                         lignes, tva, acompte, validite, notes
                     )
                     self.nouvelles_lignes_devis([])
@@ -196,7 +200,7 @@ class VueBudget:
             )
 
             if nouveau_statut != devis["statut"]:
-                self.carnet_devis.changer_statut(numero, nouveau_statut)
+                self.ctx.carnet_devis.changer_statut(numero, nouveau_statut)
 
                 if nouveau_statut == "Accepté":
                     self.accepter_devis(devis, montants)
@@ -209,7 +213,7 @@ class VueBudget:
             bouton_pdf, bouton_envoi, bouton_supprimer = st.columns([2, 3, 1])
             bouton_pdf.download_button(
                 "Télécharger le PDF", icon=":material/download:",
-                data=generer_pdf(devis, self.fiche_evenement.donnees),
+                data=generer_pdf(devis, self.ctx.fiche_evenement.donnees),
                 file_name=f"{numero}.pdf",
                 mime="application/pdf",
                 key=f"pdf_{numero}",
@@ -221,17 +225,18 @@ class VueBudget:
 
             if bouton_envoi.button("Préparer le message d'envoi", icon=":material/mail:", key=f"envoi_{numero}", width="stretch"):
                 contexte = {**devis, "totaux": montants}
-                self.rediger(suggestion(f"envoi_devis_{numero}", "envoi_devis", destinataire_clients(self.fiche_evenement.donnees), contexte))
+                destinataire = destinataire_clients(self.ctx.fiche_evenement.donnees)
+                VueMessages(self.ctx).rediger(suggestion(f"envoi_devis_{numero}", "envoi_devis", destinataire, contexte))
 
             if bouton_supprimer.button("Supprimer", key=f"suppr_devis_{numero}"):
-                self.carnet_devis.supprimer(numero)
+                self.ctx.carnet_devis.supprimer(numero)
                 st.rerun()
 
 
     def afficher_devis(self, profil):
         devis_visibles = [
-            devis for devis in self.carnet_devis.devis
-            if not self.prestataire or meme_nom(devis["emetteur"], self.prestataire["nom"])
+            devis for devis in self.ctx.carnet_devis.devis
+            if not self.ctx.prestataire or meme_nom(devis["emetteur"], self.ctx.prestataire["nom"])
         ]
 
         if not devis_visibles:

@@ -79,6 +79,7 @@ L'application s'ouvre sur http://localhost:8501. Au tout premier lancement, des 
 |---|---|---|
 | `GROQ_KEY` | oui | Clé de l'API Groq (chat, vision, transcription audio) |
 | `MOT_DE_PASSE_HACHE` | oui | Mot de passe organisateur haché, écrit par `python definir_mot_de_passe.py` |
+| `AURORE_DONNEES` | non | Dossier où enregistrer les données (par défaut, celui du projet) |
 | `OUTLOOK_ACCOUNT` | non | Compte Outlook à utiliser pour synchroniser l'agenda (Windows, Outlook installé) |
 
 Aucune clé n'est écrite dans le code.
@@ -108,15 +109,16 @@ mypy               # vérification des types
 
 Les trois commandes sont lancées automatiquement par GitHub Actions à chaque push (`.github/workflows/qualite.yml`). Leur configuration est dans `pyproject.toml`.
 
-Les tests couvrent la logique métier : conflits de calendrier, budget et devis, normalisation des noms, statuts des messages, règles RGPD, accueil sur les données de démonstration. Ils n'écrivent que dans des dossiers temporaires.
+Les tests couvrent la logique métier, les PDF, l'agent et ses outils, le RAG, la sécurité et chaque écran (AppTest). Ils n'écrivent que dans des dossiers temporaires et n'appellent jamais Groq. Une couverture sous 80 % fait échouer la CI.
 
 ## Structure
 
 ```
-app.py                point d'entrée Streamlit
+app.py                point d'entrée : connexion, puis interface
+DECISIONS.md          choix techniques et leurs limites
 textes.py             libellés de l'interface, noms propres, pluriels
 config/               evenements.py (types et champs par type), features.py (flags), profils.py (les trois vues)
-ui/                   un module par onglet, composants partagés, habillage HTML/CSS
+ui/                   contexte.py (état du dossier ouvert), interface.py (mise en page), une vue par onglet, composants, habillage
 metier/               agenda, budget, devis, messages, invités, galerie, jour J, accueil, RGPD
 donnees/              base SQLite, reprise des anciens JSON, dossiers clients, fiche, démonstration
 llm/                  agent Groq, outils de l'agent, Outlook, prompt système

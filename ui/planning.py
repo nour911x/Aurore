@@ -21,43 +21,40 @@ from metier.jour_j import (
 from metier.messages import fiche_publique
 from metier.rgpd import CATEGORIE_DONNEES_SANTE, recap_anonyme, recap_sans_sante, sante_partageable
 from textes import CHOIX_TYPE_RDV, date_longue, pluriel
+from ui import composants
 from ui.commun import AUCUN, CONFIG_COLONNES_DEROULE, DELAI_BRIEFING_AUTOMATIQUE, FORMAT_DATE
+from ui.contexte import Vue
 from ui.habillage import disposition_salle, frise_html, plan_salle_html, salle_3d_html
 
 
-class VuePlanning:
-    def rdvs_visibles(self, rdvs):
-        visibles = self.outils.rdvs_visibles()
-        return [rdv for rdv in rdvs if rdv in visibles]
-
-
+class VuePlanning(Vue):
     def afficher_rappels_rdv(self):
-        for rdv in self.rdvs_visibles(self.agenda.rdvs_proches()):
+        for rdv in self.ctx.rdvs_visibles(self.ctx.agenda.rdvs_proches()):
             date_lisible = datetime.fromisoformat(rdv["date_heure"]).strftime("%d/%m à %H:%M")
             st.info(f"Bientôt : {rdv['titre']} le {date_lisible} avec {rdv['avec']}", icon=":material/event:")
 
 
     def generer_briefing(self, rdv):
-        if self.prestataire:
-            donnees_evenement = self.infos_pour_destinataire(self.prestataire["id"])
-            historique, budget, fiche = [], [], fiche_publique(self.prestataire)
+        if self.ctx.prestataire:
+            donnees_evenement = self.ctx.infos_pour_destinataire(self.ctx.prestataire["id"])
+            historique, budget, fiche = [], [], fiche_publique(self.ctx.prestataire)
         else:
-            fiche = self.carnet.trouver_par_nom(rdv["avec"])
+            fiche = self.ctx.carnet.trouver_par_nom(rdv["avec"])
             besoin_sante = type_rdv(rdv) == "Dégustation" or bool(fiche and fiche["categorie"] == CATEGORIE_DONNEES_SANTE)
-            avec_sante = besoin_sante and sante_partageable(self.fiche_evenement.donnees)
-            donnees_evenement = self.fiche_evenement.infos_sans_historique(avec_sante=avec_sante)
-            historique, budget = self.fiche_evenement.donnees["historique"], self.budget.resume()
+            avec_sante = besoin_sante and sante_partageable(self.ctx.fiche_evenement.donnees)
+            donnees_evenement = self.ctx.fiche_evenement.infos_sans_historique(avec_sante=avec_sante)
+            historique, budget = self.ctx.fiche_evenement.donnees["historique"], self.ctx.budget.resume()
 
-        if self.liste_invites.invites:
-            recap = self.liste_invites.recap_traiteur()
+        if self.ctx.liste_invites.invites:
+            recap = self.ctx.liste_invites.recap_traiteur()
             avec_sante = "allergies_interdits" in donnees_evenement
             donnees_evenement["invites"] = recap_anonyme(recap) if avec_sante else recap_sans_sante(recap)
 
-        return self.agent.preparer_briefing(rdv, donnees_evenement, historique, budget, fiche)
+        return self.ctx.agent.preparer_briefing(rdv, donnees_evenement, historique, budget, fiche)
 
 
     def briefing(self, rdv):
-        if self.prestataire:
+        if self.ctx.prestataire:
             return st.session_state.briefings.get(f"{rdv['titre']}_{rdv['date_heure']}")
 
         return rdv.get("briefing")
@@ -67,16 +64,16 @@ class VuePlanning:
         with st.spinner(f"AURORE prépare le briefing de « {rdv['titre']} »…"):
             texte = self.generer_briefing(rdv)
 
-        if self.prestataire:
+        if self.ctx.prestataire:
             st.session_state.briefings[f"{rdv['titre']}_{rdv['date_heure']}"] = texte
             return
 
         rdv["briefing"] = texte
-        self.agenda.sauvegarder()
+        self.ctx.agenda.sauvegarder()
 
 
     def briefing_automatique(self, rdv):
-        if self.prestataire or rdv.get("briefing") or bornes(rdv)[0] - datetime.now() > DELAI_BRIEFING_AUTOMATIQUE:
+        if self.ctx.prestataire or rdv.get("briefing") or bornes(rdv)[0] - datetime.now() > DELAI_BRIEFING_AUTOMATIQUE:
             return
 
         try:
@@ -86,7 +83,7 @@ class VuePlanning:
 
 
     def afficher_rdvs(self, lecture_seule=False):
-        rdvs = self.rdvs_visibles(self.agenda.rdvs_a_venir())
+        rdvs = self.ctx.rdvs_visibles(self.ctx.agenda.rdvs_a_venir())
 
         if not rdvs:
             st.info("Aucun rendez-vous à venir.")
@@ -108,7 +105,7 @@ class VuePlanning:
                 if rdv["avec"] and not rdv.get("confirme") and not lecture_seule:
                     bouton_confirmer.button(
                         "Marquer confirmé", key=f"confirme_{cle}", icon=":material/check:",
-                        on_click=self.agenda.confirmer, args=(rdv["titre"], rdv["date_heure"], self.dossier_id)
+                        on_click=self.ctx.agenda.confirmer, args=(rdv["titre"], rdv["date_heure"], self.ctx.dossier_id)
                     )
 
                 self.briefing_automatique(rdv)
@@ -118,7 +115,7 @@ class VuePlanning:
                     self.preparer_briefing(rdv)
 
                 if not lecture_seule and bouton_supprimer.button("Supprimer", key=f"del_{cle}"):
-                    self.agenda.supprimer_rdv(rdv["titre"], rdv["date_heure"])
+                    self.ctx.agenda.supprimer_rdv(rdv["titre"], rdv["date_heure"])
                     st.session_state.briefings.pop(cle, None)
                     st.rerun()
 
@@ -129,14 +126,14 @@ class VuePlanning:
         if rdvs:
             st.download_button(
                 "Exporter vers mon calendrier (.ics)", icon=":material/download:",
-                data=self.agenda.exporter_ics(rdvs),
+                data=self.ctx.agenda.exporter_ics(rdvs),
                 file_name="aurore_rendez_vous.ics",
                 mime="text/calendar"
             )
 
-        if self.outils.avec_outlook and not self.prestataire and st.button("Envoyer mes rendez-vous vers Outlook", icon=":material/outbox:"):
+        if self.ctx.outils.avec_outlook and not self.ctx.prestataire and st.button("Envoyer mes rendez-vous vers Outlook", icon=":material/outbox:"):
             with st.spinner("Synchronisation avec Outlook…"):
-                nombre_envoyes = self.outils.synchroniser_outlook()
+                nombre_envoyes = self.ctx.outils.synchroniser_outlook()
 
             st.success(f"{pluriel(nombre_envoyes, 'rendez-vous ajouté', 'rendez-vous ajoutés')} à Outlook.")
 
@@ -151,19 +148,19 @@ class VuePlanning:
                 duree = st.number_input("Durée (minutes)", min_value=15, step=15, value=60)
                 lieu = st.text_input("Lieu")
 
-                if self.prestataire:
-                    avec = self.prestataire["nom"]
+                if self.ctx.prestataire:
+                    avec = self.ctx.prestataire["nom"]
                 else:
-                    noms_prestataires = [AUCUN] + [prestataire["nom"] for prestataire in self.carnet.prestataires]
+                    noms_prestataires = [AUCUN] + [prestataire["nom"] for prestataire in self.ctx.carnet.prestataires]
                     prestataire_choisi = st.selectbox("Avec quel prestataire", noms_prestataires)
                     autre = st.text_input("Ou avec quelqu'un d'autre (ex : les clients, la témoin)")
                     avec = autre or ("" if prestataire_choisi == AUCUN else prestataire_choisi)
 
                 if st.form_submit_button("Ajouter le rendez-vous") and titre:
                     date_heure = datetime.combine(jour, heure).isoformat()
-                    conflit = self.agenda.ajouter_rdv(titre, date_heure, duree, lieu, avec, None if type_choisi == CHOIX_TYPE_RDV else type_choisi)
+                    conflit = self.ctx.agenda.ajouter_rdv(titre, date_heure, duree, lieu, avec, None if type_choisi == CHOIX_TYPE_RDV else type_choisi)
 
-                    if conflit and self.profil != ORGANISATEUR:
+                    if conflit and self.ctx.profil != ORGANISATEUR:
                         st.error("Ce créneau est déjà pris dans l'agenda de l'organisateur. Choisissez un autre horaire.", icon=":material/warning:")
                     elif conflit:
                         st.error(
@@ -175,9 +172,9 @@ class VuePlanning:
 
 
     def precision_dossier(self, rdv):
-        dossier = self.dossiers.get(rdv.get("dossier_id"))
+        dossier = self.ctx.dossiers.get(rdv.get("dossier_id"))
 
-        if not dossier or dossier["id"] == self.dossier_id:
+        if not dossier or dossier["id"] == self.ctx.dossier_id:
             return ""
 
         return f" (dossier {libelle_dossier(dossier)})"
@@ -192,47 +189,47 @@ class VuePlanning:
     def generer_deroule(self):
         reserves = [
             {"nom": prestataire["nom"], "categorie": prestataire["categorie"]}
-            for prestataire in self.carnet.prestataires if prestataire["statut"] == "Réservé"
+            for prestataire in self.ctx.carnet.prestataires if prestataire["statut"] == "Réservé"
         ]
-        date_evenement = self.fiche_evenement.donnees["date"] or ""
-        rdvs_jour_j = [rdv for rdv in self.agenda.rdvs if date_evenement and rdv["date_heure"].startswith(date_evenement)]
+        date_evenement = self.ctx.fiche_evenement.donnees["date"] or ""
+        rdvs_jour_j = [rdv for rdv in self.ctx.agenda.rdvs if date_evenement and rdv["date_heure"].startswith(date_evenement)]
 
         with st.spinner("AURORE construit le déroulé de la journée…"):
-            deroule = self.agent.suggerer_deroule(self.fiche_evenement.infos_pour_prestataire(), reserves, rdvs_jour_j)
+            deroule = self.ctx.agent.suggerer_deroule(self.ctx.fiche_evenement.infos_pour_prestataire(), reserves, rdvs_jour_j)
 
-        self.jour_j.definir_deroule(deroule)
+        self.ctx.jour_j.definir_deroule(deroule)
         st.session_state["version_deroule"] = st.session_state.get("version_deroule", 0) + 1
         st.rerun()
 
 
     def afficher_deroule(self):
-        libelle = "Régénérer le déroulé avec AURORE" if self.jour_j.deroule else "Construire le déroulé avec AURORE"
+        libelle = "Régénérer le déroulé avec AURORE" if self.ctx.jour_j.deroule else "Construire le déroulé avec AURORE"
 
         if st.button(libelle, icon=":material/auto_awesome:"):
             self.generer_deroule()
 
-        if not self.jour_j.deroule:
+        if not self.ctx.jour_j.deroule:
             st.info("AURORE peut proposer le programme heure par heure à partir de la fiche et des prestataires réservés.")
 
-        st.markdown(frise_html(self.jour_j.deroule), unsafe_allow_html=True)
+        st.markdown(frise_html(self.ctx.jour_j.deroule), unsafe_allow_html=True)
 
         with st.expander("Modifier le déroulé", icon=":material/edit:"):
-            self.editer_tableau(
-                "deroule", self.jour_j.deroule, COLONNES_DEROULE, CONFIG_COLONNES_DEROULE,
-                nettoyer_deroule, self.jour_j.definir_deroule
+            composants.editer_tableau(
+                "deroule", self.ctx.jour_j.deroule, COLONNES_DEROULE, CONFIG_COLONNES_DEROULE,
+                nettoyer_deroule, self.ctx.jour_j.definir_deroule
             )
 
-        if self.jour_j.deroule:
+        if self.ctx.jour_j.deroule:
             st.download_button(
                 "Télécharger le déroulé (PDF) pour les prestataires", icon=":material/download:",
-                data=generer_deroule_pdf(self.jour_j.deroule, self.fiche_evenement.donnees),
+                data=generer_deroule_pdf(self.ctx.jour_j.deroule, self.ctx.fiche_evenement.donnees),
                 file_name="deroule-jour-j.pdf",
                 mime="application/pdf"
             )
 
 
     def afficher_amenagement(self, total_personnes):
-        with st.expander("Aménager la salle", icon=":material/construction:", expanded=not self.jour_j.salle["tables"]):
+        with st.expander("Aménager la salle", icon=":material/construction:", expanded=not self.ctx.jour_j.salle["tables"]):
             with st.form("form_salle"):
                 gauche, milieu, droite = st.columns(3)
                 forme = gauche.selectbox("Forme des tables", FORMES_TABLE)
@@ -240,10 +237,10 @@ class VuePlanning:
                 places_honneur = droite.number_input("Table d'honneur (places, 0 = aucune)", min_value=0, max_value=30, value=10)
                 suggestion_tables = max(1, -(-max(total_personnes - places_honneur, 0) // places))
                 nombre = st.number_input("Nombre de tables", min_value=1, max_value=60, value=suggestion_tables)
-                elements = st.multiselect("Dans la salle", ELEMENTS_SALLE, default=self.jour_j.salle["elements"] or ELEMENTS_SALLE[:3])
+                elements = st.multiselect("Dans la salle", ELEMENTS_SALLE, default=self.ctx.jour_j.salle["elements"] or ELEMENTS_SALLE[:3])
 
                 if st.form_submit_button("Créer le plan de la salle"):
-                    self.jour_j.amenager(creer_tables(nombre, places, forme, places_honneur), elements)
+                    self.ctx.jour_j.amenager(creer_tables(nombre, places, forme, places_honneur), elements)
                     st.session_state["version_placement"] = st.session_state.get("version_placement", 0) + 1
                     st.rerun()
 
@@ -253,12 +250,12 @@ class VuePlanning:
             {"id": invite["id"], "nom": invite["nom"], "groupe": invite["groupe"], "personnes": personnes(invite)}
             for invite in a_placer
         ]
-        tables = [{"nom": table["nom"], "places": table["places"]} for table in self.jour_j.salle["tables"]]
+        tables = [{"nom": table["nom"], "places": table["places"]} for table in self.ctx.jour_j.salle["tables"]]
 
         with st.spinner("AURORE réfléchit au plan de table…"):
-            souhaits = self.agent.suggerer_placement(invites, tables, self.fiche_evenement.infos_pour_prestataire())
+            souhaits = self.ctx.agent.suggerer_placement(invites, tables, self.ctx.fiche_evenement.infos_pour_prestataire())
 
-        if not self.jour_j.placer(souhaits, self.liste_invites.invites):
+        if not self.ctx.jour_j.placer(souhaits, self.ctx.liste_invites.invites):
             st.warning("AURORE n'a pas réussi à proposer un placement cette fois-ci. Réessaie, ou place les invités à la main ci-dessous.")
             return
 
@@ -270,14 +267,14 @@ class VuePlanning:
         return [
             {
                 "id": invite["id"], "nom": invite["nom"], "groupe": invite["groupe"], "personnes": personnes(invite),
-                "table": self.jour_j.salle["placement"].get(invite["id"], AUCUNE_TABLE)
+                "table": self.ctx.jour_j.salle["placement"].get(invite["id"], AUCUNE_TABLE)
             }
             for invite in a_placer
         ]
 
 
     def afficher_placement(self, a_placer):
-        noms_tables = [AUCUNE_TABLE] + [table["nom"] for table in self.jour_j.salle["tables"]]
+        noms_tables = [AUCUNE_TABLE] + [table["nom"] for table in self.ctx.jour_j.salle["tables"]]
         config = {
             "id": None,
             "nom": st.column_config.TextColumn("Invité", disabled=True),
@@ -287,10 +284,10 @@ class VuePlanning:
         }
 
         with st.expander("Modifier le placement", icon=":material/edit:"):
-            self.editer_tableau(
+            composants.editer_tableau(
                 "placement", self.lignes_placement(a_placer), ["id", "nom", "groupe", "personnes", "table"], config,
                 lambda lignes: [{**ligne, "table": ligne["table"] or AUCUNE_TABLE} for ligne in lignes],
-                lambda lignes: self.jour_j.placer({ligne["id"]: ligne["table"] for ligne in lignes}, self.liste_invites.invites),
+                lambda lignes: self.ctx.jour_j.placer({ligne["id"]: ligne["table"] for ligne in lignes}, self.ctx.liste_invites.invites),
                 num_rows="fixed"
             )
 
@@ -299,7 +296,7 @@ class VuePlanning:
         colonnes = st.columns(3)
 
         for index, (table, invites) in enumerate(repartition.items()):
-            places = next(ligne["places"] for ligne in self.jour_j.salle["tables"] if ligne["nom"] == table)
+            places = next(ligne["places"] for ligne in self.ctx.jour_j.salle["tables"] if ligne["nom"] == table)
             regimes = [invite["regime"] for invite in invites if invite["regime"] != "Aucun"]
 
             with colonnes[index % 3].container(border=True):
@@ -311,19 +308,19 @@ class VuePlanning:
 
 
     def afficher_plan_salle(self):
-        a_placer = invites_a_placer(self.liste_invites.invites)
+        a_placer = invites_a_placer(self.ctx.liste_invites.invites)
         total = sum(personnes(invite) for invite in a_placer)
         self.afficher_amenagement(total)
 
-        if not self.jour_j.salle["tables"]:
+        if not self.ctx.jour_j.salle["tables"]:
             st.info("Commence par aménager la salle : nombre de tables, forme, table d'honneur.")
             return
 
-        repartition = self.jour_j.par_table(self.liste_invites.invites)
-        non_places = self.jour_j.non_places(self.liste_invites.invites)
-        self.afficher_compteurs({
-            ":material/table_restaurant: Tables": len(self.jour_j.salle["tables"]),
-            ":material/chair: Places": sum(table["places"] for table in self.jour_j.salle["tables"]),
+        repartition = self.ctx.jour_j.par_table(self.ctx.liste_invites.invites)
+        non_places = self.ctx.jour_j.non_places(self.ctx.liste_invites.invites)
+        composants.afficher_compteurs({
+            ":material/table_restaurant: Tables": len(self.ctx.jour_j.salle["tables"]),
+            ":material/chair: Places": sum(table["places"] for table in self.ctx.jour_j.salle["tables"]),
             ":material/groups: Personnes": total,
             "⏳ Non placés": len(non_places)
         })
@@ -344,25 +341,25 @@ class VuePlanning:
             self.afficher_tables(repartition)
             st.download_button(
                 "Télécharger le plan de table (PDF)", icon=":material/download:",
-                data=generer_plan_table_pdf(repartition, self.fiche_evenement.donnees),
+                data=generer_plan_table_pdf(repartition, self.ctx.fiche_evenement.donnees),
                 file_name="plan-de-table.pdf",
                 mime="application/pdf"
             )
 
 
     def disposition_salle(self, repartition):
-        return disposition_salle(self.jour_j.salle["tables"], repartition, self.jour_j.salle["elements"])
+        return disposition_salle(self.ctx.jour_j.salle["tables"], repartition, self.ctx.jour_j.salle["elements"])
 
 
     def afficher_salle_3d(self):
-        if not self.jour_j.salle["tables"]:
+        if not self.ctx.jour_j.salle["tables"]:
             st.info("Aménagez d'abord la salle dans Plan de salle : la 3D est construite à partir du plan.")
             return
 
-        palette = [couleur["hex"] for couleur in self.inspiration.moodboard.get("couleurs", [])]
+        palette = [couleur["hex"] for couleur in self.ctx.inspiration.moodboard.get("couleurs", [])]
         st.caption(
             "La salle est construite à partir de ton plan de salle, aux couleurs du moodboard."
             if palette else "Créez le moodboard dans Inspiration & galerie pour habiller la salle à vos couleurs."
         )
-        disposition = self.disposition_salle(self.jour_j.par_table(self.liste_invites.invites))
+        disposition = self.disposition_salle(self.ctx.jour_j.par_table(self.ctx.liste_invites.invites))
         st.iframe(salle_3d_html(disposition, palette), height=620)

@@ -3,25 +3,27 @@ import streamlit as st
 from donnees.dossiers import libelle_dossier
 from metier.accueil import doubles_reservations
 from metier.devis import date_lisible
-from metier.prestataires import CATEGORIES, STATUTS, appliquer_statut, meme_nom
+from metier.prestataires import CATEGORIES, STATUTS, meme_nom
 from textes import montant
+from ui import composants
 from ui.commun import AUCUN, FORMAT_DATE, ICONES_STATUT
+from ui.contexte import Vue
 
 
-class VuePrestataires:
+class VuePrestataires(Vue):
     def afficher_resume_carnet(self):
-        compteurs = self.carnet.compter_par_statut()
-        self.afficher_compteurs({f"{ICONES_STATUT[statut]} {statut}": compteurs[statut] for statut in STATUTS})
+        compteurs = self.ctx.carnet.compter_par_statut()
+        composants.afficher_compteurs({f"{ICONES_STATUT[statut]} {statut}": compteurs[statut] for statut in STATUTS})
 
 
     def afficher_ajout_facture_prestataire(self, prestataire):
         with st.expander("Ajouter son devis / acompte au budget", icon=":material/receipt_long:"):
-            if not self.budget.postes:
+            if not self.ctx.budget.postes:
                 st.caption("Créez d'abord les postes dans l'onglet Budget & devis.")
                 return
 
             with st.form(f"facture_{prestataire['id']}", clear_on_submit=True):
-                noms_postes = [poste["nom"] for poste in self.budget.postes]
+                noms_postes = [poste["nom"] for poste in self.ctx.budget.postes]
                 index_poste = noms_postes.index(prestataire["poste_budget"]) if prestataire["poste_budget"] in noms_postes else 0
                 poste_choisi = st.selectbox("Poste", noms_postes, index=index_poste)
                 libelle = st.text_input("Libellé", value=f"Acompte {prestataire['nom']}")
@@ -30,25 +32,21 @@ class VuePrestataires:
                 payee = st.checkbox("Déjà payée")
 
                 if st.form_submit_button("Ajouter au budget") and libelle:
-                    self.budget.ajouter_facture(poste_choisi, libelle, montant, str(echeance), payee)
+                    self.ctx.budget.ajouter_facture(poste_choisi, libelle, montant, str(echeance), payee)
                     st.success("Ajouté au budget", icon=":material/check_circle:")
-
-
-    def changer_statut_prestataire(self, prestataire, statut):
-        appliquer_statut(self.carnet, self.fiche_evenement, prestataire, statut)
 
 
     def afficher_conditions(self, prestataire):
         with st.expander("Conditions pour ce dossier", icon=":material/tune:"):
             with st.form(f"conditions_{prestataire['id']}"):
-                postes = [AUCUN] + [poste["nom"] for poste in self.budget.postes]
+                postes = [AUCUN] + [poste["nom"] for poste in self.ctx.budget.postes]
                 actuel = prestataire["poste_budget"] if prestataire["poste_budget"] in postes else AUCUN
                 gauche, droite = st.columns(2)
                 tarif = gauche.number_input("Tarif pour ce dossier (€)", min_value=0, step=100, value=int(prestataire["tarif_indicatif"] or 0))
                 poste_budget = droite.selectbox("Poste de budget", postes, index=postes.index(actuel))
 
                 if st.form_submit_button("Enregistrer"):
-                    self.carnet.modifier_conditions(prestataire["id"], tarif, None if poste_budget == AUCUN else poste_budget)
+                    self.ctx.carnet.modifier_conditions(prestataire["id"], tarif, None if poste_budget == AUCUN else poste_budget)
                     st.rerun()
 
 
@@ -77,11 +75,11 @@ class VuePrestataires:
             )
 
             if nouveau_statut != prestataire["statut"]:
-                self.changer_statut_prestataire(prestataire, nouveau_statut)
+                self.ctx.changer_statut_prestataire(prestataire, nouveau_statut)
                 st.rerun()
 
             for double in doubles:
-                autres = [dossier for dossier in double["dossiers"] if dossier != libelle_dossier(self.fiche_evenement.donnees)]
+                autres = [dossier for dossier in double["dossiers"] if dossier != libelle_dossier(self.ctx.fiche_evenement.donnees)]
 
                 if meme_nom(double["prestataire"], prestataire["nom"]) and autres:
                     st.warning(
@@ -92,7 +90,7 @@ class VuePrestataires:
             if prestataire["notes"]:
                 st.markdown(f":material/notes: {prestataire['notes']}")
 
-            self.afficher_boutons_contact(prestataire["telephone"], prestataire["email"], prestataire["lien"])
+            composants.afficher_boutons_contact(prestataire["telephone"], prestataire["email"], prestataire["lien"])
 
             self.afficher_conditions(prestataire)
 
@@ -100,7 +98,7 @@ class VuePrestataires:
                 self.afficher_ajout_facture_prestataire(prestataire)
 
             if st.button("Retirer de ce dossier", key=f"suppr_presta_{prestataire['id']}", help="Le prestataire reste dans le carnet commun."):
-                self.carnet.supprimer(prestataire["id"])
+                self.ctx.carnet.supprimer(prestataire["id"])
                 st.rerun()
 
 
@@ -115,12 +113,12 @@ class VuePrestataires:
                 email = gauche.text_input("Email")
                 lien = droite.text_input("Site ou Instagram (lien complet)")
                 tarif = gauche.number_input("Tarif indicatif (€)", min_value=0, step=100)
-                postes = [AUCUN] + [poste["nom"] for poste in self.budget.postes]
+                postes = [AUCUN] + [poste["nom"] for poste in self.ctx.budget.postes]
                 poste_budget = droite.selectbox("Poste de budget", postes)
                 notes = st.text_area("Notes (spécialités, disponibilités, impressions…)", height=68)
 
                 if st.form_submit_button("Ajouter au carnet et à ce dossier") and nom:
-                    self.carnet.ajouter_prestataire(
+                    self.ctx.carnet.ajouter_prestataire(
                         nom, categorie, contact, telephone, email, lien,
                         tarif, None if poste_budget == AUCUN else poste_budget, notes
                     )
@@ -128,7 +126,7 @@ class VuePrestataires:
 
 
     def afficher_choix_dans_carnet(self):
-        disponibles = {f"{fiche['nom']} · {fiche['categorie']}": fiche for fiche in self.carnet.disponibles()}
+        disponibles = {f"{fiche['nom']} · {fiche['categorie']}": fiche for fiche in self.ctx.carnet.disponibles()}
 
         if not disponibles:
             return
@@ -137,21 +135,21 @@ class VuePrestataires:
             choix = st.selectbox("Prestataire", list(disponibles))
 
             if st.button("Ajouter à ce dossier", icon=":material/add:"):
-                self.carnet.selectionner(disponibles[choix]["id"])
+                self.ctx.carnet.selectionner(disponibles[choix]["id"])
                 st.rerun()
 
 
     def afficher_prestataires(self):
         st.caption("Le carnet est commun à tous vos dossiers ; le statut, le tarif et le poste de budget sont propres à ce dossier.")
 
-        if not self.carnet.prestataires:
+        if not self.ctx.carnet.prestataires:
             st.info("Aucun prestataire dans ce dossier. Choisissez-en dans le carnet commun ou ajoutez-en un nouveau.")
         else:
             self.afficher_resume_carnet()
 
-        doubles = [double for double in doubles_reservations() if double["date"] == self.fiche_evenement.donnees["date"]]
+        doubles = [double for double in doubles_reservations() if double["date"] == self.ctx.fiche_evenement.donnees["date"]]
 
-        for categorie, membres in self.carnet.par_categorie().items():
+        for categorie, membres in self.ctx.carnet.par_categorie().items():
             st.subheader(categorie)
 
             for prestataire in membres:

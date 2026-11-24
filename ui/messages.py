@@ -4,64 +4,49 @@ import streamlit as st
 
 from metier.devis import date_lisible
 from metier.messages import MODIFIABLES, TYPES_MESSAGE, destinataire_clients, destinataire_prestataire, suggestion
-from metier.rgpd import peut_recevoir_sante
+from ui import composants
 from ui.commun import resume_contexte
+from ui.contexte import Vue
 
 
-class VueMessages:
-    def infos_pour_destinataire(self, prestataire_id):
-        prestataire = self.carnet.trouver(prestataire_id)
-
-        if not prestataire:
-            return self.fiche_evenement.infos_sans_historique()
-
-        infos_prestataire = self.fiche_evenement.infos_pour_prestataire(
-            avec_sante=peut_recevoir_sante(self.fiche_evenement.donnees, prestataire)
-        )
-
-        if st.session_state.get("donner_enveloppe"):
-            infos_prestataire["budget_prestation"] = self.budget.prevu_pour(prestataire)
-
-        return infos_prestataire
-
-
+class VueMessages(Vue):
     def ecrire(self, message, consigne=""):
         with st.spinner("AURORE rédige le message…"):
-            return self.agent.rediger_message(
+            return self.ctx.agent.rediger_message(
                 TYPES_MESSAGE[message["type"]],
                 message["destinataire"],
                 message.get("contexte") or {},
-                self.infos_pour_destinataire(message["prestataire_id"]),
+                self.ctx.infos_pour_destinataire(message["prestataire_id"]),
                 consigne
             )
 
 
     def rediger(self, suggestion_message, consigne=""):
-        self.messagerie.ajouter(suggestion_message, self.ecrire(suggestion_message, consigne))
+        self.ctx.messagerie.ajouter(suggestion_message, self.ecrire(suggestion_message, consigne))
         st.rerun()
 
 
     def reecrire(self, message):
-        self.messagerie.reecrire(message["id"], self.ecrire(message))
+        self.ctx.messagerie.reecrire(message["id"], self.ecrire(message))
         st.rerun()
 
 
     def changer_statut_message(self, message, statut):
-        self.messagerie.changer_statut(message["id"], statut)
+        self.ctx.messagerie.changer_statut(message["id"], statut)
         st.rerun()
 
 
     def marquer_envoye(self, message):
-        self.messagerie.changer_statut(message["id"], "envoyé")
-        self.fiche_evenement.ajouter_echange(
+        self.ctx.messagerie.changer_statut(message["id"], "envoyé")
+        self.ctx.fiche_evenement.ajouter_echange(
             "Message",
             f"**{TYPES_MESSAGE[message['type']]}** envoyé à {message['destinataire']} :\n\n{message['contenu']}"
         )
 
-        prestataire = self.carnet.trouver(message["prestataire_id"])
+        prestataire = self.ctx.carnet.trouver(message["prestataire_id"])
 
         if message["type"] == "demande_devis" and prestataire:
-            self.changer_statut_prestataire(prestataire, "Devis demandé")
+            self.ctx.changer_statut_prestataire(prestataire, "Devis demandé")
 
         st.rerun()
 
@@ -82,14 +67,14 @@ class VueMessages:
                     self.rediger(suggestion_message)
 
                 if bouton_ignorer.button("Ignorer", key=f"ignorer_{suggestion_message['cle']}"):
-                    self.messagerie.ajouter(suggestion_message, "", "annulé")
+                    self.ctx.messagerie.ajouter(suggestion_message, "", "annulé")
                     st.rerun()
 
 
     def afficher_a_valider(self):
         st.subheader(":material/rate_review: À relire et valider")
         st.caption("Rien ne part sans votre validation : relisez, corrigez si besoin, puis validez.")
-        messages = self.messagerie.par_statut(*MODIFIABLES)
+        messages = self.ctx.messagerie.par_statut(*MODIFIABLES)
 
         if not messages:
             st.caption("Aucun message à relire.")
@@ -104,7 +89,7 @@ class VueMessages:
                 )
 
                 if contenu != message["contenu"]:
-                    self.messagerie.modifier_contenu(message["id"], contenu)
+                    self.ctx.messagerie.modifier_contenu(message["id"], contenu)
 
                 principal, reecrire, annuler = st.columns([2, 2, 1])
 
@@ -123,7 +108,7 @@ class VueMessages:
 
     def afficher_valides(self):
         st.subheader(":material/outbox: Validés, à envoyer")
-        messages = self.messagerie.par_statut("validé")
+        messages = self.ctx.messagerie.par_statut("validé")
 
         if not messages:
             st.caption("Aucun message validé en attente d'envoi.")
@@ -138,7 +123,7 @@ class VueMessages:
                 if not (message["telephone"] or message["email"]):
                     st.caption("Pas de téléphone ni d'email pour ce destinataire : copiez le message ou complétez sa fiche.")
 
-                self.afficher_boutons_contact(message["telephone"], message["email"], message=message["contenu"], sujet=type_message)
+                composants.afficher_boutons_contact(message["telephone"], message["email"], message=message["contenu"], sujet=type_message)
                 st.caption("Ces boutons ouvrent WhatsApp ou votre messagerie avec le texte prêt : c'est vous qui envoyez.")
                 envoye, modifier, annuler = st.columns([2, 2, 1])
 
@@ -153,8 +138,8 @@ class VueMessages:
 
 
     def afficher_message_libre(self):
-        destinataires = [destinataire_clients(self.fiche_evenement.donnees)] + [
-            destinataire_prestataire(prestataire) for prestataire in self.carnet.prestataires
+        destinataires = [destinataire_clients(self.ctx.fiche_evenement.donnees)] + [
+            destinataire_prestataire(prestataire) for prestataire in self.ctx.carnet.prestataires
         ]
         par_nom = {destinataire["destinataire"]: destinataire for destinataire in destinataires}
 
@@ -172,13 +157,13 @@ class VueMessages:
                     if rediger:
                         self.rediger(nouveau, f"Ce que le message doit dire : {consigne}")
 
-                    self.messagerie.ajouter(nouveau, consigne, "brouillon")
+                    self.ctx.messagerie.ajouter(nouveau, consigne, "brouillon")
                     st.rerun()
 
 
     def afficher_historique_messages(self):
         for statut, titre, icone in [("envoyé", "Envoyés", "send"), ("annulé", "Annulés", "cancel")]:
-            messages = [message for message in self.messagerie.par_statut(statut) if message["contenu"]]
+            messages = [message for message in self.ctx.messagerie.par_statut(statut) if message["contenu"]]
 
             if messages:
                 with st.expander(f"{titre} ({len(messages)})", icon=f":material/{icone}:"):

@@ -347,3 +347,14 @@ Les sections précédentes gardent les noms de l'époque. Ce tableau donne leur 
 - **Erreurs** : `.streamlit/config.toml` cache les détails techniques au visiteur (ils restent dans le terminal) et limite les fichiers à 20 Mo.
 - **Limites connues** : pas de durée de session, mais recharger la page (F5) déconnecte l'organisateur ; un lien partagé donne accès à qui le possède ; le blocage est commun à tous, donc quelqu'un peut retarder la connexion de l'organisateur ; les conversations des visiteurs consomment le quota Groq ; la base n'est pas chiffrée sur le disque.
 - **Tests** : 115 (16 nouveaux).
+
+---
+
+## Finalisation (`feature/finalisation`)
+
+- **Découpage de l'interface** : `InterfaceUtilisateur` n'hérite plus de 11 classes. `ui/contexte.py` porte l'état du dossier ; chaque vue le reçoit. `app.py` passe de 475 à 26 lignes ; nouveaux modules `ui/interface.py`, `ui/discussion.py` et `ui/index_documents.py`. `Composants` devient un module de fonctions.
+- **Bug corrigé** : un numéro de devis pouvait être attribué deux fois après une suppression. `prochain_numero` prend maintenant le plus grand numéro existant plus un.
+- **Tests** : 213, dont chaque écran vide et rempli, les parcours principaux (fiche, message validé puis envoyé, panne de Groq, lien privé) et les PDF. Couverture de 85 %, interface et agent compris ; minimum de 80 % imposé par la CI.
+- **`AURORE_DONNEES`** : dossier des données configurable, utilisé par les tests.
+- **`DECISIONS.md`** : choix techniques, alternatives et limites.
+- **Reste à faire** : déploiement.

@@ -1,58 +1,29 @@
 import streamlit as st
 
-from donnees.dossiers import chemin_index
-from donnees.dossiers import lister as lister_dossiers
 from metier.devis import date_lisible
 from textes import pluriel
+from ui import composants
+from ui.contexte import Vue
+from ui.index_documents import ouvrir_vector_db
 
 
 TYPES_DOCUMENT = ["pdf", "txt", "md"]
 
 
-@st.cache_resource(show_spinner="Chargement du moteur de recherche documentaire…")
-def ouvrir_vector_db():
-    from llm.rag.vector_db import VectorDB
-
-    return VectorDB(chemin_index())
-
-
-@st.cache_resource(show_spinner=False)
-def ouvrir_rag():
-    from llm.rag.rag import Rag
-
-    return Rag(ouvrir_vector_db())
-
-
-def nettoyer_index():
-    if not chemin_index().exists():
-        return
-
-    from llm.rag.vector_db import supprimer_dossiers_absents
-
-    supprimer_dossiers_absents(chemin_index(), [dossier["id"] for dossier in lister_dossiers()])
-
-
-class VueDocuments:
-    def interroger_documents(self, question):
-        if not self.documents.documents:
-            raise ValueError("Aucun document dans ce dossier. Ajoutez-en dans Prestataires › Documents.")
-
-        return ouvrir_rag().interroger(question, self.dossier_id)
-
-
+class VueDocuments(Vue):
     def importer_document(self, nom, contenu):
         from llm.rag.extraits import extraire
 
-        self.documents.verifier_nom(nom)
+        self.ctx.documents.verifier_nom(nom)
         extraits = extraire(nom, contenu)
-        document_id = self.documents.nouvel_id()
-        ouvrir_vector_db().ajouter_document(self.dossier_id, document_id, extraits)
-        self.documents.ajouter(document_id, nom, contenu, len(extraits))
+        document_id = self.ctx.documents.nouvel_id()
+        ouvrir_vector_db().ajouter_document(self.ctx.dossier_id, document_id, extraits)
+        self.ctx.documents.ajouter(document_id, nom, contenu, len(extraits))
 
 
     def supprimer_document(self, document):
         ouvrir_vector_db().supprimer_document(document["id"])
-        self.documents.supprimer(document["id"])
+        self.ctx.documents.supprimer(document["id"])
 
 
     def afficher_import_document(self):
@@ -72,10 +43,10 @@ class VueDocuments:
 
 
     def afficher_liste_documents(self):
-        if not self.documents.documents:
+        if not self.ctx.documents.documents:
             st.caption("Aucun document pour l'instant.")
 
-        for document in self.documents.documents:
+        for document in self.ctx.documents.documents:
             infos, bouton = st.columns([5, 1], vertical_alignment="center")
             infos.markdown(
                 f":material/description: **{document['nom']}** · "
@@ -95,12 +66,12 @@ class VueDocuments:
                 return
 
         with st.spinner("AURORE lit les documents…"):
-            resultats = self.interroger_documents(question)
+            resultats = self.ctx.interroger_documents(question)
 
         for resultat in resultats:
             st.markdown(f"**{resultat['question']}**")
             st.markdown(resultat["reponse"])
-            self.afficher_sources(resultat["sources"])
+            composants.afficher_sources(resultat["sources"])
 
 
     def afficher_documents(self):
@@ -108,6 +79,6 @@ class VueDocuments:
         self.afficher_import_document()
         self.afficher_liste_documents()
 
-        if self.documents.documents:
+        if self.ctx.documents.documents:
             st.subheader(":material/search: Interroger les documents")
             self.afficher_question_documents()
