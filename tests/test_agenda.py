@@ -1,8 +1,9 @@
+from donnees.stockage import Emplacement
 from metier.agenda import Agenda
 
 
 def agenda_vide(tmp_path, dossier_id="a"):
-    return Agenda(str(tmp_path / "agenda.json"), dossier_id)
+    return Agenda(Emplacement(tmp_path, "test", "agenda"), dossier_id)
 
 
 def test_conflit_quand_les_creneaux_se_chevauchent(tmp_path):
@@ -40,7 +41,7 @@ def test_chaque_dossier_ne_voit_que_ses_rdvs(tmp_path):
     agenda.ajouter_rdv("Essayage", "2026-12-04T10:00:00", 60, "", "")
 
     assert [rdv["titre"] for rdv in agenda.rdvs] == ["Essayage"]
-    assert len(Agenda(agenda.chemin_fichier).tous) == 2
+    assert len(Agenda(agenda.emplacement).tous) == 2
 
 
 def test_supprimer_ne_touche_pas_les_autres_dossiers(tmp_path):

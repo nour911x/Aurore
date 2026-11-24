@@ -1,5 +1,6 @@
 import pytest
 
+from donnees.stockage import Emplacement
 from metier.messages import Messagerie, suggestion
 
 
@@ -7,7 +8,7 @@ CLIENT = {"destinataire": "Léa et Liam", "prestataire_id": None, "telephone": "
 
 
 def messagerie_avec_un_message(tmp_path, statut="à valider"):
-    messagerie = Messagerie(str(tmp_path / "messages.json"))
+    messagerie = Messagerie(Emplacement(tmp_path, "test", "messages"))
     messagerie.ajouter(suggestion("cle", "libre", CLIENT, {}), "Bonjour !", statut)
     return messagerie, messagerie.messages[0]["id"]
 

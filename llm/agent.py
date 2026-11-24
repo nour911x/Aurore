@@ -34,6 +34,13 @@ PROFILS = {
 }
 
 
+def message_interruption(actions):
+    return (
+        "La connexion à mon serveur a été coupée avant la fin. Actions déjà faites : "
+        f"{', '.join(actions)}. Vérifiez-les avant de redemander la suite."
+    )
+
+
 def date_du_jour():
     maintenant = datetime.now()
     return f"{date_longue(maintenant)} {maintenant.year}, {maintenant:%H:%M}"
@@ -176,8 +183,12 @@ class AgentConversation(Agent):
             except BadRequestError:
                 continue
             except APIError:
-                self.historique_conversation.pop()
-                raise
+                if not (outils and outils.actions):
+                    self.historique_conversation.pop()
+                    raise
+
+                reponse = message_interruption(outils.actions)
+                break
 
             if not message.tool_calls:
                 reponse = message.content

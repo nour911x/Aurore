@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from donnees.stockage import charger_json, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, sauvegarder_donnees
 from metier.prestataires import meme_nom, normaliser_nom
 
 
@@ -10,16 +10,16 @@ DELAI_ACOMPTE = 7
 
 
 class Budget:
-    def __init__(self, chemin_fichier: str) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement) -> None:
+        self.emplacement = emplacement
         self.postes: list[dict] = []
         self.charger()
 
     def charger(self) -> None:
-        self.postes = charger_json(self.chemin_fichier, [])
+        self.postes = charger_donnees(self.emplacement, [])
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, self.postes)
+        sauvegarder_donnees(self.emplacement, self.postes)
 
     def ajouter_poste(self, nom: str, montant_prevu: float) -> None:
         self.postes.append({

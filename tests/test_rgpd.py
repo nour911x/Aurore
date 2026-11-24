@@ -1,7 +1,8 @@
 import json
 
-from donnees.dossiers import FICHIER_FICHE, chemin, creer, lister, supprimer
+from donnees.dossiers import NOM_FICHE, creer, emplacement, emplacement_agenda, lister, supprimer
 from donnees.fiche_evenement import FicheEvenement
+from donnees.stockage import Emplacement, charger_donnees, sauvegarder_donnees
 from metier.galerie import publiable
 from metier.invites import ListeInvites
 from metier.rgpd import consentement, exporter, peut_recevoir_sante, recap_anonyme, recap_sans_sante
@@ -14,7 +15,7 @@ DJ = {"nom": "DJ Max", "categorie": "DJ / Musiciens"}
 
 def fiche(tmp_path, accorde=None):
     dossier_id = creer({"noms": "Léa et Liam", "allergies_interdits": ["arachides"]}, tmp_path)
-    fiche_test = FicheEvenement(chemin(dossier_id, FICHIER_FICHE, tmp_path))
+    fiche_test = FicheEvenement(emplacement(dossier_id, NOM_FICHE, tmp_path))
 
     if accorde is not None:
         fiche_test.definir_consentement("consentement_sante", consentement(accorde))
@@ -74,10 +75,10 @@ def test_photo_publiable_selon_le_tag_et_le_consentement():
 
 def test_export_puis_suppression(tmp_path):
     dossier_id, fiche_test = fiche(tmp_path)
-    (tmp_path / "agenda_data.json").write_text(json.dumps([
+    sauvegarder_donnees(emplacement_agenda(tmp_path), [
         {"titre": "Essayage", "date_heure": "2026-12-01T10:00:00", "duree_minutes": 60, "dossier_id": dossier_id},
         {"titre": "Autre client", "date_heure": "2026-12-01T12:00:00", "duree_minutes": 60, "dossier_id": "autre"}
-    ]), encoding="utf-8")
+    ])
 
     export = json.loads(exporter(dossier_id, tmp_path))
     assert export["event_data"]["noms"] == "Léa et Liam"
@@ -86,11 +87,11 @@ def test_export_puis_suppression(tmp_path):
     supprimer(dossier_id, tmp_path)
 
     assert lister(tmp_path) == []
-    assert [rdv["titre"] for rdv in json.loads((tmp_path / "agenda_data.json").read_text(encoding="utf-8"))] == ["Autre client"]
+    assert [rdv["titre"] for rdv in charger_donnees(emplacement_agenda(tmp_path), [])] == ["Autre client"]
 
 
 def test_import_de_contacts_sans_doublons(tmp_path):
-    invites = ListeInvites(str(tmp_path / "invites.json"))
+    invites = ListeInvites(Emplacement(tmp_path, "test", "invites"))
     contacts = [
         {"nom": "Paul", "telephone": "06", "email": ""},
         {"nom": "paul", "telephone": "06", "email": ""},

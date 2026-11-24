@@ -318,3 +318,19 @@ Les sections précédentes gardent les noms de l'époque. Ce tableau donne leur 
 - **RGPD** : les extraits utiles à une question sont envoyés à Groq ; l'embedding est calculé en local. Supprimer un dossier (ou la démo) efface aussi ses vecteurs (`nettoyer_index`).
 - **Factorisation** : `llm/base.py` (`Agent`) regroupe le client Groq et les appels, partagés par `AgentConversation` et les agents du RAG.
 - **Tests** : 84 (15 nouveaux), avec un faux modèle d'embedding et sans appel à Groq.
+
+---
+
+## Robustesse (`feature/robustesse`)
+
+- **SQLite au lieu des fichiers JSON** : une base `aurore.db`, une table `contenus` (dossier, rubrique, contenu, date de modification), clé primaire (dossier, rubrique). Chaque écriture est une transaction : elle réussit entièrement ou pas du tout. `Emplacement` (racine, dossier, rubrique) remplace les chemins de fichiers dans les classes métier.
+- **Choix assumé** : le contenu d'une rubrique reste du JSON dans une colonne. Les classes métier lisent et écrivent toujours une rubrique entière, et aucune recherche SQL dans le détail n'est nécessaire. Un schéma complet (une table par objet) apporterait des clés étrangères et des requêtes, au prix d'une réécriture de toutes les classes.
+- **Requêtes paramétrées** : les valeurs sont passées avec `?`, jamais collées dans le SQL.
+- **Suppression d'un dossier** : les rubriques et les rendez-vous partent dans la même transaction, puis les photos, les documents et les anciens JSON.
+- **Reprise des JSON** (`donnees/migration.py`) : une seule fois, si la base est vide. Tous les fichiers sont lus avant la première écriture ; un fichier illisible arrête la reprise avec son nom, sans rien enregistrer. Les JSON sont conservés.
+- **Groq** : délai de 30 s par essai, 3 nouvelles tentatives (client Groq). Une erreur n'arrête plus toute la page : elle s'affiche dans la section concernée.
+- **Message conservé** : si l'envoi échoue, le texte et la photo sont gardés avec un bouton « Réessayer ». Un enregistrement vocal dont la transcription échoue est à refaire.
+- **Pas d'action en double** : si la connexion tombe après une action (rendez-vous créé…), AURORE liste ce qui est déjà fait au lieu de proposer de tout relancer.
+- **Clé absente** : message clair au lieu d'une erreur Python.
+- **Limite connue** : deux fenêtres ouvertes sur le même dossier gardent chacune leur copie en mémoire ; la dernière sauvegarde l'emporte.
+- **Tests** : 99 (15 nouveaux : stockage, reprise, pannes Groq).

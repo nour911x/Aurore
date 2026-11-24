@@ -1,10 +1,11 @@
+from donnees.stockage import Emplacement
 from metier.prestataires import Annuaire, Carnet, meme_fiche, reservations_en_double
 
 
 def test_un_prestataire_commun_garde_statut_et_tarif_propres_a_chaque_dossier(tmp_path):
-    annuaire = Annuaire(str(tmp_path / "annuaire.json"))
-    mariage = Carnet(annuaire, str(tmp_path / "mariage.json"))
-    anniversaire = Carnet(annuaire, str(tmp_path / "anniversaire.json"))
+    annuaire = Annuaire(Emplacement(tmp_path, "test", "annuaire"))
+    mariage = Carnet(annuaire, Emplacement(tmp_path, "test", "mariage"))
+    anniversaire = Carnet(annuaire, Emplacement(tmp_path, "test", "anniversaire"))
 
     traiteur = mariage.ajouter_prestataire("Saveurs d'Orient", "Traiteur", "", "0612345678", "", "", 9500, "Traiteur", "")
     anniversaire.selectionner(traiteur, 2000)
@@ -18,8 +19,8 @@ def test_un_prestataire_commun_garde_statut_et_tarif_propres_a_chaque_dossier(tm
 
 
 def test_retirer_d_un_dossier_garde_le_prestataire_dans_le_carnet(tmp_path):
-    annuaire = Annuaire(str(tmp_path / "annuaire.json"))
-    carnet = Carnet(annuaire, str(tmp_path / "dossier.json"))
+    annuaire = Annuaire(Emplacement(tmp_path, "test", "annuaire"))
+    carnet = Carnet(annuaire, Emplacement(tmp_path, "test", "dossier"))
     prestataire_id = carnet.ajouter_prestataire("DJ Max", "DJ / Musiciens", "", "", "", "", 0, None, "")
 
     carnet.supprimer(prestataire_id)

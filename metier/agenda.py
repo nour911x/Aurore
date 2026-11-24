@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from donnees.stockage import charger_json, premier, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, premier, sauvegarder_donnees
 
 
 TYPES_RDV = {
@@ -50,8 +50,8 @@ def conflits(rdvs: list[dict]) -> list[tuple]:
 
 
 class Agenda:
-    def __init__(self, chemin_fichier: str, dossier_id: str | None = None) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement, dossier_id: str | None = None) -> None:
+        self.emplacement = emplacement
         self.dossier_id = dossier_id
         self.tous: list[dict] = []
         self.charger()
@@ -64,10 +64,10 @@ class Agenda:
         self.dossier_id = dossier_id
 
     def charger(self) -> None:
-        self.tous = charger_json(self.chemin_fichier, [])
+        self.tous = charger_donnees(self.emplacement, [])
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, self.tous)
+        sauvegarder_donnees(self.emplacement, self.tous)
 
     def detecter_conflit(self, date_heure: str, duree_minutes: int) -> dict | None:
         debut = datetime.fromisoformat(date_heure)

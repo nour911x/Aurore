@@ -3,7 +3,7 @@ from typing import Any
 
 from fpdf import FPDF
 
-from donnees.stockage import charger_json, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, sauvegarder_donnees
 from metier.devis import date_lisible, texte_pdf
 from metier.prestataires import normaliser_nom
 
@@ -74,19 +74,19 @@ def creer_tables(nombre: int, places: int, forme: str, places_honneur: int) -> l
 
 
 class JourJ:
-    def __init__(self, chemin_fichier: str) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement) -> None:
+        self.emplacement = emplacement
         self.deroule: list[dict] = []
         self.salle: dict = {"tables": [], "elements": [], "placement": {}}
         self.charger()
 
     def charger(self) -> None:
-        donnees = charger_json(self.chemin_fichier, {})
+        donnees = charger_donnees(self.emplacement, {})
         self.deroule = donnees.get("deroule", [])
         self.salle = donnees.get("salle", self.salle)
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, {"deroule": self.deroule, "salle": self.salle})
+        sauvegarder_donnees(self.emplacement, {"deroule": self.deroule, "salle": self.salle})
 
     def definir_deroule(self, deroule: list[dict]) -> None:
         self.deroule = nettoyer_deroule(deroule)

@@ -2,9 +2,21 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from donnees.dossiers import FICHIER_FICHE, FICHIER_SELECTION, RACINE, chemin, chemin_agenda, chemin_annuaire, creer, ecrire_etat, lire_etat, lister, supprimer
+from donnees.dossiers import (
+    NOM_FICHE,
+    NOM_SELECTION,
+    RACINE,
+    creer,
+    ecrire_etat,
+    emplacement,
+    emplacement_agenda,
+    emplacement_annuaire,
+    lire_etat,
+    lister,
+    supprimer,
+)
 from donnees.fiche_evenement import FicheEvenement
-from donnees.stockage import charger_json, sauvegarder_json
+from donnees.stockage import charger_donnees, sauvegarder_donnees
 from metier.agenda import Agenda
 from metier.budget import Budget
 from metier.devis import CarnetDevis
@@ -20,7 +32,7 @@ if TYPE_CHECKING:
 
 NOMS_MARIAGE = "Léa et Liam"
 
-FICHIERS_MARQUES = ["budget_data.json", "messages_data.json", "devis_data.json", FICHIER_SELECTION]
+NOMS_MARQUES = ["budget_data", "messages_data", "devis_data", NOM_SELECTION]
 
 
 def a_heure(jour: date, heure: int, minute: int = 0) -> str:
@@ -34,12 +46,12 @@ def marquer(element: dict) -> dict:
 
 def nouveau_dossier(fiche: dict, racine: Path) -> str:
     dossier_id = creer({**fiche, "demo": True}, racine)
-    FicheEvenement(chemin(dossier_id, FICHIER_FICHE, racine)).remplacer(fiche)
+    FicheEvenement(emplacement(dossier_id, NOM_FICHE, racine)).remplacer(fiche)
     return dossier_id
 
 
 def ajouter_rdvs(racine: Path, dossier_id: str, rdvs: list[tuple]) -> None:
-    agenda = Agenda(chemin_agenda(racine), dossier_id)
+    agenda = Agenda(emplacement_agenda(racine), dossier_id)
 
     for titre, debut, duree, lieu, avec, confirme in rdvs:
         agenda.tous.append(marquer({
@@ -93,7 +105,7 @@ def poste(budget: "Budget", nom: str, montant: float) -> str:
 
 def mariage(racine: Path, annuaire: "Annuaire", aujourd_hui: date) -> str:
     dossier_id = dossier_mariage(racine, aujourd_hui)
-    carnet = Carnet(annuaire, chemin(dossier_id, FICHIER_SELECTION, racine))
+    carnet = Carnet(annuaire, emplacement(dossier_id, NOM_SELECTION, racine))
     traiteur = choisir(carnet, {"nom": "Saveurs d'Orient", "categorie": "Traiteur"}, "Réservé", 9500, "Traiteur")
     choisir(carnet, {"nom": "DJ Groove", "categorie": "DJ / Musiciens", "contact": "Yanis", "telephone": "06 45 67 89 10"}, "Réservé", 1200, "Musique")
     photographe = {"nom": "Studio Lumière", "categorie": "Photographe", "contact": "Julien", "telephone": "06 98 76 54 32"}
@@ -101,14 +113,14 @@ def mariage(racine: Path, annuaire: "Annuaire", aujourd_hui: date) -> str:
     fiche_fleuriste = {"nom": "Fleurs de Lune", "categorie": "Fleuriste", "contact": "Léna", "telephone": "06 11 22 33 44"}
     fleuriste = choisir(carnet, fiche_fleuriste, "Devis reçu", 1500, "Fleuriste")
 
-    budget = Budget(chemin(dossier_id, "budget_data.json", racine))
+    budget = Budget(emplacement(dossier_id, "budget_data", racine))
     poste_traiteur = poste(budget, "Traiteur", 9500)
     poste(budget, "Fleuriste", 1500)
     budget.ajouter_facture(poste_traiteur, "Acompte Saveurs d'Orient", 2850, str(aujourd_hui - timedelta(days=3)), False)
     marquer(next(element for element in budget.postes if element["nom"] == poste_traiteur)["factures"][-1])
     budget.sauvegarder()
 
-    devis = CarnetDevis(chemin(dossier_id, "devis_data.json", racine))
+    devis = CarnetDevis(emplacement(dossier_id, "devis_data", racine))
     devis.ajouter_devis(
         "Fleurs de Lune", fleuriste["id"], NOMS_MARIAGE,
         [{"designation": "Arche de cérémonie", "quantite": 1, "prix_unitaire": 650},
@@ -118,7 +130,7 @@ def mariage(racine: Path, annuaire: "Annuaire", aujourd_hui: date) -> str:
     marquer(devis.devis[-1])
     devis.changer_statut(devis.devis[-1]["numero"], "Envoyé")
 
-    messagerie = Messagerie(chemin(dossier_id, "messages_data.json", racine))
+    messagerie = Messagerie(emplacement(dossier_id, "messages_data", racine))
     messagerie.ajouter(
         suggestion("demo_menu", "libre", destinataire_prestataire(traiteur), {}),
         "Bonjour Nadia, pourriez-vous nous envoyer la version finale du menu ? Merci !"
@@ -131,7 +143,7 @@ def mariage(racine: Path, annuaire: "Annuaire", aujourd_hui: date) -> str:
         ("Essayage robe", a_heure(aujourd_hui, 15), 60, "Atelier Blanche", "Léa", False)
     ])
 
-    return FicheEvenement(chemin(dossier_id, FICHIER_FICHE, racine)).donnees["date"]
+    return FicheEvenement(emplacement(dossier_id, NOM_FICHE, racine)).donnees["date"]
 
 
 def anniversaire(racine: Path, annuaire: "Annuaire", date_mariage: str) -> None:
@@ -140,7 +152,7 @@ def anniversaire(racine: Path, annuaire: "Annuaire", date_mariage: str) -> None:
         "lieu": "Rooftop Le Perchoir", "budget": 4000, "nombre_invites": 60,
         "personne_fetee": "Tom", "age": 40, "surprise": True
     }, racine)
-    carnet = Carnet(annuaire, chemin(dossier_id, FICHIER_SELECTION, racine))
+    carnet = Carnet(annuaire, emplacement(dossier_id, NOM_SELECTION, racine))
     choisir(carnet, {"nom": "DJ Groove", "categorie": "DJ / Musiciens"}, "Réservé", 800, "Musique")
 
 
@@ -150,7 +162,7 @@ def baby_shower(racine: Path, aujourd_hui: date) -> None:
         "nombre_invites": 25, "allergies_interdits": ["lactose"], "gender_reveal": True,
         "date_naissance": str(aujourd_hui + timedelta(days=60))
     }, racine)
-    FicheEvenement(chemin(dossier_id, FICHIER_FICHE, racine)).definir_consentement("consentement_sante", consentement(True))
+    FicheEvenement(emplacement(dossier_id, NOM_FICHE, racine)).definir_consentement("consentement_sante", consentement(True))
     ajouter_rdvs(racine, dossier_id, [
         ("Visite de salle", a_heure(aujourd_hui, 15, 30), 60, "Salle des Tilleuls", "Inès", False)
     ])
@@ -158,7 +170,7 @@ def baby_shower(racine: Path, aujourd_hui: date) -> None:
 
 def creer_demo(racine: Path = RACINE, aujourd_hui: date | None = None) -> None:
     aujourd_hui = aujourd_hui or date.today()
-    annuaire = Annuaire(chemin_annuaire(racine))
+    annuaire = Annuaire(emplacement_annuaire(racine))
     date_mariage = mariage(racine, annuaire, aujourd_hui)
     anniversaire(racine, annuaire, date_mariage)
     baby_shower(racine, aujourd_hui)
@@ -193,12 +205,12 @@ def retirer_demo(racine: Path = RACINE) -> None:
             supprimer(dossier["id"], racine)
             continue
 
-        for fichier in FICHIERS_MARQUES:
-            chemin_fichier = chemin(dossier["id"], fichier, racine)
-            donnees = charger_json(chemin_fichier, None)
+        for nom in NOMS_MARQUES:
+            cible = emplacement(dossier["id"], nom, racine)
+            donnees = charger_donnees(cible, None)
 
             if donnees is not None:
-                sauvegarder_json(chemin_fichier, sans_marques(donnees))
+                sauvegarder_donnees(cible, sans_marques(donnees))
 
-    sauvegarder_json(chemin_agenda(racine), sans_marques(charger_json(chemin_agenda(racine), [])))
+    sauvegarder_donnees(emplacement_agenda(racine), sans_marques(charger_donnees(emplacement_agenda(racine), [])))
     ecrire_etat("demo_active", False, racine)

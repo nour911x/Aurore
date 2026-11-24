@@ -6,7 +6,7 @@ from typing import Any
 from fpdf import FPDF
 
 from config.evenements import libelle_evenement
-from donnees.stockage import charger_json, premier, sauvegarder_json
+from donnees.stockage import Emplacement, charger_donnees, premier, sauvegarder_donnees
 from metier.devis import date_lisible, texte_pdf
 from metier.rgpd import consentements_manquants
 from textes import noms_clients
@@ -42,23 +42,23 @@ def publiable(photo: dict, droit_image: list[dict], usage: str = "Réseaux socia
 
 
 class Galerie:
-    def __init__(self, chemin_fichier: str, dossier: Path) -> None:
-        self.chemin_fichier = chemin_fichier
+    def __init__(self, emplacement: Emplacement, dossier: Path) -> None:
+        self.emplacement = emplacement
         self.dossier = Path(dossier)
         self.photos: list[dict] = []
         self.avis: list[dict] = []
         self.charger()
 
     def charger(self) -> None:
-        donnees = charger_json(self.chemin_fichier, {"photos": [], "avis": []})
+        donnees = charger_donnees(self.emplacement, {"photos": [], "avis": []})
         self.photos = donnees["photos"]
         self.avis = donnees["avis"]
 
     def sauvegarder(self) -> None:
-        sauvegarder_json(self.chemin_fichier, {"photos": self.photos, "avis": self.avis})
+        sauvegarder_donnees(self.emplacement, {"photos": self.photos, "avis": self.avis})
 
     def ajouter_photo(self, contenu: bytes, type_mime: str) -> dict:
-        self.dossier.mkdir(exist_ok=True)
+        self.dossier.mkdir(parents=True, exist_ok=True)
         photo_id = uuid.uuid4().hex[:8]
         fichier = f"{photo_id}{EXTENSIONS.get(type_mime, '.jpg')}"
         (self.dossier / fichier).write_bytes(contenu)

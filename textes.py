@@ -32,10 +32,22 @@ ACCUEILS = {
 ERREURS_IA = {
     "RateLimitError": "AURORE a reçu trop de demandes d'un coup. Réessayez dans une minute.",
     "AuthenticationError": "La clé GROQ_KEY du fichier .env est refusée par Groq. Vérifiez-la.",
-    "APIConnectionError": "AURORE n'arrive pas à joindre son serveur. Vérifiez votre connexion internet."
+    "APIConnectionError": "AURORE n'arrive pas à joindre son serveur. Vérifiez votre connexion internet.",
+    "InternalServerError": "Le serveur d'AURORE est momentanément indisponible. Réessayez dans quelques minutes."
 }
 
+ERREUR_CLE_MANQUANTE = "La clé GROQ_KEY est absente du fichier .env : AURORE ne peut pas démarrer (voir le README)."
+
+ERREUR_FICHE = "AURORE a répondu, mais la fiche client n'a pas pu être mise à jour avec ce message."
+
 ERREUR_IA_PAR_DEFAUT = "AURORE n'a pas pu répondre. Réessayez dans un instant."
+
+def message_erreur(erreur: Exception) -> str:
+    return next(
+        (texte for nom, texte in ERREURS_IA.items() if any(classe.__name__ == nom for classe in type(erreur).__mro__)),
+        ERREUR_IA_PAR_DEFAUT
+    )
+
 
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 

@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from config.evenements import CHAMPS_ESSENTIELS
-from donnees.dossiers import FICHIER_FICHE, FICHIER_SELECTION, RACINE, chemin, chemin_agenda, chemin_annuaire, libelle_dossier, lister
+from donnees.dossiers import NOM_FICHE, NOM_SELECTION, RACINE, emplacement, emplacement_agenda, emplacement_annuaire, libelle_dossier, lister
 from donnees.fiche_evenement import FicheEvenement, renseigne
 from metier.agenda import Agenda, bornes, conflits, type_rdv
 from metier.budget import POSTE_ORGANISATION, Budget
@@ -62,11 +62,11 @@ def reservations(carnet: "Carnet", fiche: dict, origine: dict) -> list[dict]:
 
 
 def doubles_reservations(racine: Path = RACINE) -> list[dict]:
-    annuaire = Annuaire(chemin_annuaire(racine))
+    annuaire = Annuaire(emplacement_annuaire(racine))
     toutes = []
 
     for dossier in lister(racine):
-        carnet = Carnet(annuaire, chemin(dossier["id"], FICHIER_SELECTION, racine))
+        carnet = Carnet(annuaire, emplacement(dossier["id"], NOM_SELECTION, racine))
         toutes += reservations(carnet, dossier, {"dossier_id": dossier["id"], "dossier": libelle_dossier(dossier)})
 
     return reservations_en_double(toutes)
@@ -75,20 +75,20 @@ def doubles_reservations(racine: Path = RACINE) -> list[dict]:
 def synthese(racine: Path = RACINE, maintenant: datetime | None = None) -> dict:
     maintenant = maintenant or datetime.now()
     aujourd_hui = maintenant.date()
-    agenda = Agenda(chemin_agenda(racine))
-    annuaire = Annuaire(chemin_annuaire(racine))
+    agenda = Agenda(emplacement_agenda(racine))
+    annuaire = Annuaire(emplacement_annuaire(racine))
     libelles = {}
     toutes_reservations = []
     resultat: dict[str, list] = {"rdvs_du_jour": [], "a_faire": [], "paiements": [], "a_surveiller": [], "conflits": [], "doubles_reservations": []}
 
     for dossier in lister(racine):
         dossier_id = dossier["id"]
-        fiche = FicheEvenement(chemin(dossier_id, FICHIER_FICHE, racine)).donnees
+        fiche = FicheEvenement(emplacement(dossier_id, NOM_FICHE, racine)).donnees
         libelles[dossier_id] = libelle_dossier(fiche)
         agenda.pour_dossier(dossier_id)
-        budget = Budget(chemin(dossier_id, "budget_data.json", racine))
-        messagerie = Messagerie(chemin(dossier_id, "messages_data.json", racine))
-        carnet = Carnet(annuaire, chemin(dossier_id, FICHIER_SELECTION, racine))
+        budget = Budget(emplacement(dossier_id, "budget_data", racine))
+        messagerie = Messagerie(emplacement(dossier_id, "messages_data", racine))
+        carnet = Carnet(annuaire, emplacement(dossier_id, NOM_SELECTION, racine))
         suggestions = messagerie.a_preparer(detecter_messages(fiche, carnet, agenda, budget))
         origine = {"dossier_id": dossier_id, "dossier": libelles[dossier_id]}
         toutes_reservations += reservations(carnet, fiche, origine)

@@ -4,10 +4,12 @@ from groq import APIError
 from config.evenements import CHAMPS_ESSENTIELS, libelle_evenement
 from config.profils import ORGANISATEUR, PRESTATAIRE
 from donnees.demo import demo_au_premier_lancement
-from donnees.dossiers import FICHIER_FICHE, FICHIER_SELECTION, chemin, chemin_agenda, chemin_annuaire, libelle_court
+from donnees.dossiers import NOM_FICHE, NOM_SELECTION, chemin, emplacement, emplacement_agenda, emplacement_annuaire, libelle_court
 from donnees.dossiers import lister as lister_dossiers
 from donnees.fiche_evenement import FicheEvenement
+from donnees.migration import migrer_json
 from llm.agent import PROFILS, AgentConversation
+from llm.base import CleGroqManquante
 from llm.outils import Outils
 from metier.agenda import Agenda
 from metier.budget import Budget
@@ -20,7 +22,17 @@ from metier.jour_j import JourJ
 from metier.messages import MODIFIABLES, Messagerie, detecter_messages
 from metier.prestataires import Annuaire, Carnet
 from metier.rgpd import peut_recevoir_sante
-from textes import CHAMPS_DOSSIER_PRESTATAIRE, ERREUR_IA_PAR_DEFAUT, ERREURS_IA, LIBELLES_PROFIL, LIBELLES_SECTIONS, ONGLETS, TEXTES_INDICATIFS, pluriel
+from textes import (
+    CHAMPS_DOSSIER_PRESTATAIRE,
+    ERREUR_CLE_MANQUANTE,
+    ERREUR_FICHE,
+    LIBELLES_PROFIL,
+    LIBELLES_SECTIONS,
+    ONGLETS,
+    TEXTES_INDICATIFS,
+    message_erreur,
+    pluriel,
+)
 from ui.accueil import VueAccueil
 from ui.budget import VueBudget
 from ui.commun import (
@@ -62,8 +74,8 @@ class InterfaceUtilisateur(
         self.prestataire = None
         self.profil = None
         self.dossier_id = self.choisir_dossier()
-        self.agenda = self.obtenir_persistant("agenda", lambda: Agenda(chemin_agenda()))
-        self.annuaire = self.obtenir_persistant("annuaire", lambda: Annuaire(chemin_annuaire()))
+        self.agenda = self.obtenir_persistant("agenda", lambda: Agenda(emplacement_agenda()))
+        self.annuaire = self.obtenir_persistant("annuaire", lambda: Annuaire(emplacement_annuaire()))
         st.session_state.setdefault("version_galerie", 0)
         st.session_state.setdefault("version_invites", 0)
         st.session_state.setdefault("briefings", {})
@@ -75,6 +87,7 @@ class InterfaceUtilisateur(
 
 
     def choisir_dossier(self):
+        migrer_json()
         demo_au_premier_lancement()
         self.dossiers = {dossier["id"]: dossier for dossier in lister_dossiers()}
 
@@ -84,29 +97,29 @@ class InterfaceUtilisateur(
         return st.session_state.dossier_actif
 
 
-    def obtenir_du_dossier(self, cle, classe, fichier):
-        return self.obtenir_persistant(f"{cle}_{self.dossier_id}", lambda: classe(chemin(self.dossier_id, fichier)))
+    def obtenir_du_dossier(self, cle, classe, nom):
+        return self.obtenir_persistant(f"{cle}_{self.dossier_id}", lambda: classe(emplacement(self.dossier_id, nom)))
 
 
     def charger_dossier(self):
         self.agenda.pour_dossier(self.dossier_id)
-        self.fiche_evenement = self.obtenir_du_dossier("fiche_evenement", FicheEvenement, FICHIER_FICHE)
-        self.budget = self.obtenir_du_dossier("budget", Budget, "budget_data.json")
+        self.fiche_evenement = self.obtenir_du_dossier("fiche_evenement", FicheEvenement, NOM_FICHE)
+        self.budget = self.obtenir_du_dossier("budget", Budget, "budget_data")
         self.carnet = self.obtenir_persistant(
-            f"carnet_{self.dossier_id}", lambda: Carnet(self.annuaire, chemin(self.dossier_id, FICHIER_SELECTION))
+            f"carnet_{self.dossier_id}", lambda: Carnet(self.annuaire, emplacement(self.dossier_id, NOM_SELECTION))
         )
-        self.messagerie = self.obtenir_du_dossier("messagerie", Messagerie, "messages_data.json")
-        self.carnet_devis = self.obtenir_du_dossier("carnet_devis", CarnetDevis, "devis_data.json")
-        self.liste_invites = self.obtenir_du_dossier("liste_invites", ListeInvites, "invites_data.json")
-        self.inspiration = self.obtenir_du_dossier("inspiration", Inspiration, "inspiration_data.json")
-        self.jour_j = self.obtenir_du_dossier("jour_j", JourJ, "jour_j_data.json")
+        self.messagerie = self.obtenir_du_dossier("messagerie", Messagerie, "messages_data")
+        self.carnet_devis = self.obtenir_du_dossier("carnet_devis", CarnetDevis, "devis_data")
+        self.liste_invites = self.obtenir_du_dossier("liste_invites", ListeInvites, "invites_data")
+        self.inspiration = self.obtenir_du_dossier("inspiration", Inspiration, "inspiration_data")
+        self.jour_j = self.obtenir_du_dossier("jour_j", JourJ, "jour_j_data")
         self.galerie = self.obtenir_persistant(
             f"galerie_{self.dossier_id}",
-            lambda: Galerie(chemin(self.dossier_id, "galerie_data.json"), chemin(self.dossier_id, "galerie"))
+            lambda: Galerie(emplacement(self.dossier_id, "galerie_data"), chemin(self.dossier_id, "galerie"))
         )
         self.documents = self.obtenir_persistant(
             f"documents_{self.dossier_id}",
-            lambda: Documents(chemin(self.dossier_id, "documents_data.json"), chemin(self.dossier_id, "documents"))
+            lambda: Documents(emplacement(self.dossier_id, "documents_data"), chemin(self.dossier_id, "documents"))
         )
         self.outils = Outils(
             self.fiche_evenement, self.agenda, self.budget, self.carnet,
@@ -255,17 +268,70 @@ class InterfaceUtilisateur(
 
 
     def traiter_message(self, profil):
-        demande, image = self.lire_saisie(profil)
+        demande = image = None
 
-        if demande or image:
-            with st.spinner("AURORE regarde ta photo…" if image else "AURORE réfléchit…"):
-                self.agent.demander(demande, profil, self.outils, image)
+        try:
+            demande, image = self.lire_saisie(profil)
 
-                if profil == ORGANISATEUR and not self.outils.documents_lus:
-                    nouvelles_infos = self.agent.extraire_infos_evenement(self.fiche_evenement.infos_sans_historique())
-                    self.fiche_evenement.mettre_a_jour(nouvelles_infos)
+            if demande or image:
+                self.envoyer_message(profil, demande, image)
+        except APIError as erreur:
+            st.session_state.message_echoue = {
+                "conversation": self.cle_conversation(profil), "demande": demande, "image": image, "erreur": message_erreur(erreur)
+            }
 
-            st.session_state.version_invites += 1
+
+    def envoyer_message(self, profil, demande, image):
+        st.session_state.pop("message_echoue", None)
+
+        with st.spinner("AURORE regarde ta photo…" if image else "AURORE réfléchit…"):
+            self.agent.demander(demande, profil, self.outils, image)
+
+        st.session_state.version_invites += 1
+
+        if profil == ORGANISATEUR and not self.outils.documents_lus:
+            self.mettre_a_jour_fiche()
+
+
+    def mettre_a_jour_fiche(self):
+        try:
+            with st.spinner("AURORE met la fiche à jour…"):
+                nouvelles_infos = self.agent.extraire_infos_evenement(self.fiche_evenement.infos_sans_historique())
+        except APIError:
+            st.warning(ERREUR_FICHE, icon=":material/sync_problem:")
+            return
+
+        self.fiche_evenement.mettre_a_jour(nouvelles_infos)
+
+
+    def afficher_message_echoue(self, profil):
+        echec = st.session_state.get("message_echoue")
+
+        if not echec or echec["conversation"] != self.cle_conversation(profil):
+            return
+
+        st.error(echec["erreur"], icon=":material/cloud_off:")
+
+        if not (echec["demande"] or echec["image"]):
+            return
+
+        st.markdown(f"Votre message n'a pas été perdu : *{echec['demande'] or 'photo jointe'}*")
+
+        if st.button("Réessayer", icon=":material/refresh:", key="reessayer_message"):
+            try:
+                self.envoyer_message(profil, echec["demande"], echec["image"])
+            except APIError as erreur:
+                st.session_state.message_echoue = {**echec, "erreur": message_erreur(erreur)}
+
+            st.rerun()
+
+
+    @staticmethod
+    def afficher_section(afficheur):
+        try:
+            afficheur()
+        except APIError as erreur:
+            st.error(message_erreur(erreur), icon=":material/cloud_off:")
 
 
     @staticmethod
@@ -285,7 +351,7 @@ class InterfaceUtilisateur(
                 sections = self.sections(onglet)
 
                 if len(sections) == 1:
-                    afficheurs[sections[0]]()
+                    self.afficher_section(afficheurs[sections[0]])
                     continue
 
                 sous_panneaux = st.tabs(
@@ -296,7 +362,7 @@ class InterfaceUtilisateur(
                 for section, sous_panneau in zip(sections, sous_panneaux, strict=True):
                     if sous_panneau.open:
                         with sous_panneau:
-                            afficheurs[section]()
+                            self.afficher_section(afficheurs[section])
 
 
     @staticmethod
@@ -325,6 +391,7 @@ class InterfaceUtilisateur(
             return
 
         self.traiter_message(profil)
+        self.afficher_message_echoue(profil)
         suggestions = self.messagerie.a_preparer(
             detecter_messages(self.fiche_evenement.donnees, self.carnet, self.agenda, self.budget)
         )
@@ -364,18 +431,10 @@ class InterfaceUtilisateur(
         self.ouvrir_dialogue_si_demande()
 
 
-
-def message_erreur(erreur):
-    return next(
-        (texte for nom, texte in ERREURS_IA.items() if any(classe.__name__ == nom for classe in type(erreur).__mro__)),
-        ERREUR_IA_PAR_DEFAUT
-    )
-
-
 if __name__ == "__main__":
-    interface = InterfaceUtilisateur()
-
     try:
-        interface.lancer()
+        InterfaceUtilisateur().lancer()
+    except CleGroqManquante:
+        st.error(ERREUR_CLE_MANQUANTE, icon=":material/key_off:")
     except APIError as erreur:
         st.error(message_erreur(erreur), icon=":material/cloud_off:")
