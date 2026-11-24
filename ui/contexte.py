@@ -2,7 +2,7 @@
 import streamlit as st
 
 from config.profils import PRESTATAIRE
-from donnees.demo import demo_au_premier_lancement
+from donnees.demo import actualiser_rdvs, demo_au_premier_lancement
 from donnees.dossiers import NOM_FICHE, NOM_SELECTION, chemin, emplacement, emplacement_agenda, emplacement_annuaire
 from donnees.dossiers import lister as lister_dossiers
 from donnees.fiche_evenement import FicheEvenement
@@ -61,6 +61,10 @@ class Contexte:
     def choisir_dossier(self):
         migrer_json()
         demo_au_premier_lancement()
+
+        if actualiser_rdvs():
+            st.session_state.pop("agenda", None)
+
         self.dossiers = {dossier["id"]: dossier for dossier in lister_dossiers()}
 
         if self.acces.par_lien:

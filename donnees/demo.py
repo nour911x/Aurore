@@ -189,6 +189,20 @@ def demo_au_premier_lancement(racine: Path = RACINE) -> None:
     ecrire_etat("demo_initialisee", True, racine)
 
 
+def actualiser_rdvs(racine: Path = RACINE, aujourd_hui: date | None = None) -> bool:
+    jour = (aujourd_hui or date.today()).isoformat()
+    rdvs = charger_donnees(emplacement_agenda(racine), [])
+    passes = [rdv for rdv in rdvs if rdv.get("demo") and rdv["date_heure"][:10] < jour]
+
+    for rdv in passes:
+        rdv["date_heure"] = jour + rdv["date_heure"][10:]
+
+    if passes:
+        sauvegarder_donnees(emplacement_agenda(racine), rdvs)
+
+    return bool(passes)
+
+
 def sans_marques(donnees: Any) -> Any:
     if isinstance(donnees, list):
         return [sans_marques(element) for element in donnees if not (isinstance(element, dict) and element.get("demo"))]
