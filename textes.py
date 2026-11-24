@@ -145,6 +145,8 @@ LIBELLES_SECTIONS = {
     "deroule": ":material/schedule: Déroulé du jour J",
     "plan_salle": ":material/table_restaurant: Plan de salle",
     "salle_3d": ":material/view_in_ar: Salle en 3D",
+    "prestataires": ":material/handshake: Carnet",
+    "documents": ":material/description: Documents",
     "budget": ":material/payments: Budget",
     "devis": ":material/request_quote: Devis",
     "achats": ":material/receipt_long: Achats & factures",

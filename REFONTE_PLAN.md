@@ -300,3 +300,21 @@ Les sections précédentes gardent les noms de l'époque. Ce tableau donne leur 
 - **Configuration centralisée** : `pytest.ini` est remplacé par `pyproject.toml`, qui regroupe pytest, ruff, mypy et coverage.
 - **Tests** : 69 (5 nouveaux pour `donnees/stockage.py`). Couverture de 70 % sur la logique métier. Les modules à moins de 50 % (devis, galerie, inspiration, invités, jour J) sont surtout des générateurs de PDF ; ils seront traités dans `feature/finalisation`.
 - **Conservé volontairement** : `afficher_achats` et `Budget.depense_du_poste` (voir la section précédente).
+
+---
+
+## Recherche dans les documents (`feature/rag`)
+
+- **Pipeline du cours** (md5-my-first-rag) repris dans `llm/rag/` : `AtomicQuestionAgent` découpe la demande, `VectorDB` (ChromaDB, `distiluse-base-multilingual-cased-v2`) cherche les 20 extraits les plus proches, `RerankingAgent` garde les extraits utiles, `Rag` répond avec ses sources.
+- **Différences avec le cours**, volontaires :
+  - les documents sont importés dans l'app (PDF, TXT, MD) et découpés en extraits de 800 caractères au plus, au lieu d'un CSV déjà découpé ;
+  - chaque extrait porte un `dossier_id` et la recherche filtre dessus : un dossier ne voit jamais les documents d'un autre ;
+  - le reclassement renvoie les numéros des extraits au lieu de les recopier : moins de jetons, et un extrait ne peut pas être altéré ;
+  - les extraits sont dans le message utilisateur, entre balises échappées, et non dans le prompt système ;
+  - sans extrait utile, la réponse est fixe et le modèle n'est pas appelé.
+- **Injection de prompt** : les textes des documents sont déclarés comme données dans les prompts, et leurs chevrons sont échappés. Surtout, après `chercher_documents`, `Outils` n'autorise plus que la lecture jusqu'au message suivant, et la fiche n'est pas mise à jour depuis cette réponse. Cette règle est dans le code, elle ne dépend pas du modèle.
+- **Limite connue** : la réponse reste dans l'historique de la conversation. Au message suivant, les outils d'écriture et la mise à jour de la fiche sont de nouveau actifs, avec la seule consigne de demander confirmation. Les messages restent validés à la main.
+- **Accès** : organisateur uniquement. Les vues Clients et Prestataire n'ont ni l'onglet ni l'outil.
+- **RGPD** : les extraits utiles à une question sont envoyés à Groq ; l'embedding est calculé en local. Supprimer un dossier (ou la démo) efface aussi ses vecteurs (`nettoyer_index`).
+- **Factorisation** : `llm/base.py` (`Agent`) regroupe le client Groq et les appels, partagés par `AgentConversation` et les agents du RAG.
+- **Tests** : 84 (15 nouveaux), avec un faux modèle d'embedding et sans appel à Groq.

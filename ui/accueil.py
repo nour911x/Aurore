@@ -9,6 +9,7 @@ from metier.accueil import JOURS_SURVEILLANCE, synthese
 from metier.devis import date_lisible
 from textes import RACCOURCIS, RACCOURCIS_CLIENTS, RACCOURCIS_PRESTATAIRE, montant, pluriel
 from ui.commun import echeance_lisible, heure_rdv, ouvrir_dossier
+from ui.documents import nettoyer_index
 from ui.habillage import AVERTISSEMENT_HTML, accueil_html, aujourdhui_html
 
 
@@ -129,6 +130,7 @@ class VueAccueil:
 
                 if st.button("Retirer les données de démonstration", icon=":material/delete:"):
                     retirer_demo()
+                    nettoyer_index()
                     self.recharger_donnees()
                     st.rerun()
             else:
@@ -179,14 +181,14 @@ class VueAccueil:
         st.markdown(accueil_html(profil), unsafe_allow_html=True)
 
 
-    @staticmethod
-    def afficher_conversation(messages):
+    def afficher_conversation(self, messages):
         for message in messages:
             with st.chat_message(message["role"]):
                 if message.get("image"):
                     st.image(base64.b64decode(message["image"]), width=280)
 
                 st.markdown(message["content"])
+                self.afficher_sources(message.get("sources"))
 
         st.markdown(AVERTISSEMENT_HTML, unsafe_allow_html=True)
 

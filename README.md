@@ -81,6 +81,15 @@ L'application s'ouvre sur http://localhost:8501. Au tout premier lancement, des 
 
 Aucune clé n'est écrite dans le code.
 
+## Recherche dans les documents (RAG)
+
+Dans **Prestataires › Documents**, l'organisateur ajoute des contrats ou devis (PDF, TXT, MD) et pose ses questions. La discussion avec AURORE y a aussi accès. Les réponses citent leurs sources et se limitent au dossier ouvert. Au premier usage, le modèle d'embedding (environ 500 Mo) est téléchargé.
+
+1. La demande est découpée en questions atomiques.
+2. Chaque question est vectorisée et comparée aux extraits du dossier (20 plus proches).
+3. Le LLM ne garde que les extraits utiles.
+4. Il répond uniquement à partir de ces extraits.
+
 ## Tests et qualité
 
 ```powershell
@@ -104,6 +113,9 @@ ui/                   un module par onglet, composants partagés, habillage HTML
 metier/               agenda, budget, devis, messages, invités, galerie, jour J, accueil, RGPD
 donnees/              stockage JSON, dossiers clients, fiche, données de démonstration
 llm/                  agent Groq, outils de l'agent, Outlook, prompt système
+llm/rag/              recherche dans les documents : extraits, base vectorielle, reclassement, prompts
+exemples/             documents fictifs pour essayer la recherche (dont un piégé)
+index_documents/      base vectorielle ChromaDB (créée au premier import, ignorée par git)
 assets/               feuille de style, salle 3D
 tests/                tests unitaires (pytest)
 .github/workflows/     intégration continue (ruff, mypy, pytest)

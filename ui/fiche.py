@@ -11,6 +11,7 @@ from metier.invites import entier
 from metier.rgpd import PERIMETRES_IMAGE, TEXTE_CONSENTEMENT_SANTE, consentement, exporter
 from textes import CHAMPS_LISTES, SOURCES_ECHANGE, formater_nom
 from ui.commun import FORMAT_DATE, OUI_NON, lire_date, personnes_du_dossier, texte_vers_liste
+from ui.documents import nettoyer_index
 
 
 class VueFiche:
@@ -210,6 +211,7 @@ class VueFiche:
 
     def retirer_dossier(self):
         supprimer_dossier(self.dossier_id)
+        nettoyer_index()
 
         for cle in [cle for cle in st.session_state if self.dossier_id in str(cle)]:
             del st.session_state[cle]
@@ -228,7 +230,7 @@ class VueFiche:
             st.markdown("**Supprimer ce dossier**")
             st.caption(
                 "Supprime définitivement la fiche, l'historique, le budget, les devis, les invités, les messages, "
-                "les photos et les rendez-vous de ce client. Cette action est irréversible : exportez d'abord si besoin."
+                "les documents, les photos et les rendez-vous de ce client. Cette action est irréversible : exportez d'abord si besoin."
             )
             confirme = st.checkbox(f"Je confirme la suppression définitive du dossier « {libelle_dossier(self.fiche_evenement.donnees)} »")
             st.button(

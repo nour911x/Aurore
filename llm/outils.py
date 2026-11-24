@@ -88,6 +88,12 @@ OUTILS = [
         {"nom": TEXTE, "statut": choix_parmi(STATUTS)},
         ["nom", "statut"]
     ),
+    outil(
+        "chercher_documents",
+        "Cherche une réponse dans les documents du dossier (contrats, devis reçus, conditions des prestataires) et donne les sources.",
+        {"question": TEXTE},
+        ["question"]
+    ),
     outil("consulter_deroule", "Donne le déroulé heure par heure du jour J (moments, lieux, intervenants).", {}),
     outil("consulter_invites","Donne les réponses des invités, le nombre de couverts, les régimes et les allergies.", {}),
     outil(
@@ -147,6 +153,8 @@ OUTILS_OUTLOOK = [
 ]
 
 
+OUTILS_LECTURE = ("consulter_", "chercher_", "outlook_agenda")
+
 OUTILS_PAR_ESPACE = {
     CLIENTS: {"consulter_agenda", "consulter_budget", "consulter_invites", "consulter_deroule"},
     PRESTATAIRE: {"consulter_agenda", "consulter_invites", "consulter_deroule"}
@@ -166,8 +174,9 @@ def chercher_par_nom(elements, nom):
 
 
 class Outils:
-    def __init__(self, fiche_evenement, agenda, budget, carnet, liste_invites, messagerie, carnet_devis, jour_j):
+    def __init__(self, fiche_evenement, agenda, budget, carnet, liste_invites, messagerie, carnet_devis, jour_j, interroger_documents):
         self.jour_j = jour_j
+        self.interroger_documents = interroger_documents
         self.fiche_evenement = fiche_evenement
         self.agenda = agenda
         self.budget = budget
@@ -178,6 +187,11 @@ class Outils:
         self.avec_outlook = outlook.outlook_disponible()
         self.espace = ORGANISATEUR
         self.prestataire = None
+        self.nouveau_tour()
+
+    def nouveau_tour(self):
+        self.documents_lus = False
+        self.sources = []
 
     def pour_espace(self, espace, prestataire=None):
         self.espace = espace
@@ -187,7 +201,13 @@ class Outils:
         schemas = OUTILS + (OUTILS_OUTLOOK if self.avec_outlook and self.espace != PRESTATAIRE else [])
         autorises = OUTILS_PAR_ESPACE.get(self.espace)
 
-        return [schema for schema in schemas if autorises is None or schema["function"]["name"] in autorises]
+        return [schema for schema in schemas if self.est_permis(schema["function"]["name"], autorises)]
+
+    def est_permis(self, nom, autorises):
+        if self.documents_lus and not nom.startswith(OUTILS_LECTURE):
+            return False
+
+        return autorises is None or nom in autorises
 
     def executer(self, nom, arguments):
         noms_autorises = {schema["function"]["name"] for schema in self.schemas()}
@@ -272,6 +292,20 @@ class Outils:
         appliquer_statut(self.carnet, self.fiche_evenement, prestataire, statut)
 
         return {"statut": f"{prestataire['nom']} est maintenant « {statut} »"}
+
+    def chercher_documents(self, question):
+        self.documents_lus = True
+        resultats = self.interroger_documents(question)
+        self.sources += [source for resultat in resultats for source in resultat["sources"] if source not in self.sources]
+
+        return [
+            {
+                "question": resultat["question"],
+                "reponse": resultat["reponse"],
+                "sources": [f"{source['document']}, p. {source['page']}" for source in resultat["sources"]]
+            }
+            for resultat in resultats
+        ]
 
     def consulter_deroule(self):
         return self.jour_j.deroule or {"info": "le déroulé du jour J n'a pas encore été construit"}
