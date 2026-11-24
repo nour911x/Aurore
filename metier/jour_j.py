@@ -1,3 +1,4 @@
+import math
 import re
 from typing import Any
 
@@ -16,7 +17,7 @@ TABLE_HONNEUR = "Table d'honneur"
 
 FORMES_TABLE = ["Ronde", "Rectangulaire"]
 
-ELEMENTS_SALLE = ["Piste de danse", "Buffet", "DJ", "Bar", "Photobooth"]
+ELEMENTS_SALLE = ["Piste de danse", "Buffet", "DJ", "Bar", "Photobooth", "Arche", "Gâteau"]
 
 AUCUNE_TABLE = "—"
 
@@ -30,6 +31,10 @@ def heure_valide(texte: Any) -> str:
     heures, minutes = int(correspondance.group(1)), int(correspondance.group(2) or 0)
 
     return f"{heures:02d}:{minutes:02d}" if heures < 24 and minutes < 60 else ""
+
+
+def coordonnee_valide(valeur: Any) -> bool:
+    return type(valeur) in (int, float) and math.isfinite(valeur)
 
 
 def texte(valeur: Any) -> str:
@@ -77,13 +82,13 @@ class JourJ:
     def __init__(self, emplacement: Emplacement) -> None:
         self.emplacement = emplacement
         self.deroule: list[dict] = []
-        self.salle: dict = {"tables": [], "elements": [], "placement": {}}
+        self.salle: dict = {"tables": [], "elements": [], "placement": {}, "positions": {}, "couleurs": {}}
         self.charger()
 
     def charger(self) -> None:
         donnees = charger_donnees(self.emplacement, {})
         self.deroule = donnees.get("deroule", [])
-        self.salle = donnees.get("salle", self.salle)
+        self.salle = {**self.salle, **donnees.get("salle", {})}
 
     def sauvegarder(self) -> None:
         sauvegarder_donnees(self.emplacement, {"deroule": self.deroule, "salle": self.salle})
@@ -92,13 +97,32 @@ class JourJ:
         self.deroule = nettoyer_deroule(deroule)
         self.sauvegarder()
 
-    def amenager(self, tables: list[dict], elements: list[dict]) -> None:
+    def amenager(self, tables: list[dict], elements: list[str]) -> None:
         noms = {table["nom"] for table in tables}
         self.salle = {
+            **self.salle,
             "tables": tables,
             "elements": elements,
-            "placement": {invite: table for invite, table in self.salle["placement"].items() if table in noms}
+            "placement": {invite: table for invite, table in self.salle["placement"].items() if table in noms},
+            "positions": {nom: position for nom, position in self.salle["positions"].items() if nom in noms | set(elements)}
         }
+        self.sauvegarder()
+
+    def placer_element(self, nom: str, x: Any, y: Any) -> None:
+        connus = {table["nom"] for table in self.salle["tables"]} | set(self.salle["elements"])
+
+        if nom not in connus or not (coordonnee_valide(x) and coordonnee_valide(y)):
+            raise ValueError(f"Déplacement impossible : {nom}")
+
+        self.salle["positions"][nom] = [x, y]
+        self.sauvegarder()
+
+    def reinitialiser_positions(self) -> None:
+        self.salle["positions"] = {}
+        self.sauvegarder()
+
+    def definir_couleurs(self, couleurs: dict[str, str]) -> None:
+        self.salle["couleurs"] = couleurs
         self.sauvegarder()
 
     def placer(self, souhaits: dict, invites: list[dict]) -> int:

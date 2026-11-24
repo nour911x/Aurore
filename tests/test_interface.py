@@ -19,6 +19,7 @@ from metier.inspiration import Inspiration
 from metier.invites import ListeInvites, nouvel_invite
 from metier.jour_j import JourJ, creer_tables
 from metier.prestataires import Annuaire, Carnet
+from metier.salle import tables_necessaires
 from textes import LIBELLES_PROFIL, LIBELLES_SECTIONS, ONGLETS
 from ui.commun import ESPACES
 from ui.design import sans_icone
@@ -220,6 +221,26 @@ def test_interroger_un_document_affiche_ses_sources(monkeypatch):
     assert not page.exception
     assert "30 %" in [texte.value for texte in page.markdown]
     assert "contrat.txt, page 1" in [texte.value for texte in page.caption]
+
+
+def test_choisir_la_salle_puis_placer_le_dj():
+    page, dossier_id = ecran_du_mariage(onglet="planning", section="salle_3d")
+    page.run()
+    next(champ for champ in page.number_input if champ.label == "Nombre d'invités").set_value(50)
+    next(champ for champ in page.number_input if champ.label == "Nombre de tables").set_value(0)
+    next(champ for champ in page.number_input if champ.label == "Places à la table d'honneur").set_value(10)
+    bouton(page, "Créer le plan de la salle").click().run()
+    salle = charger_donnees(emplacement(dossier_id, "jour_j_data"), {})["salle"]
+
+    assert not page.exception
+    assert len(salle["tables"]) == 1 + tables_necessaires(50, salle["tables"][-1]["places"], 10)
+
+    next(champ for champ in page.selectbox if champ.label == "Élément").set_value("Table d'honneur")
+    next(champ for champ in page.selectbox if champ.label == "Emplacement").set_value("Devant, à gauche")
+    bouton(page, "Placer").click().run()
+
+    assert not page.exception
+    assert "Table d'honneur" in charger_donnees(emplacement(dossier_id, "jour_j_data"), {})["salle"]["positions"]
 
 
 def test_se_deconnecter():

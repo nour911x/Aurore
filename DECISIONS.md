@@ -69,3 +69,9 @@ Chaque décision : le problème, le choix, ce qu'il coûte. Le détail de chaque
 
 - **Choix** : couleurs, échelle typographique et styles dans `ui/theme.css` ; composants dans `ui/design.py`. Un test vérifie le contraste WCAG AA des couleurs de texte et l'absence de style ailleurs.
 - **Coût** : `.streamlit/config.toml` répète les couleurs, Streamlit ne lisant pas les variables CSS (un test vérifie qu'elles concordent). Les sélecteurs CSS dépendent de la structure interne de Streamlit, d'où la version figée.
+
+## 13. Salle en 3D interactive
+
+- **Choix** : `metier/salle.py` calcule la disposition sans interface ; le plan 2D et la scène Three.js dessinent les mêmes objets. Un composant Streamlit v2 renvoie chaque déplacement à Python, qui le vérifie avant de l'enregistrer.
+- **Alternative écartée** : une image générée par IA. Elle demanderait un autre fournisseur que Groq et ne respecterait ni le nombre de tables ni les places.
+- **Coût** : Three.js (version figée) est chargé depuis jsDelivr, donc la 3D demande internet et fait confiance à ce service. Le navigateur doit accepter WebGL.
