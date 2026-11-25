@@ -9,6 +9,11 @@ from config.profils import ORGANISATEUR
 from metier.devis import date_lisible
 from metier.galerie import CATEGORIES_PHOTO, TAGS_PHOTO, generer_autorisation_pdf, publiable, tag
 from metier.inspiration import CATEGORIES_BEAUTE, ELEMENTS_MOODBOARD, generer_moodboard_pdf, lien_maps
+from metier.instagram import (
+    CarteTemoignage,
+    ErreurInstagram,
+    PublicationInstagram,
+)
 from metier.messages import destinataire_clients, suggestion
 from metier.rgpd import USAGES_PHOTO, consentements_manquants
 from textes import noms_clients, pluriel
@@ -223,6 +228,73 @@ class VueInspiration(Vue):
         )
 
 
+    @staticmethod
+    def instagram():
+        return PublicationInstagram()
+
+    def publier_par_api(self, instagram, cle, contenu, legende, au_publier):
+        """Toujours après une confirmation : un post est public."""
+        with st.popover(
+            "Publier", icon=":material/send:", type="primary", width="stretch"
+        ):
+            st.markdown(
+                "L'image et la légende seront publiées sur le compte "
+                "Instagram d'AURORE, visibles par tout le monde."
+            )
+
+            if not st.button(
+                "Confirmer la publication", key=f"confirmer_{cle}",
+                type="primary", disabled=not legende.strip()
+            ):
+                return
+
+            with st.spinner("Publication sur Instagram…"):
+                try:
+                    resultat = instagram.publier(contenu, legende)
+                except ErreurInstagram as erreur:
+                    st.error(str(erreur), icon=":material/error:")
+                    return
+
+            au_publier(resultat["lien"])
+            st.rerun()
+
+    def afficher_actions_publication(
+        self, cle, contenu, nom_fichier, legende, au_publier
+    ):
+        """Télécharger, puis publier par l'API si elle est configurée,
+        sinon ouvrir Instagram et marquer le post comme publié."""
+        instagram = self.instagram()
+        telecharger, publier, marquer = st.columns(3)
+        telecharger.download_button(
+            "Image", icon=":material/download:", data=contenu,
+            file_name=nom_fichier, key=f"dl_{cle}", width="stretch"
+        )
+
+        if instagram.est_configuree():
+            with publier:
+                self.publier_par_api(
+                    instagram, cle, contenu, legende, au_publier
+                )
+            return
+
+        publier.link_button(
+            "Instagram", "https://www.instagram.com/",
+            icon=":material/share:", width="stretch"
+        )
+
+        if marquer.button(
+            "Publiée", icon=":material/check_circle:",
+            key=f"publiee_{cle}", width="stretch"
+        ):
+            au_publier("")
+            st.rerun()
+
+    @staticmethod
+    def lien_post(element):
+        lien = element.get("lien_instagram")
+
+        return f" · [voir le post]({lien})" if lien else ""
+
     def afficher_publication(self, photo):
         with st.container(border=True):
             image, texte = st.columns([1, 2])
@@ -247,21 +319,29 @@ class VueInspiration(Vue):
                 if legende != photo["legende"]:
                     self.ctx.galerie.modifier(photo["id"], legende=legende)
 
-                telecharger, ouvrir, publiee = st.columns(3)
-                telecharger.download_button(
-                    "Photo", icon=":material/download:", data=contenu, file_name=photo["fichier"], key=f"dl_photo_{photo['id']}", width="stretch"
+                self.afficher_actions_publication(
+                    f"photo_{photo['id']}", contenu, photo["fichier"], legende,
+                    lambda lien: self.ctx.galerie.modifier(
+                        photo["id"], publiee=True, lien_instagram=lien
+                    )
                 )
-                ouvrir.link_button("Instagram", "https://www.instagram.com/", icon=":material/share:", width="stretch")
-
-                if publiee.button("Publiée", icon=":material/check_circle:", key=f"publiee_{photo['id']}", width="stretch"):
-                    self.ctx.galerie.modifier(photo["id"], publiee=True)
-                    st.rerun()
 
 
     def afficher_instagram(self):
         a_publier = [photo for photo in self.ctx.galerie.publiables(self.ctx.fiche_evenement.donnees["droit_image"]) if not photo["publiee"]]
         deja_publiees = [photo for photo in self.ctx.galerie.photos if photo["publiee"]]
-        st.caption("Seules les photos autorisées apparaissent ici. Copie la légende, télécharge la photo et publie-la depuis Instagram.")
+        if self.instagram().est_configuree():
+            st.caption(
+                "Seules les photos autorisées apparaissent ici. Relis la "
+                "légende, puis publie : AURORE demande toujours confirmation."
+            )
+        else:
+            st.caption(
+                "Seules les photos autorisées apparaissent ici. Copie la "
+                "légende, télécharge la photo et publie-la depuis "
+                "Instagram. Pour publier directement depuis AURORE, "
+                "configure l'API Instagram (voir le README)."
+            )
 
         if not a_publier:
             design.vide("Aucune photo publiable en attente.")
@@ -270,7 +350,12 @@ class VueInspiration(Vue):
             self.afficher_publication(photo)
 
         if deja_publiees:
-            st.caption(f":material/push_pin: {pluriel(len(deja_publiees), 'photo déjà publiée', 'photos déjà publiées')}.")
+            nombre = pluriel(
+                len(deja_publiees), "photo déjà publiée",
+                "photos déjà publiées"
+            )
+            liens = "".join(self.lien_post(photo) for photo in deja_publiees)
+            st.caption(f":material/push_pin: {nombre}{liens}.")
 
 
     def afficher_avis(self, profil):
@@ -315,4 +400,36 @@ class VueInspiration(Vue):
                     st.rerun()
 
                 if avis["post"]:
-                    st.text_area("Post Instagram", value=avis["post"], height=150, key=f"texte_post_{avis['id']}_{hash(avis['post'])}")
+                    self.afficher_post_temoignage(avis)
+
+    def afficher_post_temoignage(self, avis):
+        """La carte témoignage et sa légende, prêtes à publier."""
+        if avis.get("publie"):
+            st.caption(
+                ":material/check_circle: Témoignage publié sur Instagram"
+                f"{self.lien_post(avis)}."
+            )
+            return
+
+        carte = CarteTemoignage(
+            avis["commentaire"], avis["note"], avis["auteur"]
+        ).generer()
+        image, texte = st.columns([1, 2])
+        image.image(carte, width="stretch")
+
+        with texte:
+            legende = st.text_area(
+                "Post Instagram", value=avis["post"], height=150,
+                key=f"texte_post_{avis['id']}_{hash(avis['post'])}"
+            )
+
+            if legende != avis["post"]:
+                self.ctx.galerie.modifier_avis(avis["id"], post=legende)
+
+            self.afficher_actions_publication(
+                f"avis_{avis['id']}", carte, f"temoignage_{avis['id']}.jpg",
+                legende,
+                lambda lien: self.ctx.galerie.modifier_avis(
+                    avis["id"], publie=True, lien_instagram=lien
+                )
+            )

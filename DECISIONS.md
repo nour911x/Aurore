@@ -38,6 +38,14 @@ Chaque décision : le problème, le choix, ce qu'il coûte. Le détail de chaque
 - **Choix** : après la lecture d'un document, `Outils.est_permis` n'autorise plus que la lecture jusqu'au message suivant. Les vues partagées n'ont que des outils de consultation. Aucun message n'est envoyé par l'application.
 - **Coût** : il faut deux messages pour lire un contrat puis agir.
 
+## 6 bis. Publication Instagram
+
+- **Problème** : publier sur Instagram demandait de télécharger la photo, de copier la légende et d'ouvrir l'application ; les avis, sans image, ne pouvaient pas devenir des posts.
+- **Choix** : `metier/instagram.py` publie par l'API Instagram (création du conteneur, attente, publication, lien du post) quand `INSTAGRAM_TOKEN`, `INSTAGRAM_USER_ID` et `AURORE_URL_PUBLIQUE` sont renseignés ; sinon le flux manuel reste en place. Chaque publication demande un clic puis une confirmation, et seules les photos autorisées par le droit à l'image sont proposées. Un avis devient une carte témoignage dessinée avec Pillow. Le jeton passe dans l'en-tête des requêtes, jamais dans l'adresse.
+- **Exception assumée à la décision 6** : c'est le seul envoi fait par l'application elle-même, toujours à l'initiative de l'organisateur ; l'IA n'a aucun outil pour publier.
+- **Alternative écartée** : héberger l'image chez un service tiers pour publier depuis un ordinateur local. Les photos des clients seraient parties chez un prestataire de plus.
+- **Coût** : il faut un compte Instagram professionnel, une application Meta et une application en ligne ; l'image est publique quelques secondes dans `static/publications/`. La police de la carte est celle livrée avec Streamlit (Source Serif, licence OFL) : si une mise à jour la déplace, la carte retombe sur la police de Pillow, sans accents. L'API réelle n'a pas été testée faute de compte : les tests simulent ses réponses.
+
 ## 7. Mot de passe et liens privés
 
 - **Choix** : scrypt et sel pour le mot de passe ; jeton aléatoire de 256 bits pour les liens, dont seule l'empreinte est stockée. La vue, le dossier et le prestataire viennent du lien enregistré, jamais de l'adresse.
@@ -56,7 +64,7 @@ Chaque décision : le problème, le choix, ce qu'il coûte. Le détail de chaque
 
 ## 10. Feature flags
 
-- **Choix** : les fonctions en attente (Instagram, Pinterest, recommandations) sont désactivées dans `config/features.py`, pas supprimées.
+- **Choix** : les fonctions en attente (Pinterest, recommandations) sont désactivées dans `config/features.py`, pas supprimées.
 - **Coût** : ce code reste à maintenir et il est moins testé.
 
 ## 11. Un menu latéral maison plutôt que `st.navigation`

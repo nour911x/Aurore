@@ -235,6 +235,7 @@ jour_j_data.json
 dossiers/
 index_documents/
 aurore.db*
+static/publications/
 
 annuaire_prestataires.json
 aurore_etat.json

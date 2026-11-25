@@ -43,13 +43,30 @@ Tout ce qu'AURORE rédige arrive « à valider ». Les boutons WhatsApp et email
 - **Import de contacts** : uniquement à l'initiative de l'utilisateur, après un aperçu.
 - **Export JSON et suppression** de toutes les données d'un client.
 
+## Publication Instagram
+
+Dans **Inspiration & galerie › Instagram**, seules les photos publiables apparaissent : photos de décor, ou photos des clients avec leur consentement de droit à l'image pour les réseaux sociaux. AURORE rédige la légende, que l'organisateur relit et modifie. Dans **Avis**, un avis client devient un post témoignage : une carte carrée aux couleurs d'AURORE (citation, étoiles, auteur) et sa légende.
+
+- **Sans configuration** : on télécharge l'image, on ouvre Instagram et on publie à la main, puis on marque le post comme publié.
+- **Avec l'API** : le bouton **Publier** demande une confirmation, puis AURORE publie et garde le lien du post. L'IA ne publie jamais seule.
+
+Pour activer l'API :
+
+1. Passer le compte Instagram d'AURORE en compte professionnel (créateur ou entreprise).
+2. Créer une application sur [developers.facebook.com](https://developers.facebook.com), ajouter le produit **Instagram** (API avec connexion Instagram) et l'autorisation `instagram_business_content_publish`.
+3. Générer un jeton d'accès pour le compte, et relever son identifiant.
+4. Mettre en ligne AURORE (par exemple sur Streamlit Community Cloud) : Instagram télécharge l'image à une adresse publique. L'image est déposée dans `static/publications/` le temps de la publication, puis supprimée.
+5. Renseigner `INSTAGRAM_TOKEN`, `INSTAGRAM_USER_ID` et `AURORE_URL_PUBLIQUE` dans le `.env` (ou les secrets de l'hébergeur).
+
+En local, sans adresse publique, la publication reste manuelle.
+
 ## Feature flags
 
 Dans `config/features.py`. Un module désactivé n'apparaît pas dans l'interface, mais son code reste en place.
 
 | Flag | Défaut | Rôle |
 |---|---|---|
-| `INSTAGRAM_FEEDBACK` | `False` | Publication Instagram et avis transformés en posts |
+| `INSTAGRAM_FEEDBACK` | `True` | Publication Instagram des photos autorisées et des avis transformés en cartes témoignage |
 | `PINTEREST_MOODBOARD_AUTO` | `False` | Liens Pinterest générés pour le moodboard |
 | `DIGITAL_EVENT_REPRESENTATION` | `True` | Salle en 3D |
 | `WHATSAPP_AUTO_SEND` | `False` | Réservé : aucun envoi automatique n'existe et ce flag doit rester à `False` |
@@ -82,6 +99,9 @@ L'application s'ouvre sur http://localhost:8501. Au tout premier lancement, des 
 | `NOM_ORGANISATEUR` | non | Nom affiché dans le menu et l'accueil |
 | `AURORE_DONNEES` | non | Dossier où enregistrer les données (par défaut, celui du projet) |
 | `OUTLOOK_ACCOUNT` | non | Compte Outlook à utiliser pour synchroniser l'agenda (Windows, Outlook installé) |
+| `INSTAGRAM_TOKEN` | non | Jeton d'accès de l'API Instagram, pour publier depuis AURORE |
+| `INSTAGRAM_USER_ID` | non | Identifiant du compte Instagram professionnel |
+| `AURORE_URL_PUBLIQUE` | non | Adresse en ligne de l'application (ex. `https://aurore.streamlit.app`) : Instagram y télécharge l'image |
 
 Aucune clé n'est écrite dans le code.
 

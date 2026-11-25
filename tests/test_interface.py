@@ -153,6 +153,67 @@ def test_modifier_la_fiche_est_enregistre():
     assert charger_donnees(emplacement(dossier_id, "event_data"), {})["lieu"] == "Domaine des Lys"
 
 
+def photo_publiable(dossier_id):
+    remplir(dossier_id)
+    galerie = Galerie(
+        emplacement(dossier_id, "galerie_data"), chemin(dossier_id, "galerie")
+    )
+    photo = galerie.photos[0]
+    galerie.modifier(photo["id"], legende="Une table fleurie 🌿")
+
+    return galerie, photo["id"]
+
+
+def test_publication_instagram_apres_confirmation(monkeypatch):
+    from metier.instagram import PublicationInstagram
+
+    publiees = []
+    monkeypatch.setenv("INSTAGRAM_TOKEN", "jeton")
+    monkeypatch.setenv("INSTAGRAM_USER_ID", "178")
+    monkeypatch.setenv("AURORE_URL_PUBLIQUE", "https://aurore.exemple.org")
+    monkeypatch.setattr(
+        PublicationInstagram, "publier",
+        lambda self, contenu, legende: publiees.append(legende) or {
+            "id": "1", "lien": "https://www.instagram.com/p/abc/"
+        }
+    )
+    page, dossier_id = ecran_du_mariage(
+        onglet="inspiration", section="instagram"
+    )
+    galerie, photo_id = photo_publiable(dossier_id)
+    page.run()
+
+    assert "Publiée" not in [bouton.label for bouton in page.button]
+
+    bouton(page, "Confirmer la publication").click().run()
+    galerie.charger()
+
+    assert not page.exception
+    assert publiees == ["Une table fleurie 🌿"]
+    assert galerie.trouver(photo_id)["publiee"]
+    assert galerie.trouver(photo_id)["lien_instagram"].endswith("/p/abc/")
+
+
+def test_sans_api_la_publication_reste_manuelle(monkeypatch):
+    monkeypatch.setattr("metier.instagram.load_dotenv", lambda: None)
+
+    for variable in ("INSTAGRAM_TOKEN", "INSTAGRAM_USER_ID",
+                     "AURORE_URL_PUBLIQUE"):
+        monkeypatch.delenv(variable, raising=False)
+
+    page, dossier_id = ecran_du_mariage(
+        onglet="inspiration", section="instagram"
+    )
+    galerie, photo_id = photo_publiable(dossier_id)
+    page.run()
+    bouton(page, "Publiée").click().run()
+    galerie.charger()
+
+    assert not page.exception
+    assert "Confirmer la publication" not in [b.label for b in page.button]
+    assert galerie.trouver(photo_id)["publiee"]
+
+
 def test_un_message_passe_par_toutes_les_validations():
     page, dossier_id = ecran_du_mariage(onglet="messages", section="a_envoyer")
     page.run()
