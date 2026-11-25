@@ -218,7 +218,9 @@ class VueAccueil(Vue):
         with st.expander("Données de démonstration", icon=":material/science:"):
             if demo_active():
                 st.caption(
-                    "La démonstration est chargée : l'anniversaire de Tom, la baby shower d'Inès & Malik et des éléments "
+                    "La démonstration est chargée : l'anniversaire de Tom, "
+                    "la baby shower d'Inès & Malik, le séminaire de "
+                    "Nova Tech et des éléments "
                     "ajoutés au mariage de Léa & Liam. Les retirer ne touche pas à vos propres données."
                 )
 
@@ -228,7 +230,11 @@ class VueAccueil(Vue):
                     self.ctx.recharger_donnees()
                     st.rerun()
             else:
-                st.caption("Ajoute un anniversaire, une baby shower et des éléments au mariage de Léa & Liam, datés à partir d'aujourd'hui.")
+                st.caption(
+                    "Ajoute un anniversaire, une baby shower, un séminaire "
+                    "d'entreprise et des éléments au mariage de Léa & "
+                    "Liam, datés à partir d'aujourd'hui."
+                )
 
                 if st.button("Ajouter les données de démonstration", icon=":material/add:"):
                     creer_demo()

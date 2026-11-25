@@ -34,6 +34,24 @@ TYPES_EVENEMENT = {
             "puis soirée dansante. Pour une surprise, les invités arrivent avant la personne fêtée."
         )
     },
+    "entreprise": {
+        "libelle": "Entreprise",
+        "icone": ":material/business_center:",
+        "exemples": "Séminaire, conférence, gala",
+        "personnes": "Contact(s)",
+        "champs": [
+            "entreprise", "format_entreprise", "materiel_technique",
+            "facturation"
+        ],
+        "deroule": (
+            "Pour un séminaire d'entreprise : accueil café et badges vers "
+            "8h30, plénière d'ouverture vers 9h, ateliers en sous-groupes, "
+            "pause en milieu de matinée, déjeuner vers 12h30, sessions de "
+            "l'après-midi avec une pause vers 16h, conclusion vers 17h30. "
+            "Une soirée de gala commence vers 19h30 par un cocktail, puis "
+            "dîner, discours de la direction entre les plats et animation."
+        )
+    },
     "autre": {
         "libelle": "Autre",
         "icone": ":material/celebration:",
@@ -55,14 +73,35 @@ CHAMPS_SPECIFIQUES = {
     "personne_fetee": ("Personne fêtée", "texte", None),
     "age": ("Âge", "nombre", None),
     "surprise": ("Surprise", "oui_non", "La personne fêtée ne doit pas être au courant"),
-    "sous_type": ("Type précis", "texte", "EVJF, fiançailles, crémaillère, gala…")
+    "entreprise": (
+        "Entreprise", "texte", "Raison sociale de l'entreprise cliente"
+    ),
+    "format_entreprise": (
+        "Format", "texte",
+        "Séminaire, conférence, team building, soirée de gala…"
+    ),
+    "materiel_technique": (
+        "Matériel technique", "liste",
+        "Vidéoprojecteur, micros, sono, wifi…"
+    ),
+    "facturation": (
+        "Facturation", "texte",
+        "SIRET, adresse de facturation, bon de commande…"
+    ),
+    "sous_type": ("Type précis", "texte", "EVJF, fiançailles, crémaillère…")
 }
 
 MOTS_CLES = {
     "mariage": ["mariage", "noces"],
     "baby_shower": ["baby", "naissance", "gender"],
-    "anniversaire": ["anniv"]
+    "anniversaire": ["anniv"],
+    "entreprise": [
+        "entreprise", "seminaire", "séminaire", "conference", "conférence",
+        "corporate", "team building", "gala", "salon professionnel"
+    ]
 }
+
+CHAMPS_INTERNES = {"facturation"}
 
 GENRES_LLM = {"texte": "texte", "liste": "liste de textes courts", "date": "date AAAA-MM-JJ", "oui_non": "true ou false", "nombre": "nombre"}
 

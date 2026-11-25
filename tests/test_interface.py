@@ -143,6 +143,32 @@ def test_un_lien_impose_sa_vue_et_son_dossier(profil):
     assert "Tom" not in " ".join(texte.value for texte in page.markdown)
 
 
+def test_le_prestataire_technique_voit_le_materiel_sans_la_facturation():
+    nouvelle_page().run()
+    dossier = next(
+        dossier for dossier in lister() if dossier["noms"] == "Claire Dubois"
+    )
+    carnet = Carnet(
+        Annuaire(emplacement_annuaire()),
+        emplacement(dossier["id"], NOM_SELECTION)
+    )
+    studio = next(
+        prestataire for prestataire in carnet.prestataires
+        if prestataire["nom"] == "Studio Lumen"
+    )
+    jeton = LiensAcces(emplacement_acces()).creer(
+        PRESTATAIRE, dossier["id"], studio["id"]
+    )
+    page = AppTest.from_file(APP, default_timeout=60)
+    page.query_params["acces"] = jeton
+    page.run()
+    textes = " ".join(texte.value for texte in page.markdown)
+
+    assert not page.exception
+    assert "Matériel technique" in textes and "micros sans fil" in textes
+    assert "bon de commande" not in textes
+
+
 def test_modifier_la_fiche_est_enregistre():
     page, dossier_id = ecran_du_mariage(onglet="fiche")
     page.run()

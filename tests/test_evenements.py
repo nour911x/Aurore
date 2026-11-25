@@ -43,3 +43,36 @@ def test_changer_de_type_masque_les_champs_sans_les_supprimer(tmp_path):
 
     assert champs_du_type(fiche.donnees)["ceremonie"] == "Cérémonie"
     assert fiche.donnees["ceremonie"] == "Laïque à 15h"
+
+
+def test_evenements_d_entreprise_reconnus():
+    for texte in (
+        "Séminaire annuel", "seminaire", "Conférence clients",
+        "Soirée de gala", "Team building", "Entreprise"
+    ):
+        assert cle_type(texte) == "entreprise", texte
+
+    assert libelle_evenement({"type_evenement": "séminaire"}) == "Entreprise"
+
+
+def test_champs_d_un_evenement_d_entreprise():
+    champs = champs_du_type({"type_evenement": "Entreprise"})
+
+    assert list(champs) == [
+        "entreprise", "format_entreprise", "materiel_technique",
+        "facturation"
+    ]
+    assert "ceremonie" not in champs
+
+
+def test_facturation_jamais_envoyee_aux_prestataires(tmp_path):
+    dossier_id = creer({
+        "type_evenement": "Entreprise", "entreprise": "Nova Tech",
+        "materiel_technique": ["micros"], "facturation": "SIRET 123"
+    }, tmp_path)
+    fiche = FicheEvenement(emplacement(dossier_id, NOM_FICHE, tmp_path))
+    infos = fiche.infos_pour_prestataire()
+
+    assert infos["entreprise"] == "Nova Tech"
+    assert infos["materiel_technique"] == ["micros"]
+    assert "facturation" not in infos

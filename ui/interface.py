@@ -51,7 +51,11 @@ from ui.vues_partagees import VuesPartagees
 
 class InterfaceUtilisateur(Vue):
     def details_pour_prestataire(self, donnees):
-        masques = {"allergies_interdits": "allergies", "preferences_musicales": "musique"}
+        masques = {
+            "allergies_interdits": "allergies",
+            "preferences_musicales": "musique",
+            "materiel_technique": "technique"
+        }
         return {
             cle: libelle for cle, libelle in details_dossier(donnees, prive=False).items()
             if masques.get(cle, "toujours") in self.ctx.infos_utiles() | {"toujours"}

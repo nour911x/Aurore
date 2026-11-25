@@ -54,7 +54,8 @@ def demo_du_jour(tmp_path):
 def test_l_accueil_est_rempli_par_la_demo(tmp_path):
     resultat = demo_du_jour(tmp_path)
 
-    assert {dossier["type_evenement"] for dossier in lister(tmp_path)} == {"Mariage", "Anniversaire", "Baby shower"}
+    types = {dossier["type_evenement"] for dossier in lister(tmp_path)}
+    assert types == {"Mariage", "Anniversaire", "Baby shower", "Entreprise"}
     assert len(resultat["rdvs_du_jour"]) >= 1
     assert any(facture["jours_restants"] < 0 for facture in resultat["paiements"])
 
@@ -95,7 +96,7 @@ def test_la_demo_complete_le_mariage_existant_puis_se_retire_proprement(tmp_path
 
     creer_demo(tmp_path)
 
-    assert len(lister(tmp_path)) == 3
+    assert len(lister(tmp_path)) == 4
     assert any(rdv["dossier_id"] == existant for rdv in charger_donnees(emplacement_agenda(tmp_path), []))
 
     retirer_demo(tmp_path)

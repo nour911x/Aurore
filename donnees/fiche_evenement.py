@@ -1,6 +1,11 @@
 from datetime import date
 
-from config.evenements import CHAMPS_SPECIFIQUES, TYPES_EVENEMENT, champs_par_defaut
+from config.evenements import (
+    CHAMPS_INTERNES,
+    CHAMPS_SPECIFIQUES,
+    TYPES_EVENEMENT,
+    champs_par_defaut,
+)
 from donnees.stockage import Emplacement, charger_donnees, sauvegarder_donnees
 from metier.rgpd import CHAMPS_CONSENTEMENT, CHAMPS_SANTE, sans_sante
 from textes import formater_nom
@@ -8,7 +13,8 @@ from textes import formater_nom
 
 CHAMPS_POUR_PRESTATAIRE = [
     "type_evenement", "noms", "date", "lieu", "nombre_invites", "theme",
-    "allergies_interdits", "preferences", *CHAMPS_SPECIFIQUES
+    "allergies_interdits", "preferences",
+    *(cle for cle in CHAMPS_SPECIFIQUES if cle not in CHAMPS_INTERNES)
 ]
 
 
