@@ -2,7 +2,7 @@
 
 **Vos événements, organisés de bout en bout.**
 
-AURORE est un assistant pour les organisateurs d'événements : wedding planners, mais aussi organisateurs de baby showers, d'anniversaires, d'EVJF, de fiançailles ou de crémaillères. L'application rassemble au même endroit les dossiers clients, le calendrier, les prestataires, le budget, les devis, les invités et les messages. Une IA (Groq) prépare le travail, et l'organisateur garde toujours la main.
+AURORE est un assistant pour les organisateurs d'événements : wedding planners, mais aussi organisateurs de baby showers, d'anniversaires, d'EVJF, de fiançailles, de crémaillères et d'événements d'entreprise (séminaires, conférences, team building, soirées de gala). L'application rassemble au même endroit les dossiers clients, le calendrier, les prestataires, le budget, les devis, les invités et les messages. Une IA (Groq) prépare le travail, et l'organisateur garde toujours la main.
 
 Application Streamlit, en Python.
 
@@ -21,12 +21,12 @@ Application Streamlit, en Python.
 | **Invités** | La liste, l'import de contacts avec aperçu, les faire-parts et le récapitulatif pour le traiteur. |
 | **Inspiration & galerie** | Le moodboard, les photos taguées décor / avec personnes, le droit à l'image, les avis. |
 
-La barre latérale permet de changer de dossier et d'en créer un nouveau (Mariage, Baby shower, Anniversaire ou Autre). Changer le type d'un dossier demande une confirmation : les champs propres à l'ancien type sont masqués, pas supprimés. La zone de saisie en bas de page comprend le langage naturel : « ajoute une dégustation jeudi 14h ».
+La barre latérale permet de changer de dossier et d'en créer un nouveau (Mariage, Baby shower, Anniversaire, Entreprise ou Autre). Un dossier Entreprise a ses propres champs : entreprise cliente, format, matériel technique et facturation ; la facturation reste interne et n'est jamais montrée aux prestataires. Changer le type d'un dossier demande une confirmation : les champs propres à l'ancien type sont masqués, pas supprimés. La zone de saisie en bas de page comprend le langage naturel : « ajoute une dégustation jeudi 14h ».
 
 ### Vues partagées, en lecture seule
 
 - **Clients** : le récap du dossier, les prochains rendez-vous, le suivi du budget et des factures, les invitations.
-- **Prestataire** : ses rendez-vous, ses devis et factures, et seulement les informations utiles à son métier (allergies pour le traiteur, musique pour le DJ…).
+- **Prestataire** : ses rendez-vous, ses devis et factures, et seulement les informations utiles à son métier (allergies pour le traiteur, musique pour le DJ, matériel technique pour l'audiovisuel et la salle…).
 
 Dans ces deux vues, l'IA consulte les données mais ne modifie rien.
 

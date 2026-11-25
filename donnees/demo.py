@@ -168,12 +168,31 @@ def baby_shower(racine: Path, aujourd_hui: date) -> None:
     ])
 
 
+def seminaire(racine: Path, annuaire: "Annuaire", aujourd_hui: date) -> None:
+    dossier_id = nouveau_dossier({
+        "type_evenement": "Entreprise", "noms": "Claire Dubois",
+        "date": str(aujourd_hui + timedelta(days=60)),
+        "lieu": "Château de Grandvaux", "budget": 25000,
+        "nombre_invites": 80, "entreprise": "Nova Tech",
+        "format_entreprise": "Séminaire annuel et soirée de gala",
+        "materiel_technique": ["vidéoprojecteur", "micros sans fil", "wifi"],
+        "facturation": "Nova Tech SAS, bon de commande à recevoir"
+    }, racine)
+    carnet = Carnet(annuaire, emplacement(dossier_id, NOM_SELECTION, racine))
+    choisir(
+        carnet,
+        {"nom": "Studio Lumen", "categorie": "Audiovisuel / Technique"},
+        "Devis demandé", 3200, "Technique"
+    )
+
+
 def creer_demo(racine: Path = RACINE, aujourd_hui: date | None = None) -> None:
     aujourd_hui = aujourd_hui or date.today()
     annuaire = Annuaire(emplacement_annuaire(racine))
     date_mariage = mariage(racine, annuaire, aujourd_hui)
     anniversaire(racine, annuaire, date_mariage)
     baby_shower(racine, aujourd_hui)
+    seminaire(racine, annuaire, aujourd_hui)
     ecrire_etat("demo_active", True, racine)
 
 

@@ -4,7 +4,12 @@ from datetime import date, datetime, timedelta
 import streamlit as st
 
 from config import features
-from config.evenements import TYPES_EVENEMENT, champs_du_type, type_du_dossier
+from config.evenements import (
+    CHAMPS_INTERNES,
+    TYPES_EVENEMENT,
+    champs_du_type,
+    type_du_dossier,
+)
 from config.profils import CLIENTS, ORGANISATEUR, PRESTATAIRE
 from donnees.dossiers import creer as creer_dossier
 from metier.invites import GROUPES, REGIMES, STATUTS_INVITE
@@ -51,7 +56,8 @@ PROFILS_ACTIFS = {CLIENTS: features.CLIENT_PORTAL, PRESTATAIRE: features.VENDOR_
 INFOS_PAR_CATEGORIE = {
     "Traiteur": {"allergies", "invites", "tables"},
     "DJ / Musiciens": {"musique"},
-    "Domaine / Salle": {"couverts"}
+    "Domaine / Salle": {"couverts", "technique"},
+    "Audiovisuel / Technique": {"technique"}
 }
 
 
@@ -127,6 +133,11 @@ def details_dossier(donnees, prive=True):
 
     if prive:
         details["prestataires"] = "Prestataires"
+    else:
+        details = {
+            cle: libelle for cle, libelle in details.items()
+            if cle not in CHAMPS_INTERNES
+        }
 
     return details
 

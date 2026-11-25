@@ -29,7 +29,12 @@ PROFILS = {
         "un organisateur ou une organisatrice d'événements professionnel(le) qui gère l'événement de ses clients. "
         "Vouvoie-le ou la, ton professionnel."
     ),
-    CLIENTS: "les clients dont on organise l'événement (mariage, baby shower, anniversaire…). Tutoie-les, ton chaleureux et complice.",
+    CLIENTS: (
+        "les clients dont on organise l'événement (mariage, baby shower, "
+        "anniversaire, séminaire…). Tutoie-les, ton chaleureux et "
+        "complice ; pour un événement d'entreprise, vouvoie-les, ton "
+        "professionnel et cordial."
+    ),
     PRESTATAIRE: "un prestataire (traiteur, DJ, domaine...) qui travaille sur cet événement. Vouvoie-le ou la, ton professionnel."
 }
 

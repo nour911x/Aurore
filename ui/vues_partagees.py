@@ -32,7 +32,11 @@ class VuesPartagees(Vue):
         for cle, titre, besoin in [
             ("allergies_interdits", ":material/warning: Allergies et interdits", "allergies"),
             ("preferences", ":material/palette: Préférences des clients", None),
-            ("preferences_musicales", ":material/music_note: Goûts musicaux", "musique")
+            ("preferences_musicales", ":material/music_note: Goûts musicaux", "musique"),
+            (
+                "materiel_technique",
+                ":material/videocam: Matériel technique", "technique"
+            )
         ]:
             if infos.get(cle) and (besoin is None or besoin in utiles):
                 st.markdown(f"**{titre}** : {', '.join(infos[cle])}")

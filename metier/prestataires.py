@@ -19,6 +19,7 @@ CATEGORIES = [
     "Fleuriste",
     "Tenues",
     "Maquillage / Coiffure",
+    "Audiovisuel / Technique",
     "Autre"
 ]
 
