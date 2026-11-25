@@ -63,19 +63,22 @@ def test_les_recherches_par_defaut_couvrent_chaque_element():
     assert list(RECHERCHES_PAR_DEFAUT) == ELEMENTS_MOODBOARD
 
 
-def test_recherche_raccourcie_si_trop_peu_de_resultats():
+def test_recherches_essayees_de_la_plus_precise_a_la_plus_large():
     banque = FausseBanque({
-        "boho table centerpiece": [resultat(9)],
-        "centerpiece": [resultat(1), resultat(2, "Ben"), resultat(3, "Cy")]
+        "boho wedding centerpiece": [resultat(9)],
+        "wedding decor": [resultat(1), resultat(2, "Ben"), resultat(3, "Cy")]
     })
 
-    images = banque.rechercher("boho table centerpiece", 3)
+    images = banque.rechercher(
+        ["boho wedding centerpiece", "wedding centerpiece", "wedding décor"],
+        3
+    )
 
     assert banque.recherches == [
-        "boho table centerpiece", "table centerpiece", "centerpiece"
+        "boho wedding centerpiece", "wedding centerpiece", "wedding decor"
     ]
-    assert [image["titre"] for image in images] == [
-        "Photo 1", "Photo 2", "Photo 3"
+    assert sorted(image["titre"] for image in images) == [
+        "Photo 1", "Photo 2", "Photo 3", "Photo 9"
     ]
     assert images[0]["licence"] == "CC BY 2.0"
 
@@ -86,7 +89,7 @@ def test_auteurs_varies_en_priorite():
         resultat(4, "Cy")
     ]})
 
-    images = banque.rechercher("gateau", 3)[:3]
+    images = banque.rechercher(["gateau"], 3)[:3]
     auteurs = [image["auteur"] for image in images]
 
     assert auteurs == ["Ana", "Ben", "Cy"]
@@ -97,7 +100,7 @@ def test_panne_reseau_sans_erreur():
         def lire_url(self, url):
             raise URLError("hors ligne")
 
-    assert BanqueHorsLigne().rechercher("wedding cake", 3) == []
+    assert BanqueHorsLigne().rechercher(["wedding cake"], 3) == []
 
 
 def test_licences_lisibles():
@@ -131,7 +134,7 @@ def test_composer_range_les_images_dans_le_dossier(tmp_path):
     stock = ImagesMoodboard(tmp_path / "moodboard", banque)
 
     images = stock.composer(
-        {"recherches_images": {"Gâteau": "rustic cake"}}, nombre=2
+        {"recherches_images": {"Gâteau": ["rustic cake"]}}, nombre=2
     )
 
     assert list(images) == ["Gâteau"]
@@ -146,10 +149,13 @@ def test_composer_range_les_images_dans_le_dossier(tmp_path):
 
 def test_recherches_images_nettoyees():
     moodboard = nettoyer_moodboard({"recherches_images": {
-        "Fleurs": "peony bouquet", "Table": 3, "Inconnu": "x"
+        "Fleurs": "peony bouquet", "Table": 3, "Inconnu": "x",
+        "Gâteau": ["wedding cake", 4, " ", "cake", "a", "b"]
     }})
 
-    assert moodboard["recherches_images"] == {"Fleurs": "peony bouquet"}
+    assert moodboard["recherches_images"] == {
+        "Fleurs": ["peony bouquet"], "Gâteau": ["wedding cake", "cake", "a"]
+    }
     assert nettoyer_moodboard({"recherches_images": "x"})[
         "recherches_images"
     ] == {}
@@ -186,7 +192,7 @@ def test_chaque_page_decale_la_selection_en_boucle():
     ]})
 
     def titres(page):
-        images = banque.rechercher("boho arch", 3, page)[:3]
+        images = banque.rechercher(["boho arch"], 3, page)[:3]
         return [image["titre"] for image in images]
 
     assert titres(1) == ["Photo 1", "Photo 2", "Photo 3"]
@@ -208,4 +214,48 @@ def test_une_photo_n_apparait_que_dans_un_element():
 
     assert [image["titre"] for image in uniques["Tenues"]] == [
         "Photo 3", "Photo 4"
+    ]
+
+
+def test_accents_retires_des_recherches():
+    assert BanqueImages.sans_accents(" wedding décor ") == "wedding decor"
+
+
+def test_recherche_generique_en_dernier_recours():
+    recherches = ImagesMoodboard.recherches(
+        {"recherches_images": {"Fleurs": ["wedding peony bouquet"]}}
+    )
+
+    assert recherches["Fleurs"] == ["wedding peony bouquet", "flower bouquet"]
+    assert recherches["Table"] == ["table setting"]
+
+
+def titre(numero, texte):
+    return {**resultat(numero, f"Auteur {numero}"), "title": texte}
+
+
+def test_seules_les_images_pertinentes_si_assez():
+    banque = FausseBanque({"wedding velvet decor": [
+        titre(1, "Red Velvet Cupcakes"), titre(2, "Wedding Décoration"),
+        titre(3, "Ceremony arch"), titre(4, "Rustic decor")
+    ]})
+
+    images = banque.rechercher(
+        ["wedding velvet decor"], 3, mots_cles=["decor", "arch"]
+    )
+
+    assert [image["titre"] for image in images] == [
+        "Wedding Décoration", "Ceremony arch", "Rustic decor"
+    ]
+
+
+def test_completee_par_les_autres_si_trop_peu_de_pertinentes():
+    banque = FausseBanque({"wedding cake": [
+        titre(1, "IMG_2041"), titre(2, "Two tier cake")
+    ]})
+
+    images = banque.rechercher(["wedding cake"], 3, mots_cles=["cake"])
+
+    assert [image["titre"] for image in images] == [
+        "Two tier cake", "IMG_2041"
     ]

@@ -38,15 +38,32 @@ def couleur_valide(code: Any) -> str:
     return code if isinstance(code, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", code) else COULEUR_PAR_DEFAUT
 
 
-def recherches_valides(recherches: Any) -> dict[str, str]:
+RECHERCHES_PAR_ELEMENT = 3
+
+
+def liste_recherches(valeur: Any) -> list[str]:
+    """Une ou plusieurs recherches, de la plus précise à la plus large."""
+    if isinstance(valeur, str):
+        valeur = [valeur]
+
+    if not isinstance(valeur, list):
+        return []
+
+    textes = [texte.strip() for texte in valeur if isinstance(texte, str)]
+
+    return [texte for texte in textes if texte][:RECHERCHES_PAR_ELEMENT]
+
+
+def recherches_valides(recherches: Any) -> dict[str, list[str]]:
     if not isinstance(recherches, dict):
         return {}
 
-    return {
-        element: recherches[element]
+    valides = {
+        element: liste_recherches(recherches.get(element))
         for element in ELEMENTS_MOODBOARD
-        if isinstance(recherches.get(element), str)
     }
+
+    return {element: liste for element, liste in valides.items() if liste}
 
 
 def nettoyer_moodboard(moodboard: dict) -> dict:

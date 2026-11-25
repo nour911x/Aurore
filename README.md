@@ -93,10 +93,10 @@ Aucune clé n'est écrite dans le code.
 
 ## Images du moodboard
 
-Quand AURORE crée le moodboard, elle propose aussi, pour chaque élément (décoration, fleurs, tenues, gâteau, table, papeterie), une courte recherche en anglais. Les images viennent d'[Openverse](https://openverse.org), un catalogue d'images sous licence Creative Commons : gratuit, sans clé ni compte.
+Quand AURORE crée le moodboard, elle propose aussi, pour chaque élément (décoration, fleurs, tenues, gâteau, table, papeterie), trois recherches en anglais, de la plus précise à la plus générale, qui contiennent toutes le type d'événement. Les images viennent d'[Openverse](https://openverse.org), un catalogue d'images sous licence Creative Commons : gratuit, sans clé ni compte.
 
 - Trois images par élément, d'auteurs différents quand c'est possible, sans la même photo dans deux éléments.
-- Si une recherche donne trop peu d'images, son premier mot est retiré (« boho wedding arch » devient « wedding arch »).
+- Les recherches sont essayées dans l'ordre, sans accents. Seules les photos dont le titre parle de l'élément sont gardées (« cake » pour le gâteau, « table » ou « centerpiece » pour la table…) : Openverse rapproche sinon « velvet decor » de « red velvet cake ».
 - **Autres images** propose une nouvelle sélection.
 - Les images sont recadrées en carré et rangées dans `dossiers/<client>/moodboard/` : elles partent avec la suppression du dossier, et le PDF se génère hors ligne.
 - Chaque image affiche son auteur, sa licence et un lien vers la source ; le PDF se termine par la page des crédits.

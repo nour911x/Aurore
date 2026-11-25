@@ -1,6 +1,7 @@
 import io
 import json
 import shutil
+import unicodedata
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -28,6 +29,17 @@ RECHERCHES_PAR_DEFAUT = {
     "Gâteau": "celebration cake",
     "Table": "table setting",
     "Papeterie": "invitation card"
+}
+
+MOTS_PAR_ELEMENT = {
+    "Décoration": [
+        "decor", "arch", "garland", "backdrop", "drape", "lantern", "ceremony"
+    ],
+    "Fleurs": ["flower", "floral", "bouquet", "rose", "peon", "bloom"],
+    "Tenues": ["dress", "gown", "bride", "groom", "suit", "tuxedo", "outfit"],
+    "Gâteau": ["cake"],
+    "Table": ["table", "centerpiece", "tablescape"],
+    "Papeterie": ["invitation", "stationery", "card", "menu", "save the date"]
 }
 
 NOMS_LICENCES = {"cc0": "CC0", "pdm": "Domaine public"}
@@ -60,29 +72,54 @@ class BanqueImages:
 
         return reponse.get("results") or []
 
-    def rechercher(self, recherche: str, nombre: int, page: int = 1) -> list:
-        """Les candidates, auteurs variés en tête.
+    @staticmethod
+    def sans_accents(texte: str) -> str:
+        """Openverse ne trouve pas « décor » : on cherche « decor »."""
+        decompose = unicodedata.normalize("NFKD", texte)
 
-        Tant qu'il y a trop peu de choix, retire le premier mot : en
-        anglais le mot principal est à la fin (boho wedding arch).
-        Garde la recherche qui a donné le plus d'images. Chaque page
-        décale la sélection de `nombre` images, en boucle.
+        return decompose.encode("ascii", "ignore").decode().strip()
+
+    @staticmethod
+    def pertinente(resultat: dict, mots_cles: list[str]) -> bool:
+        """Le titre parle de l'élément : Openverse lit « red velvet
+        cake » pour « velvet decor », mais le titre ne trompe pas."""
+        titre = BanqueImages.sans_accents(resultat.get("title") or "")
+
+        return not mots_cles or any(mot in titre.lower() for mot in mots_cles)
+
+    def rechercher(
+        self, recherches: list[str], nombre: int, page: int = 1,
+        mots_cles: list[str] | None = None
+    ) -> list:
+        """Les candidates, pertinentes et d'auteurs variés en tête.
+
+        Cumule les résultats pertinents des recherches, de la plus
+        précise à la plus générale, jusqu'à avoir assez de choix. Chaque
+        page décale la sélection de `nombre` images, en boucle.
         """
-        mots = recherche.split()
-        meilleurs: list = []
+        pertinentes: list[dict] = []
+        autres: list[dict] = []
+        vues: set[str] = set()
 
-        while mots:
-            resultats = self.interroger(" ".join(mots))
+        for recherche in recherches:
+            for resultat in self.interroger(self.sans_accents(recherche)):
+                if resultat.get("url") in vues:
+                    continue
 
-            if len(resultats) > len(meilleurs):
-                meilleurs = resultats
+                vues.add(resultat.get("url"))
+                liste = (
+                    pertinentes if self.pertinente(resultat, mots_cles or [])
+                    else autres
+                )
+                liste.append(resultat)
 
-            if len(meilleurs) >= nombre * PAGES_MINIMUM:
+            if len(pertinentes) >= nombre * PAGES_MINIMUM:
                 break
 
-            mots.pop(0)
-
-        images = self.varier([self.decrire(image) for image in meilleurs])
+        retenues = pertinentes if len(pertinentes) >= nombre else (
+            pertinentes + autres
+        )
+        images = self.varier([self.decrire(image) for image in retenues])
 
         return self.tourner(images, (page - 1) * nombre)
 
@@ -175,11 +212,12 @@ class ImagesMoodboard:
         self.banque = banque or BanqueImages()
 
     @staticmethod
-    def recherches(moodboard: dict) -> dict[str, str]:
+    def recherches(moodboard: dict) -> dict[str, list[str]]:
+        """Les recherches de Groq, puis une recherche générique."""
         proposees = moodboard.get("recherches_images") or {}
 
         return {
-            element: proposees.get(element) or recherche
+            element: [*proposees.get(element, []), recherche]
             for element, recherche in RECHERCHES_PAR_DEFAUT.items()
         }
 
@@ -197,8 +235,12 @@ class ImagesMoodboard:
 
         return {**image, "fichier": fichier}
 
-    def chercher(self, recherche: str, nombre: int, page: int) -> list:
-        return self.banque.rechercher(recherche, nombre, page)
+    def chercher(
+        self, element: str, recherches: list[str], nombre: int, page: int
+    ) -> list:
+        return self.banque.rechercher(
+            recherches, nombre, page, MOTS_PAR_ELEMENT.get(element)
+        )
 
     @staticmethod
     def sans_doublons(
@@ -226,7 +268,7 @@ class ImagesMoodboard:
 
         with ThreadPoolExecutor(TELECHARGEMENTS_SIMULTANES) as executeur:
             resultats = executeur.map(
-                self.chercher, recherches.values(),
+                self.chercher, recherches, recherches.values(),
                 [nombre] * len(recherches), [page] * len(recherches)
             )
             trouvees = self.sans_doublons(

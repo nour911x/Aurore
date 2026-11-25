@@ -79,6 +79,7 @@ Chaque décision : le problème, le choix, ce qu'il coûte. Le détail de chaque
 ## 14. Images du moodboard avec Openverse
 
 - **Problème** : le moodboard n'avait que du texte et des couleurs ; les services de génération d'images et l'API Pinterest sont payants ou fermés.
-- **Choix** : `metier/images.py` cherche des images sous licence Creative Commons sur Openverse, sans clé. Groq écrit une recherche en anglais par élément, car le catalogue est surtout décrit en anglais. Les images sont téléchargées, recadrées et stockées dans le dossier du client.
+- **Choix** : `metier/images.py` cherche des images sous licence Creative Commons sur Openverse, sans clé. Groq écrit trois recherches en anglais par élément, de la plus précise à la plus générale, car le catalogue est surtout décrit en anglais. Un filtre sur le titre écarte les photos hors sujet. Les images sont téléchargées, recadrées et stockées dans le dossier du client.
+- **Alternative écartée** : raccourcir une recherche mot par mot quand elle donne trop peu d'images. Essayé : « burgundy décor » devenait « décor », et la Bourgogne remplaçait le bordeaux.
 - **Alternative écartée** : afficher les images depuis leur adresse d'origine, sans les télécharger. Le PDF aurait demandé internet, et une image retirée du site d'origine aurait disparu du moodboard.
 - **Coût** : la pertinence dépend des mots-clés et des descriptions d'Openverse ; sans clé, Openverse limite le nombre de requêtes (une par élément, soit six par moodboard). Les licences NC interdisent un usage commercial : les images servent d'inspiration privée avec les clients, pas de publication.

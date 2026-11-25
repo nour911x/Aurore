@@ -286,7 +286,7 @@ def test_moodboard_cree_avec_ses_images(monkeypatch):
     monkeypatch.setattr(BanqueImages, "lire_url", lambda self, url: fausse.lire_url(url))
     monkeypatch.setattr(
         AgentConversation, "suggerer_moodboard",
-        lambda self, donnees, elements: {"titre": "Bohème", "recherches_images": {"Décoration": "boho arch"}}
+        lambda self, donnees, elements: {"titre": "Bohème", "recherches_images": {"Décoration": ["boho arch"]}}
     )
     page, dossier_id = ecran_du_mariage(onglet="inspiration", section="moodboard")
     page.run()
