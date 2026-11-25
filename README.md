@@ -19,7 +19,7 @@ Application Streamlit, en Python.
 | **Prestataires** | Un carnet commun à tous les dossiers. Chaque dossier y choisit ses prestataires, avec un statut (à contacter → réservé), un tarif et un poste de budget propres. Alerte si un prestataire est réservé sur deux événements le même jour. |
 | **Budget & devis** | Les postes, les factures et leurs échéances ; des devis en PDF qui, une fois acceptés, créent l'acompte et le solde. |
 | **Invités** | La liste, l'import de contacts avec aperçu, les faire-parts et le récapitulatif pour le traiteur. |
-| **Inspiration & galerie** | Le moodboard, les photos taguées décor / avec personnes, le droit à l'image, les avis. |
+| **Inspiration & galerie** | Le moodboard (ambiance, palette, mots-clés et images libres de droits avec leurs crédits), les photos taguées décor / avec personnes, le droit à l'image, les avis. |
 
 La barre latérale permet de changer de dossier et d'en créer un nouveau (Mariage, Baby shower, Anniversaire ou Autre). Changer le type d'un dossier demande une confirmation : les champs propres à l'ancien type sont masqués, pas supprimés. La zone de saisie en bas de page comprend le langage naturel : « ajoute une dégustation jeudi 14h ».
 
@@ -51,6 +51,7 @@ Dans `config/features.py`. Un module désactivé n'apparaît pas dans l'interfac
 |---|---|---|
 | `INSTAGRAM_FEEDBACK` | `False` | Publication Instagram et avis transformés en posts |
 | `PINTEREST_MOODBOARD_AUTO` | `False` | Liens Pinterest générés pour le moodboard |
+| `MOODBOARD_IMAGES` | `True` | Images libres de droits (Openverse) dans le moodboard et son PDF |
 | `DIGITAL_EVENT_REPRESENTATION` | `True` | Salle en 3D |
 | `WHATSAPP_AUTO_SEND` | `False` | Réservé : aucun envoi automatique n'existe et ce flag doit rester à `False` |
 | `VENDOR_RECOMMENDATIONS` | `False` | Recommandations de boutiques et de maquilleurs |
@@ -90,6 +91,17 @@ Aucune clé n'est écrite dans le code.
 - **Organisateur** : mot de passe. Sans mot de passe défini, l'application reste fermée.
 - **Clients et prestataires** : lien privé créé dans **Fiche client › Liens privés**. Il ouvre une seule vue, sur un seul dossier, expire au bout de 90 jours et peut être révoqué. Il n'est affiché qu'une fois.
 
+## Images du moodboard
+
+Quand AURORE crée le moodboard, elle propose aussi, pour chaque élément (décoration, fleurs, tenues, gâteau, table, papeterie), une courte recherche en anglais. Les images viennent d'[Openverse](https://openverse.org), un catalogue d'images sous licence Creative Commons : gratuit, sans clé ni compte.
+
+- Trois images par élément, d'auteurs différents quand c'est possible, sans la même photo dans deux éléments.
+- Si une recherche donne trop peu d'images, son premier mot est retiré (« boho wedding arch » devient « wedding arch »).
+- **Autres images** propose une nouvelle sélection.
+- Les images sont recadrées en carré et rangées dans `dossiers/<client>/moodboard/` : elles partent avec la suppression du dossier, et le PDF se génère hors ligne.
+- Chaque image affiche son auteur, sa licence et un lien vers la source ; le PDF se termine par la page des crédits.
+- Sans internet, le moodboard reste utilisable sans images.
+
 ## Recherche dans les documents (RAG)
 
 Dans **Prestataires › Documents**, l'organisateur ajoute des contrats ou devis (PDF, TXT, MD) et pose ses questions. La discussion avec AURORE y a aussi accès. Les réponses citent leurs sources et se limitent au dossier ouvert. Au premier usage, le modèle d'embedding (environ 500 Mo) est téléchargé.
@@ -120,7 +132,7 @@ DECISIONS.md          choix techniques et leurs limites
 textes.py             libellés de l'interface, noms propres, pluriels
 config/               evenements.py (types et champs par type), features.py (flags), profils.py (les trois vues)
 ui/                   contexte.py (état du dossier ouvert), interface.py (mise en page), une vue par page, design.py (composants), theme.css (couleurs, typographie), habillage.py (frise, plan)
-metier/               agenda, budget, devis, messages, invités, galerie, jour J, accueil, RGPD
+metier/               agenda, budget, devis, messages, invités, galerie, images du moodboard, jour J, accueil, RGPD
 donnees/              base SQLite, reprise des anciens JSON, dossiers clients, fiche, démonstration
 llm/                  agent Groq, outils de l'agent, Outlook, prompt système
 llm/rag/              recherche dans les documents : extraits, base vectorielle, reclassement, prompts

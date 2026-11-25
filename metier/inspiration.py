@@ -1,3 +1,4 @@
+import io
 import re
 from typing import Any
 from urllib.parse import quote
@@ -21,6 +22,9 @@ CATEGORIES_BEAUTE = {
 
 COULEUR_PAR_DEFAUT = "#CCCCCC"
 
+IMAGES_PAR_LIGNE_PDF = 3
+ESPACE_IMAGES_PDF = 4
+
 
 def lien_pinterest(recherche: str) -> str:
     return f"https://www.pinterest.fr/search/pins/?q={quote(recherche)}"
@@ -34,10 +38,24 @@ def couleur_valide(code: Any) -> str:
     return code if isinstance(code, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", code) else COULEUR_PAR_DEFAUT
 
 
+def recherches_valides(recherches: Any) -> dict[str, str]:
+    if not isinstance(recherches, dict):
+        return {}
+
+    return {
+        element: recherches[element]
+        for element in ELEMENTS_MOODBOARD
+        if isinstance(recherches.get(element), str)
+    }
+
+
 def nettoyer_moodboard(moodboard: dict) -> dict:
     recherches = moodboard.get("recherches") or {}
 
     return {
+        "recherches_images": recherches_valides(
+            moodboard.get("recherches_images")
+        ),
         "titre": moodboard.get("titre") or "Moodboard",
         "ambiance": moodboard.get("ambiance") or "",
         "couleurs": [
@@ -73,6 +91,11 @@ class Inspiration:
         self.moodboard = nettoyer_moodboard(moodboard)
         self.sauvegarder()
 
+    def definir_images(self, images: dict[str, list[dict]], page: int) -> None:
+        self.moodboard["images"] = images
+        self.moodboard["page_images"] = page
+        self.sauvegarder()
+
     def definir_recommandation(self, categorie: str, recommandation: Any) -> None:
         self.recommandations[categorie] = recommandation
         self.sauvegarder()
@@ -82,7 +105,44 @@ def hex_vers_rgb(code: str) -> tuple[int, ...]:
     return tuple(int(code[index:index + 2], 16) for index in (1, 3, 5))
 
 
-def generer_moodboard_pdf(moodboard: dict, noms: str, avec_liens: bool = True) -> bytes:
+def ajouter_images_pdf(
+    pdf: FPDF, images: dict[str, list[tuple[bytes, str]]]
+) -> None:
+    """Une rangée d'images par élément, puis les crédits des photos."""
+    largeur = (pdf.epw - 2 * ESPACE_IMAGES_PDF) / IMAGES_PAR_LIGNE_PDF
+    pdf.add_page()
+    pdf.set_text_color(60, 60, 60)
+
+    for element, liste in images.items():
+        if pdf.get_y() + largeur + 12 > pdf.page_break_trigger:
+            pdf.add_page()
+
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 8, texte_pdf(element), new_x="LMARGIN", new_y="NEXT")
+        y = pdf.get_y()
+
+        for index, (contenu, _) in enumerate(liste[:IMAGES_PAR_LIGNE_PDF]):
+            x = pdf.l_margin + index * (largeur + ESPACE_IMAGES_PDF)
+            pdf.image(io.BytesIO(contenu), x, y, w=largeur, h=largeur,
+                      keep_aspect_ratio=True)
+
+        pdf.set_y(y + largeur + 4)
+
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 8, "Crédits des photos", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 8)
+
+    for element, liste in images.items():
+        for _, credit in liste:
+            pdf.multi_cell(0, 4, texte_pdf(f"{element} : {credit}"),
+                           new_x="LMARGIN", new_y="NEXT")
+
+
+def generer_moodboard_pdf(
+    moodboard: dict, noms: str, avec_liens: bool = True,
+    images: dict[str, list[tuple[bytes, str]]] | None = None
+) -> bytes:
     pdf = FPDF()
     pdf.add_page()
 
@@ -117,15 +177,16 @@ def generer_moodboard_pdf(moodboard: dict, noms: str, avec_liens: bool = True) -
         pdf.multi_cell(0, 6, texte_pdf(" · ".join(moodboard["mots_cles"]).replace("·", "-")))
         pdf.ln(4)
 
-    if not avec_liens:
-        return bytes(pdf.output())
+    if avec_liens:
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 7, texte_pdf("Inspirations Pinterest (cliquer pour ouvrir)"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "U", 11)
+        pdf.set_text_color(150, 100, 125)
 
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 7, texte_pdf("Inspirations Pinterest (cliquer pour ouvrir)"), new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", "U", 11)
-    pdf.set_text_color(150, 100, 125)
+        for element, lien in moodboard["liens"].items():
+            pdf.cell(0, 7, texte_pdf(f"> {element}"), link=lien, new_x="LMARGIN", new_y="NEXT")
 
-    for element, lien in moodboard["liens"].items():
-        pdf.cell(0, 7, texte_pdf(f"> {element}"), link=lien, new_x="LMARGIN", new_y="NEXT")
+    if images:
+        ajouter_images_pdf(pdf, images)
 
     return bytes(pdf.output())
