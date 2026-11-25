@@ -350,7 +350,12 @@ class AgentConversation(Agent):
             "couleurs (liste de 5 objets avec nom et hex au format #RRGGBB), "
             "mots_cles (liste de 6 à 8 mots), "
             f"recherches (objet avec exactement les clés {json.dumps(elements, ensure_ascii=False)}, "
-            "chaque valeur est une recherche Pinterest précise en français, ex : \"centre de table bohème terracotta\")."
+            "chaque valeur est une recherche Pinterest précise en français, ex : \"centre de table bohème terracotta\"), "
+            f"recherches_images (objet avec exactement les mêmes clés {json.dumps(elements, ensure_ascii=False)}, "
+            "chaque valeur est une liste de 3 recherches d'images EN ANGLAIS, de la plus précise à la plus générale, "
+            "qui contiennent toutes le type d'événement en anglais (wedding, baby shower, birthday party…), "
+            "sans mot ambigu (ex : burgundy est aussi une région, écris dark red), "
+            "ex : [\"winter wedding velvet decor\", \"wedding velvet decor\", \"wedding decor\"])."
         )
 
         reponse = self.completer(self.historique_api() + [{"role": "user", "content": instruction}])

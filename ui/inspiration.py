@@ -1,13 +1,16 @@
 import uuid
 from html import escape
+from pathlib import Path
 
 import streamlit as st
 from groq import RateLimitError
 
 from config import features
 from config.profils import ORGANISATEUR
+from donnees.dossiers import chemin
 from metier.devis import date_lisible
 from metier.galerie import CATEGORIES_PHOTO, TAGS_PHOTO, generer_autorisation_pdf, publiable, tag
+from metier.images import IMAGES_PAR_ELEMENT, ImagesMoodboard
 from metier.inspiration import CATEGORIES_BEAUTE, ELEMENTS_MOODBOARD, generer_moodboard_pdf, lien_maps
 from metier.messages import destinataire_clients, suggestion
 from metier.rgpd import USAGES_PHOTO, consentements_manquants
@@ -17,6 +20,9 @@ from ui.contexte import Vue
 from ui.fiche import VueFiche
 from ui.messages import VueMessages
 from ui.prestataires import VuePrestataires
+
+
+DOSSIER_IMAGES = "moodboard"
 
 
 class VueInspiration(Vue):
@@ -29,12 +35,90 @@ class VueInspiration(Vue):
         design.afficher_html(f'<div class="palette">{pastilles}</div>')
 
 
+    def images_moodboard(self):
+        dossier = chemin(self.ctx.dossier_id, DOSSIER_IMAGES)
+
+        return ImagesMoodboard(Path(dossier))
+
+    def composer_images(self, page=1):
+        if not features.MOODBOARD_IMAGES:
+            return
+
+        with st.spinner("AURORE cherche des images libres de droits…"):
+            images = self.images_moodboard().composer(
+                self.ctx.inspiration.moodboard, page
+            )
+
+        self.ctx.inspiration.definir_images(images, page)
+
+        if not images:
+            st.warning(
+                "Aucune image trouvée : vérifie la connexion internet, "
+                "puis relance la recherche.",
+                icon=":material/cloud_off:"
+            )
+
+    def images_lisibles(self):
+        """Les images encore présentes sur le disque, avec leur crédit."""
+        stock = self.images_moodboard()
+        images = {}
+
+        for element, liste in self.ctx.inspiration.moodboard.get(
+            "images", {}
+        ).items():
+            lisibles = [
+                (contenu, ImagesMoodboard.credit(image), image)
+                for image in liste
+                if (contenu := stock.lire(image))
+            ]
+
+            if lisibles:
+                images[element] = lisibles
+
+        return images
+
+    def afficher_images(self, images):
+        st.markdown("**:material/photo_library: Images d'inspiration**")
+
+        for element, liste in images.items():
+            st.caption(element)
+
+            for colonne, (contenu, _, image) in zip(
+                st.columns(IMAGES_PAR_ELEMENT), liste, strict=False
+            ):
+                colonne.image(contenu, width="stretch")
+                source = image["source"]
+                lien = f" · [source]({source})" if source else ""
+                colonne.caption(
+                    f"{image['auteur']} · {image['licence']}{lien}"
+                )
+
+    def afficher_galerie_moodboard(self):
+        if not features.MOODBOARD_IMAGES:
+            return {}
+
+        images = self.images_lisibles()
+
+        if images:
+            self.afficher_images(images)
+
+        libelle = "Autres images" if images else "Chercher des images"
+
+        if st.button(libelle, icon=":material/refresh:"):
+            page = self.ctx.inspiration.moodboard.get("page_images", 0) + 1
+            self.composer_images(page if images else 1)
+            st.rerun()
+
+        return images
+
     def afficher_moodboard(self):
         if st.button("Créer le moodboard à partir de la discussion", icon=":material/auto_awesome:"):
             with st.spinner("AURORE compose votre moodboard…"):
                 self.ctx.inspiration.definir_moodboard(
                     self.ctx.agent.suggerer_moodboard(self.ctx.fiche_evenement.infos_sans_historique(), ELEMENTS_MOODBOARD)
                 )
+
+            self.composer_images()
 
         moodboard = self.ctx.inspiration.moodboard
 
@@ -47,14 +131,23 @@ class VueInspiration(Vue):
         self.afficher_palette(moodboard["couleurs"])
         st.markdown(" ".join(f"`{mot}`" for mot in moodboard["mots_cles"]))
 
+        images = self.afficher_galerie_moodboard()
+
         if features.PINTEREST_MOODBOARD_AUTO:
             st.markdown("**:material/push_pin: Inspirations Pinterest**")
             composants.afficher_liens({f":material/push_pin: {element}": lien for element, lien in moodboard["liens"].items()})
 
         bouton_pdf, bouton_envoi = st.columns(2)
+        images_pdf = {
+            element: [(contenu, credit) for contenu, credit, _ in liste]
+            for element, liste in images.items()
+        }
         bouton_pdf.download_button(
             "Télécharger le moodboard (PDF)", icon=":material/download:",
-            data=generer_moodboard_pdf(moodboard, self.ctx.fiche_evenement.donnees["noms"], features.PINTEREST_MOODBOARD_AUTO),
+            data=generer_moodboard_pdf(
+                moodboard, self.ctx.fiche_evenement.donnees["noms"],
+                features.PINTEREST_MOODBOARD_AUTO, images_pdf
+            ),
             file_name="moodboard.pdf",
             mime="application/pdf",
             width="stretch"

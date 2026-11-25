@@ -273,3 +273,29 @@ def test_se_deconnecter():
     bouton(page, "Se déconnecter").click().run()
 
     assert not pages_du_menu(page)
+
+
+def test_moodboard_cree_avec_ses_images(monkeypatch):
+    from metier.images import BanqueImages
+    from tests.test_images import FausseBanque, resultat
+
+    fausse = FausseBanque({
+        recherche: [resultat(debut), resultat(debut + 1, "Ben"), resultat(debut + 2, "Cy")]
+        for recherche, debut in (("boho arch", 1), ("flower bouquet", 4))
+    })
+    monkeypatch.setattr(BanqueImages, "lire_url", lambda self, url: fausse.lire_url(url))
+    monkeypatch.setattr(
+        AgentConversation, "suggerer_moodboard",
+        lambda self, donnees, elements: {"titre": "Bohème", "recherches_images": {"Décoration": ["boho arch"]}}
+    )
+    page, dossier_id = ecran_du_mariage(onglet="inspiration", section="moodboard")
+    page.run()
+    bouton(page, "Créer le moodboard à partir de la discussion").click().run()
+
+    assert not page.exception
+    assert len(page.get("image")) == 6
+    assert any("Ana · CC BY 2.0" in texte.value for texte in page.caption)
+
+    images = charger_donnees(emplacement(dossier_id, "inspiration_data"), {})["moodboard"]["images"]
+    assert sorted(images) == ["Décoration", "Fleurs"]
+    assert "Autres images" in [bouton.label for bouton in page.button]

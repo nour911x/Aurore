@@ -75,3 +75,11 @@ Chaque décision : le problème, le choix, ce qu'il coûte. Le détail de chaque
 - **Choix** : `metier/salle.py` calcule la disposition sans interface ; le plan 2D et la scène Three.js dessinent les mêmes objets. Un composant Streamlit v2 renvoie chaque déplacement à Python, qui le vérifie avant de l'enregistrer.
 - **Alternative écartée** : une image générée par IA. Elle demanderait un autre fournisseur que Groq et ne respecterait ni le nombre de tables ni les places.
 - **Coût** : Three.js (version figée) est chargé depuis jsDelivr, donc la 3D demande internet et fait confiance à ce service. Le navigateur doit accepter WebGL.
+
+## 14. Images du moodboard avec Openverse
+
+- **Problème** : le moodboard n'avait que du texte et des couleurs ; les services de génération d'images et l'API Pinterest sont payants ou fermés.
+- **Choix** : `metier/images.py` cherche des images sous licence Creative Commons sur Openverse, sans clé. Groq écrit trois recherches en anglais par élément, de la plus précise à la plus générale, car le catalogue est surtout décrit en anglais. Un filtre sur le titre écarte les photos hors sujet. Les images sont téléchargées, recadrées et stockées dans le dossier du client.
+- **Alternative écartée** : raccourcir une recherche mot par mot quand elle donne trop peu d'images. Essayé : « burgundy décor » devenait « décor », et la Bourgogne remplaçait le bordeaux.
+- **Alternative écartée** : afficher les images depuis leur adresse d'origine, sans les télécharger. Le PDF aurait demandé internet, et une image retirée du site d'origine aurait disparu du moodboard.
+- **Coût** : la pertinence dépend des mots-clés et des descriptions d'Openverse ; sans clé, Openverse limite le nombre de requêtes (une par élément, soit six par moodboard). Les licences NC interdisent un usage commercial : les images servent d'inspiration privée avec les clients, pas de publication.
